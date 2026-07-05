@@ -781,8 +781,36 @@ internal partial class AppJsonContext : JsonSerializerContext { }
 // Usage — no reflection at runtime:
 var json = JsonSerializer.Serialize(product, AppJsonContext.Default.Product);
 ```
-
 ---
+## Why Native AOT Prefers Source Generators
+
+Reflection requires runtime metadata discovery, making it harder for the compiler to trim unused code and generate native executables.
+Source generators generate explicit C# code during compilation, so everything is known ahead of time.
+### Reflection
+``` csharpe
+
+
+Compile
+   ↓
+Run
+   ↓
+Discover types
+   ↓
+Execute
+``` 
+### Source Generator
+``` csharpe
+Compile
+   ↓
+Discover types
+   ↓
+Generate C#
+   ↓
+Compile generated code
+   ↓
+Run directly
+```
+
 
 ## Part V — Delegates, Events & Lambdas
 
