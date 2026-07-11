@@ -2472,4 +2472,409 @@ async Task CallDownstreamAsync()
 }
 ```
 
-**`ReaderWriterLockSlim`** — allows many concurrent readers **or** one e
+**`ReaderWriterLockSlim`** — allows many concurrent readers **or** one exclusive writer; better than a plain `lock` for read-heavy shared state (e.g., an in-memory cache with occasional writes).
+
+**`Interlocked` & `volatile`:**
+```csharp
+private static int _counter;
+Interlocked.Increment(ref _counter);   // atomic increment, no lock needed
+
+private volatile bool _isRunning;      // prevents per-core caching from hiding updates from other threads
+```
+`Interlocked` provides lock-free atomic operations (`Increment`, `Decrement`, `CompareExchange`) — much cheaper than a full `lock` for simple counters/flags. `volatile` is rarely needed directly in modern C# (most synchronization goes through higher-level primitives), but is still asked about conceptually.
+
+**Concurrent collections:**
+
+| Type | Use case |
+|---|---|
+| `ConcurrentDictionary<TKey,TValue>` | Thread-safe key/value cache without manual locking |
+| `ConcurrentQueue<T>` / `ConcurrentStack<T>` | Thread-safe FIFO/LIFO producer-consumer buffers |
+| `BlockingCollection<T>` | Bounded producer-consumer with blocking `Add`/`Take` |
+
+**`System.Threading.Channels`** — a modern, high-performance async producer-consumer pipeline, replacing older `BlockingCollection`-based patterns in many new designs:
+```csharp
+var channel = Channel.CreateUnbounded<int>();
+await channel.Writer.WriteAsync(42);         // producer
+channel.Writer.Complete();
+await foreach (var item in channel.Reader.ReadAllAsync()) Console.WriteLine(item); // consumer
+```
+Common use case: a `BackgroundService` reading work items off a channel populated by an API endpoint, decoupling request handling from slower processing.
+
+```mermaid
+flowchart LR
+    lock["lock / Monitor"] -->|"sync only, single entrant"| when1["Simple mutual exclusion,\nno async needed"]
+    Semaphore["SemaphoreSlim"] -->|"async-capable, N entrants"| when2["Throttle concurrent calls\nto a downstream resource"]
+    RWLock["ReaderWriterLockSlim"] -->|"many readers OR one writer"| when3["Read-heavy shared state"]
+    Interlocked["Interlocked"] -->|"lock-free atomic ops"| when4["Simple counters/flags"]
+    Channels["Channels"] -->|"async producer-consumer"| when5["Decoupled pipelines,\nbackground processing"]
+```
+
+---
+
+## Part XVII — Microservices, Messaging & CQRS
+
+**REST vs gRPC:**
+
+| | REST/OpenAPI | gRPC |
+|---|---|---|
+| Transport | HTTP/1.1 (typically), JSON | HTTP/2, binary Protobuf |
+| Performance | Good | Faster — smaller payloads, multiplexed streams |
+| Contract | OpenAPI (optional/loose) | `.proto` file (strict, code-generated) |
+| Streaming | Limited (SSE, polling) | First-class bidirectional streaming |
+| Browser support | Native | Needs grpc-web / a proxy |
+| Best for | Public APIs, browser clients | Internal service-to-service calls, low-latency needs |
+
+**Message brokers:**
+
+| Broker | Model | Typical use |
+|---|---|---|
+| RabbitMQ | Traditional message queue (AMQP) | Task queues, work distribution, routing by topic/exchange |
+| Kafka | Distributed log / event streaming | High-throughput event streams, event sourcing, replayable history |
+| Azure Service Bus | Managed queue/topic service | Enterprise .NET-native messaging, dead-lettering, sessions |
+
+Know the difference between a **queue** (message consumed once, then removed) and a **topic/pub-sub** (message delivered to every subscriber) — and be ready to describe a design (e.g., `OrderPlaced` → Inventory + Shipping services both react independently) using pub-sub for decoupling.
+
+**CQRS with MediatR:**
+```csharp
+public record CreateOrderCommand(int ProductId, int Quantity) : IRequest<int>;
+
+public class CreateOrderHandler : IRequestHandler<CreateOrderCommand, int>
+{
+    public async Task<int> Handle(CreateOrderCommand request, CancellationToken ct)
+    {
+        // validate, persist, publish domain event...
+        return newOrderId;
+    }
+}
+// var orderId = await mediator.Send(new CreateOrderCommand(productId, quantity));
+```
+Benefits: thin controllers/endpoints, each use case isolated in its own testable handler, `IPipelineBehavior<>` gives a clean place for cross-cutting concerns (validation, logging, transactions).
+
+**Saga pattern** — since microservices can't share one ACID transaction, a Saga coordinates a sequence of local transactions with compensating actions if a later step fails (reserve inventory → charge payment → confirm order; if payment fails, release the inventory reservation).
+
+| Style | Description |
+|---|---|
+| Orchestration | A central coordinator explicitly calls each service and triggers compensations |
+| Choreography | Each service reacts to events from others; no central coordinator, but harder to trace end-to-end |
+
+**Domain-Driven Design vocabulary** worth having ready: **Entity** (has identity persisting across state changes), **Value Object** (defined entirely by its values, no identity — a natural fit for `record`/`record struct`), **Aggregate** (a cluster of entities/value objects treated as one consistency boundary with a single Aggregate Root), **Bounded Context** (the boundary within which a specific model/vocabulary is valid — often maps 1:1 to a microservice), **Domain Event** (something that happened that other parts of the system may care about, e.g. `OrderPlaced`).
+
+---
+
+## Part XVIII — Observability, Testing & Full-Stack Integration
+
+### Observability & Health Checks
+
+In distributed systems, a single request spans many services — per-service logs alone make it hard to reconstruct the full picture. Modern observability adds **distributed tracing** and **metrics** alongside logs (the "three pillars").
+
+**OpenTelemetry** is the current vendor-neutral standard for collecting traces/metrics/logs and exporting to a backend (Azure Monitor, Jaeger, Prometheus/Grafana, Datadog):
+```csharp
+builder.Services.AddOpenTelemetry()
+    .WithTracing(t => t.AddAspNetCoreInstrumentation().AddHttpClientInstrumentation().AddSource("MyApp").AddOtlpExporter())
+    .WithMetrics(m => m.AddAspNetCoreInstrumentation().AddRuntimeInstrumentation());
+```
+Distributed tracing propagates a trace/correlation ID across service boundaries so a single request can be followed end-to-end — essential for debugging latency and failures in production.
+
+**Health checks:**
+```csharp
+builder.Services.AddHealthChecks().AddSqlServer(connectionString).AddCheck<RedisHealthCheck>("redis");
+app.MapHealthChecks("/health");
+```
+Kubernetes/load balancers poll a health endpoint to decide readiness (should this instance receive traffic?) and liveness (should this instance be restarted?).
+
+### Testing Strategy
+
+| Layer | Tooling | Covers |
+|---|---|---|
+| Unit tests | xUnit/NUnit + Moq or NSubstitute | Business logic in isolation, mocked dependencies |
+| Integration tests | `WebApplicationFactory<T>`, Testcontainers | API + real (or containerized) DB/cache working together |
+| E2E/UI tests | Playwright, Selenium | Full user flows through the actual frontend |
+
+```csharp
+public class OrderServiceTests
+{
+    [Fact]
+    public async Task CreateOrder_Should_Throw_When_Stock_Is_Insufficient()
+    {
+        var repoMock = new Mock<IProductRepository>();
+        repoMock.Setup(r => r.GetAsync(1)).ReturnsAsync(new Product { Id = 1, Stock = 0 });
+        var service = new OrderService(repoMock.Object);
+
+        await Assert.ThrowsAsync<InsufficientStockException>(
+            () => service.CreateOrderAsync(productId: 1, quantity: 1));
+    }
+}
+
+public class ProductsApiTests : IClassFixture<WebApplicationFactory<Program>>
+{
+    private readonly HttpClient _client;
+    public ProductsApiTests(WebApplicationFactory<Program> factory) => _client = factory.CreateClient();
+
+    [Fact]
+    public async Task Get_Products_Returns_Ok()
+    {
+        var response = await _client.GetAsync("/products");
+        response.EnsureSuccessStatusCode();
+    }
+}
+```
+**Testcontainers** spins up a real, disposable DB/Redis instance in Docker for a test run — giving integration tests real fidelity without a shared, stateful test environment.
+
+**Testing philosophy talking points:** mock at architectural boundaries (repositories, external HTTP clients), not internal implementation details, or tests become brittle to refactors; prefer testing behavior/outcomes over verifying exact internal calls; AAA structure (Arrange, Act, Assert); **`async void` is dangerous in test methods too** — always use `async Task` so the test runner can observe exceptions thrown inside (see Part VIII).
+
+### Full-Stack Integration
+
+**SignalR** abstracts WebSockets (with SSE/long-polling fallbacks) for real-time, bidirectional communication:
+```csharp
+public class NotificationHub : Hub
+{
+    public async Task SendMessage(string user, string message) =>
+        await Clients.All.SendAsync("ReceiveMessage", user, message);
+}
+// app.MapHub<NotificationHub>("/hubs/notifications");
+```
+
+**Blazor hosting models:**
+
+| Model | Where code runs | Notes |
+|---|---|---|
+| Blazor Server | On the server; UI pushed over SignalR | Small download, needs a persistent connection |
+| Blazor WebAssembly (WASM) | In the browser via WASM | True client-side C#, works offline, larger initial download |
+| Blazor Hybrid/MAUI | Native app shell hosting a Blazor UI | Shared UI code across web and native mobile/desktop |
+
+**Backend-for-Frontend (BFF)** — a dedicated backend layer (often ASP.NET Core) tailored to a specific frontend's needs: aggregates calls to multiple downstream microservices, handles auth token exchange, shapes responses exactly as the SPA needs — the browser never talks directly to internal services.
+
+**CORS in practice** — a near-guaranteed practical question: *"Your React app on `localhost:3000` can't call the API on `localhost:5001` — why, and how do you fix it?"* Answer: same-origin policy blocks cross-origin requests by default; the API must explicitly opt in specific origins via CORS middleware:
+```csharp
+builder.Services.AddCors(options => options.AddPolicy("SpaPolicy",
+    p => p.WithOrigins("https://myapp.com").AllowAnyHeader().AllowAnyMethod().AllowCredentials()));
+app.UseCors("SpaPolicy");
+```
+
+### What's Different About Senior-Level Interviews
+
+- Less "define X" trivia, more scenario-based reasoning: "Design a rate limiter," "Design a notification service," "Walk me through debugging a production memory leak" (see **GC Diagnostics Tooling for Production** in Part VII for a concrete `dotnet-counters` → `dotnet-gcdump` → `dotnet-trace` walkthrough — naming actual tools here is what separates a senior answer from a conceptual one).
+- Interviewers weight production experience and architectural judgment heavily, not just correct syntax.
+- A common signal of weakness: answering "it depends" without a follow-up. A strong answer says "it depends" and then gives a **decision framework plus a default recommendation** (e.g., the EF Core vs Dapper framing in Part IX).
+- Expect "why not X instead?" probing on almost every answer — this tests whether you understand trade-offs, not just the happy path.
+
+Sample system-design-style prompts worth rehearsing: design a URL shortener/rate limiter/notification service (practice sketching API, cache, DB, queue and talking through scaling/failure modes out loud); "how would you reduce P99 latency of an endpoint calling three downstream services sequentially?" (parallelize independent calls with `Task.WhenAll`, add caching, consider a circuit breaker for the slowest dependency); "how would you migrate a monolith's Products module to a microservice without downtime?" (strangler-fig pattern, dual-write or CDC-based data sync, feature-flag cutover).
+
+---
+
+## Part XIX — Swagger / OpenAPI & API Documentation
+
+> **Framing note:** this topic is fundamentally an **ASP.NET Core / Web API tooling** subject, not a C# language feature — it's included here because the source material (`C# Swagger.docx`) lived in the C# notes folder. The genuinely C#-language-relevant slice is XML doc-comment syntax (`///`, `<summary>`, `<param>`) and attribute usage in general; everything else below is Web API tooling/configuration knowledge that a full-stack interview will still expect you to know.
+
+**OpenAPI vs Swagger:** OpenAPI Specification (OAS) is the standard for describing REST APIs in machine-readable JSON/YAML — the API contract. Swagger is the tooling ecosystem built around it (Swagger UI, Swagger Editor, Swagger Codegen). Swagger *implements* OpenAPI.
+
+**Swagger in .NET (Swashbuckle):**
+```csharp
+// dotnet add package Swashbuckle.AspNetCore
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+app.UseSwagger();
+app.UseSwaggerUI();     // https://localhost:5001/swagger
+```
+
+**JWT auth in Swagger UI:**
+```csharp
+builder.Services.AddSwaggerGen(options =>
+{
+    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Name = "Authorization", Type = SecuritySchemeType.Http, Scheme = "bearer", BearerFormat = "JWT",
+        In = ParameterLocation.Header, Description = "Enter your JWT token (without the 'Bearer' prefix)."
+    });
+    options.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        { new OpenApiSecurityScheme { Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" } },
+          Array.Empty<string>() }
+    });
+});
+```
+Two parts to remember: the **security definition** declares the scheme exists (the Authorize button); the **security requirement** declares which operations require it (the padlocks). A very common pitfall: wiring JWT into the auth middleware but forgetting the OpenAPI security scheme, so the Authorize button never appears.
+
+**Swashbuckle removed as default in .NET 9+ (current hot topic — a great "do you keep up with the platform" signal):**
+
+| Version | OpenAPI behavior |
+|---|---|
+| .NET 8 and earlier | Swashbuckle included by default; generates OpenAPI 3.0 |
+| .NET 9 | Built-in `Microsoft.AspNetCore.OpenApi`; OpenAPI 3.0; no UI, no XML comment support at launch |
+| .NET 10 | Built-in generator emits OpenAPI 3.1 by default; Native AOT friendly |
+
+*(Verify exact per-version behavior against current Microsoft docs at interview time — tooling details like this shift between preview and RTM.)* Reasons for the change: Swashbuckle's maintenance gaps and the need for Native AOT compatibility, which reflection-heavy Swashbuckle struggled with. Swashbuckle isn't dead — it remains an actively maintained community package you can add manually.
+
+```csharp
+builder.Services.AddOpenApi();     // register generation only — no UI shipped
+var app = builder.Build();
+app.MapOpenApi();                  // serves /openapi/v1.json
+```
+
+| UI tool | Role |
+|---|---|
+| Swagger UI (`Swashbuckle.AspNetCore.SwaggerUI`) | Classic interactive UI, point at `/openapi/v1.json` |
+| Scalar (`Scalar.AspNetCore`) | Modern UI — dark mode, multi-language snippets, `MapScalarApiReference()` |
+| NSwag | Client SDK generation (TypeScript, C#) |
+| ReDoc | Clean, read-only reference documentation |
+
+**OpenAPI document structure:** `openapi` (spec version), `info`, `servers`, `paths`, `components` (reusable schemas/responses/parameters/securitySchemes, referenced via `$ref`), `security` (global requirements), `tags` (UI grouping). OpenAPI 3.1 aligns with JSON Schema draft 2020-12, adds webhooks as a top-level element, and describes nullability via `type: [string, null]` instead of 3.0's `nullable: true`.
+
+**API versioning:** URL path (`/api/v1/products`), query string (`?api-version=1.0`), header (`api-version: 1.0`), or media type (`Accept: application/json;v=1.0`) — `Asp.Versioning.Mvc` plus the API explorer exposes a Swagger document per version. Never make breaking changes to an existing version's contract; ship a new version instead.
+
+**Documenting responses/errors:**
+```csharp
+[ProducesResponseType(typeof(Product), StatusCodes.Status200OK)]
+[ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+public async Task<IActionResult> Get(int id) { /* ... */ }
+```
+Prefer `ProblemDetails` (RFC 7807) for all error responses instead of anonymous/dynamic objects, which produce no usable schema. Enable `<GenerateDocumentationFile>true</GenerateDocumentationFile>` and feed the generated XML into the generator so `<summary>`/`<param>` text appears in the UI.
+
+**Quick-fire comparisons:** Swagger UI (always reflects live code) vs Postman (standalone collections that can drift); code-first (fast, doc can lag intent) vs contract-first (better for parallel teams/public APIs, contract is the source of truth); REST/OpenAPI (fixed endpoints, mature tooling/caching) vs GraphQL (client-specified fields, reduces over/under-fetching).
+
+**Securing Swagger in production** — go beyond "just disable it": serve the spec/UI only in Development (or behind a toggle); if the UI must be exposed, put it behind auth (e.g., an admin policy); restrict by network (IP allow-lists, VPN, internal-only ingress); for internal APIs, consider serving only the raw JSON with no UI at all, since a public UI is free reconnaissance for attackers; never leak secrets/sample tokens in examples.
+
+**[new content] The remaining thin/unelaborated "advanced topics" from the raw notes, answered:**
+- **API linting** — validating an OpenAPI document against style/consistency rules (naming conventions, required fields, forbidden patterns) using tools like Spectral, catching contract problems in CI before they reach consumers.
+- **Mock server generation** — tools like Prism or WireMock can spin up a working mock HTTP server directly from an OpenAPI document, letting frontend teams build against a contract before the real backend exists.
+- **OpenAPI validation pipelines** — CI steps that lint the spec, diff it against the previous version to catch breaking changes, and optionally run contract tests against the running service to ensure the implementation matches the documented contract.
+- **AsyncAPI** — a sibling specification to OpenAPI, purpose-built for describing **event-driven/asynchronous APIs** (message queues, WebSockets, Kafka topics) where OpenAPI's request/response model doesn't fit; worth naming if a microservices-messaging question comes up alongside OpenAPI.
+- **Schema evolution strategies** — favor additive-only changes (new optional fields) over removing/renaming fields; use `deprecated: true` before removal; never change a field's type or make an optional field required without a new API version; consider consumer-driven contract testing (e.g., Pact) so breaking changes are caught by tests before shipping, not by downstream consumers in production.
+
+---
+
+## Part XX — Terminology Reference
+
+| Term | What It Is | Runs on Its Own? | Example |
+|---|---|---|---|
+| Library | Reusable code | No | `System.Collections` |
+| DLL | Compiled binary of a library | No | `Newtonsoft.Json.dll` |
+| EXE | Executable application | Yes | `MyApp.exe` |
+| Framework/SDK | Libraries + runtime (SDK adds tooling: compilers, templates, CLI) | No (needs an app) | .NET 8, .NET 10 |
+| Package | NuGet distribution format (`.nupkg`) | No | `Newtonsoft.Json` (NuGet) |
+
+**Managed vs unmanaged code:** managed code is written in a .NET language, compiled to MSIL, and runs under CLR supervision (memory management, type safety, security). Unmanaged resources are outside the CLR (file handles, DB connections, sockets, OS handles, native memory) and must be released explicitly via `Dispose()`.
+
+---
+
+## Best Practices Checklist
+
+- Favor composition over inheritance; keep inheritance hierarchies shallow.
+- Start with an interface; reach for an abstract class only when shared state/behavior is genuinely needed.
+- Keep constructors lightweight — no I/O/DB calls; validate arguments early; prefer immutability.
+- Override `Equals()` and `GetHashCode()` together, never one without the other.
+- Prefer `AsNoTracking()` for read-only EF Core queries; eager-load with `Include()` to avoid N+1.
+- Prefer `Task` by default; reach for `ValueTask` only with profiling evidence of benefit.
+- Always `async Task`, never `async void`, except for framework-mandated event handlers.
+- Use `ConfigureAwait(false)` in shared library code; it's largely optional in ASP.NET Core application code.
+- Use a global exception-handling middleware / `IExceptionHandler`, not scattered `try/catch`.
+- Expose **events**, not raw delegates, from reusable APIs.
+- Use structured logging (`{PlaceholderName}`) over string concatenation.
+- Prefer `ProblemDetails` (RFC 7807) for API error responses.
+- Never store secrets in source control; use User Secrets locally, Key Vault/Secrets Manager in production.
+- Combine retry with a circuit breaker for downstream calls — never retry indefinitely.
+- Benchmark before/after any performance change (BenchmarkDotNet) rather than trusting intuition.
+- Keep EF Core migrations small, reversible, and reviewed before running against production.
+
+## Common Pitfalls Checklist
+
+- Blocking on async code with `.Result`/`.Wait()` from a context that captures a `SynchronizationContext` → deadlock.
+- `async void` swallowing exceptions silently (including in test methods).
+- Disposing/recreating `HttpClient` per request instead of using `IHttpClientFactory`.
+- Singleton services capturing Scoped/Transient dependencies (captive dependency).
+- Multiple enumeration of the same `IQueryable`/lazily-evaluated `IEnumerable`.
+- Materializing (`.ToList()`) an `IQueryable` before applying further filters, forcing client-side evaluation.
+- String-concatenated SQL (`AddWithValue` overuse, or worse, raw concatenation) — injection risk and plan-cache bloat.
+- Un-unsubscribed event handlers leaking memory.
+- Overusing `dynamic`/reflection where a source generator or static typing would do.
+- Exposing Swagger/OpenAPI UI in production without restricting access.
+- Treating `GC.Collect()` as a routine performance tool.
+
+---
+
+## Sample Interview Q&A (Rapid Fire)
+
+**Q: What's the difference between a record and a class?**
+A: Records give value-based equality and `ToString()` for free, and support non-destructive mutation via `with` expressions; classes have reference equality and are mutable by default. Use records for DTOs/domain value objects; use `record struct` for small, allocation-sensitive value types.
+
+**Q: Why does `.Result` sometimes deadlock and sometimes not?**
+A: It deadlocks when the calling thread blocks on `.Result` while the awaited method's continuation needs to resume on a `SynchronizationContext` captured by that same thread (classic in WPF/WinForms/old ASP.NET). ASP.NET Core has no `SynchronizationContext`, so this specific deadlock doesn't occur there — though blocking on `.Result` under load can still starve the ThreadPool.
+
+**Q: When would you use ValueTask instead of Task?**
+A: Only on a proven hot path where results are frequently already available synchronously (e.g., a cache-hit path) — and only after profiling shows the `Task` allocation actually matters. Default to `Task` otherwise; `ValueTask`'s single-await restriction makes it easy to misuse.
+
+**Q: Why override GetHashCode() whenever you override Equals()?**
+A: `Dictionary`/`HashSet` bucket objects by hash code first, then use `Equals()` to disambiguate within a bucket. If two objects are `Equals`-equal but have different hash codes, lookups silently fail to find them.
+
+**Q: What's the N+1 query problem and how do you fix it?**
+A: Fetching a parent collection, then lazily triggering one additional query per row to fetch related data. Fix with eager loading (`Include()`), projection (`Select()` to pull only needed fields), or `AsSplitQuery()` for multiple `Include`s.
+
+**Q: Why is AutoMapper controversial at senior level?**
+A: It trades compile-time safety and debuggability for convenience — mapping bugs surface at runtime, not compile time, and complex configurations become their own hard-to-maintain DSL. Many senior teams prefer explicit manual mapping or a source-generated mapper for anything business-critical.
+
+**Q: What's a captive dependency in DI?**
+A: A longer-lived service (typically Singleton) that captures a shorter-lived dependency (Scoped/Transient) in its constructor, holding it far beyond its intended lifetime — commonly causing thread-safety bugs with `DbContext`. Fixed via `IServiceScopeFactory` to create a fresh scope when the dependency is actually needed.
+
+**Q: How do you secure a Swagger/OpenAPI endpoint in production?**
+A: Restrict to Development environment or gate behind auth/network controls (IP allow-list, VPN); for internal APIs, consider serving only the raw JSON document with no UI, since a public UI is free reconnaissance; never leak real tokens/hostnames in examples.
+
+**Q: Async vs multithreading — what's the actual difference?**
+A: Async/await is about not blocking a thread while waiting on I/O — it doesn't inherently create parallelism and is ideal for I/O-bound work. Multithreading explicitly runs code on multiple threads concurrently for true parallelism — ideal for CPU-bound work, at the cost of needing synchronization.
+
+**Q: Walk me through debugging a production memory leak. [gaps]**
+A: Start cheap and non-invasive: `dotnet-counters monitor` against the live PID to see whether Gen 2 heap size trends upward across GC cycles (the actual leak signature, vs. just high allocation churn). If it's climbing, take two `dotnet-gcdump` snapshots minutes apart and diff them to see which object types grew disproportionately and what's rooting them — usually an un-unsubscribed event handler, an unbounded static cache, a captive `DbContext`, or a closure captured into a long-lived delegate. Only reach for a full `dotnet-trace` capture if you still need allocation call stacks to pinpoint the exact line of code. Full details in Part VII.
+
+**Q: What changed with Swagger in .NET 9?**
+A: Swashbuckle was dropped as the default Web API template dependency, replaced by the built-in `Microsoft.AspNetCore.OpenApi` package (document generation only, no UI shipped) — driven by Swashbuckle's maintenance gaps and Native AOT incompatibility. You now separately choose a UI (Swagger UI, Scalar, ReDoc, NSwag).
+
+---
+
+## Summary of Additions
+
+All headings below were added during consolidation because the topic was missing or too thin across the six source files, based on what senior .NET interviews commonly probe in 2026 (C# 12–14 / .NET 9–10 era):
+
+| [new content] Heading | Why it matters |
+|---|---|
+| Records & record struct | Now the default choice for DTOs/value objects; a near-guaranteed "what's new in C#" question. |
+| Pattern Matching & Switch Expressions | Idiomatic replacement for `if/else`/type-check chains; signals current coding style. |
+| init, required, and Primary Constructors (C# 11/12) | Extremely common in modern minimal-API/DI code; original notes stopped around C# 8–10. |
+| Static Abstract/Virtual Interface Members & Generic Math (C# 11) | Powers `INumber<T>`-style generics; a genuinely new capability with no prior C# equivalent. |
+| Source Generators | The modern, AOT-friendly alternative to reflection; a strong current-knowledge signal. |
+| LINQ Gotchas Every Senior Dev Should Know | Multiple-enumeration, closure-capture, and First/Single semantics were entirely absent but are classic senior traps. |
+| IAsyncDisposable | `await using`/async cleanup wasn't covered at all despite being standard in modern `DbContext`/`Stream` usage. |
+| ConfigureAwait(false) and SynchronizationContext | Named nowhere in any of the six sources despite being one of the most-asked async nuances. |
+| The Classic Sync-Over-Async Deadlock | The single most common senior async interview question; source only had a generic lock-ordering deadlock, not this one. |
+| async void — Why It's Dangerous | Only a passing one-line mention existed; this is a top-tier async gotcha deserving full treatment. |
+| Task vs ValueTask | `ValueTask` was never mentioned in any source despite being a common senior performance question. |
+| The Captive Dependency Problem | A classic senior DI gotcha (Singleton capturing Scoped) absent from all DI coverage in the sources. |
+| Keyed DI Services (.NET 8+) | Current DI feature; natural follow-up once captive dependencies are discussed. |
+| NRTs in practice — the real-world adoption pain (Part I) | Sources mentioned `string?` syntax but not the real rollout pain/escape hatches interviewers probe. |
+| The AutoMapper debate | Sources presented AutoMapper uncritically; senior interviews expect awareness of its trade-offs/alternatives. |
+| Also expected... Repository/Unit of Work/Mediator/Clean Architecture (Part X) | Architectural patterns section was a one-liner list with no Repository/UoW/Mediator/Clean Architecture content. |
+
+**Contradictions/issues flagged and resolved:**
+- **CAS (Code Access Security)** was listed in raw notes as a current CLR security responsibility — flagged as legacy/deprecated (absent since .NET Framework 4 / entirely absent from .NET Core+) rather than presented as current.
+- **SOLID code examples** in `c#.txt` were written in Java syntax (`implements`, `extends`) despite being C# notes — this guide uses the correct C# versions throughout (sourced from the more complete consolidated docx).
+- **.NET version currency**: source tables stopped at .NET 9; updated to reflect .NET 10 as the current LTS release as of this guide's writing (mid-2026) — flagged with a "verify exact dates" caveat since Microsoft's lifecycle pages are the authoritative source.
+- **OpenAPI 3.0/3.1 version-to-.NET-version mapping** (Part XIX) is stated as fact per the source but flagged for verification against current Microsoft docs, since exact tooling behavior can shift between preview and RTM.
+
+**Source-file contribution to overlap:** `c#.txt` (raw, ~100 numbered Q&A plus appendices) and the pre-consolidated `C# .NET Interview Notes - Consolidated.docx` overlapped almost completely for foundational topics (OOP, CLR, delegates/events, collections, memory/GC, ADO.NET, Swagger) — the Consolidated docx had already absorbed and reorganized `C#.docx`, `C#2.docx`, `c# Async.docx`, and `C# Swagger.docx` in a prior pass, and additionally contained substantial pre-existing `[NEW CONTENT]`-tagged material (EF Core, caching, resilience, auth, performance, concurrency primitives, microservices, observability, testing, full-stack integration) not present in any raw source. `C#.docx` and `C#2.docx` overlapped heavily with each other (stack/heap, constructors, delegates/events, DI, interface-vs-abstract-class — often near word-for-word, including identical analogies like the "car keys vs invited for a ride" delegate/event comparison). `c# Async.docx` contributed the ASP.NET Core threading deep-dive (preserved in Part VIII) but was thin on `ConfigureAwait`, the sync-over-async deadlock, `async void`, and `ValueTask` — all filled in as new content here. `C# Swagger.docx` was the most self-contained and already fairly current, needing only the API-linting/AsyncAPI/schema-evolution gaps filled.
+
+---
+
+## Summary of [gaps] Additions (This Pass)
+
+This is a second gap-fill pass, run against a **formal gap-analysis review** that identified six specific missing/thin topics in the guide (as it stood after the `[new content]` consolidation pass above). Unlike that first pass, this list was handed down directly rather than re-derived — the items below are exactly what was specified, written up in full and inserted next to the most relevant existing sections:
+
+| [gaps] Heading | Location | Why it matters |
+|---|---|---|
+| Async State-Machine Internals | Part VIII, after async/await Fundamentals | Explains *how* the compiler rewrites `async` methods into an `IAsyncStateMachine`/`MoveNext()` implementation and how `IsCompleted`/`OnCompleted`/`GetResult()` actually get invoked — this is the mechanical understanding that separates candidates who memorized async rules from those who can explain why they're true. |
+| Task.Run vs Task.Factory.StartNew(LongRunning) vs Parallel.ForEachAsync | Part VIII, after Task Parallel Library (TPL) | Clarifies the one real remaining use case for `StartNew(..., LongRunning)`, and introduces `Parallel.ForEachAsync` (.NET 6+) as the modern built-in replacement for hand-rolled `SemaphoreSlim` throttling — a pattern this guide previously only showed the manual way. |
+| Expression Trees & How EF Core Translates LINQ to SQL | Part VI, before IEnumerable vs ICollection/IList/IReadOnlyList | Directly answers the near-guaranteed follow-up to "IEnumerable vs IQueryable": *how* does `Expression<Func<T,bool>>` actually become SQL — the guide previously named the mechanism ("expression trees translated to SQL") without ever explaining it. |
+| PLINQ / AsParallel() Trade-offs | Part VI, alongside the expression-trees section | The guide had no PLINQ coverage at all; this fills in when parallelizing LINQ genuinely helps vs. when partitioning/merging overhead makes it a net loss — a common "I tried this and it got slower" senior trap question. |
+| .NET 6+ LINQ Additions: MinBy/MaxBy/Chunk/DistinctBy/Order/OrderDescending | Part VI, before LINQ Gotchas | Modern, frequently-used LINQ operators that were entirely absent from the guide despite being standard in current-day .NET code — a quick, high-value currency signal. |
+| GC Diagnostics Tooling for Production | Part VII, before Dispose() vs Finalize() | The guide's own sample question ("walk me through debugging a production memory leak") previously had no tooling-based answer anywhere in the document; this adds `dotnet-counters` → `dotnet-gcdump` → `dotnet-trace` as a concrete, sequenced walkthrough, and the sample-question references elsewhere were updated to point here. |
+| Low-Level Concurrency Primitives: Monitor, SpinLock, False Sharing, Thread-Pool Starvation | Part XVI, before SemaphoreSlim | Explains what `lock` actually compiles down to (`Monitor.Enter`/`Exit`/`Wait`/`Pulse`), when `SpinLock`/`SpinWait` are (rarely) appropriate, the false-sharing/cache-line-contention performance trap, and how to recognize and reason about ThreadPool starvation (`ThreadPool.SetMinThreads` as a band-aid, not a fix) — all previously missing from the concurrency coverage. |
+
+No contradictions were found between this pass's additions and the existing `[new content]` material — the two passes are complementary (the first pass covered missing *features*; this pass covers missing *mechanisms and tooling* underneath features the guide already documented, such as async/await, LINQ, GC, and locking).
+</content>

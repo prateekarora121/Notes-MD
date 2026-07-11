@@ -509,4 +509,44 @@ flowchart TB
 
 ## Sample Interview Q&A
 
-**Q: Walk me through how you'd introduce Scrum to a team curren
+**Q: Walk me through how you'd introduce Scrum to a team currently doing ad-hoc, unstructured development.**
+A: Start with the pain points, not the ceremonies — identify what's actually hurting them (missed deadlines, unclear priorities, rework). Introduce a lightweight backlog and a short (1–2 week) sprint cadence, a real Definition of Done, and a retrospective from day one so the process self-corrects. Avoid big-bang adoption of every SAFe/Scrum artifact at once; earn the team's trust with a few working sprints before adding ceremony weight.
+
+**Q: Your velocity has been flat for three sprints despite the team saying they're busier than ever. What do you investigate?**
+A: First check whether "busier" means more WIP, not more throughput — look at cycle time and WIP counts, not just velocity. Check for hidden work (unplanned interrupts, production support) not captured on the board. Check for point inflation or estimation drift. Check for increased context-switching (too many concurrent stories per person). Velocity is a lagging, aggregate signal — flat velocity alone doesn't diagnose the cause; cycle time and WIP usually do.
+
+**Q: A stakeholder wants a fixed date and fixed scope for a project, but your org runs Scrum. How do you reconcile that?**
+A: Fixed date + fixed scope + fixed quality is the classic "iron triangle" conflict — something has to flex. In practice: negotiate an MVP scope with the stakeholder up front (MoSCoW helps), commit to the date against that reduced/prioritized scope, and use the backlog to absorb "nice to have" items that get cut if needed as the date approaches, verified sprint by sprint via velocity-based forecasting rather than a single upfront estimate.
+
+**Q: How do you know if your Definition of Done is actually being honored, versus just existing on a wiki page?**
+A: Automate as much of it as possible into CI/CD gates (tests, coverage thresholds, security scans, static analysis) so it's enforced by the pipeline, not self-reported. For the parts that can't be automated (e.g., "reviewed by QA"), track them via the board workflow (a story can't move to Done without passing through a "QA" column with an explicit checklist) and audit sporadically in retro if regressions/escaped-defects start appearing.
+
+**Q: Explain the difference between a Product Owner prioritizing the backlog and a Scrum Master facilitating the process — where do responsibilities overlap or conflict?**
+A: The PO owns the *what* and *why* (value, priority, business outcomes); the Scrum Master owns the *how* (process health, removing impediments, coaching the team on Agile practices). They can conflict when a PO tries to dictate *how* the team works (e.g., mandating overtime to hit scope) or when a Scrum Master starts making prioritization calls that belong to the PO. A healthy team keeps these separated even when, practically, one person sometimes wears both hats on smaller teams (which itself is a known risk/anti-pattern worth naming if asked).
+
+**Q: How would you handle a team member who consistently underestimates their own tasks?**
+A: Address it as a calibration problem, not a performance one, in a 1:1 first — look at their actual task breakdown process (are they missing testing/review/deployment effort, not just "coding time"?). Use retro data (planned vs actual) to make the pattern visible to them concretely. Pair them with a teammate during estimation sessions to calibrate against group consensus (planning poker's real value). Avoid public callouts — estimation accuracy is a team-learning problem, not an individual failing, especially since points are meant to be relative/team-calibrated in the first place.
+
+---
+
+## Summary of Additions
+
+The following `[new content]` sections were added to close gaps commonly probed in 2026 senior/lead .NET interviews but missing or thin in the original notes:
+
+1. **DoD vs DoR — Why Both Matter** — original notes defined each separately but never contrasted them; this distinction is a classic interview trap.
+2. **Scrum vs Kanban vs SAFe vs Scrumban** — notes only compared Scrum vs Kanban; senior roles increasingly touch scaled frameworks, so SAFe/Scrumban awareness is expected.
+3. **Velocity vs Throughput vs Cycle Time** — notes listed metrics but never explained how they relate (Little's Law) or when each is the right signal — a frequent "explain the difference" question.
+4. **Prioritization Frameworks (WSJF, MoSCoW, Kano, RICE)** — notes named prioritization *inputs* (value, risk) but no formal frameworks; WSJF especially signals SAFe experience.
+5. **Estimation Techniques Beyond Planning Poker** — notes mentioned only planning poker/Fibonacci; added t-shirt sizing, affinity estimation, and the #NoEstimates movement to show breadth.
+6. **Agile in a Microservices / CI-CD Context** — the single biggest gap: nothing in the original notes addressed how Agile delivery actually works with microservices, trunk-based dev, feature flags, and CI/CD gates — highly relevant for a .NET full-stack candidate in 2026.
+7. **Scaling Agile: SAFe, LeSS, and Spotify Model** — notes were single-team-Scrum only; a 10-year candidate is very likely to be asked about multi-team/scaled Agile experience.
+8. **Agile Anti-Patterns** — notes never covered failure modes (Water-Scrum-Fall, Zombie Scrum, velocity gaming, etc.); recognizing anti-patterns is a strong signal of real-world (not textbook) experience.
+9. **Agile Metrics Dashboards and Reporting to Leadership** — notes listed metrics but not how to translate them for non-technical leadership or the risk of Goodhart's Law when metrics become targets.
+
+**Contradictions flagged:** None found — the two source sections ("Agile & Requirements Interview Q&A" and "Advanced Agile Interview Questions") were complementary rather than conflicting; overlapping topics (e.g., scope change handling, DoD-adjacent content) were merged without factual disagreement.
+
+## Summary of `[gaps]` Additions (This Pass)
+
+A follow-up gap-analysis review flagged that this guide's metrics coverage was entirely Scrum/flow-focused (velocity, throughput, cycle time, lead time) with no mention of DORA metrics — the industry-standard, framework-agnostic way engineering organizations measure delivery performance. One `[gaps]`-tagged section was added to close this:
+
+1. **DORA Metrics** — added the four key metrics (Deployment Frequency, Lead Time for Changes, Change Failure Rate, MTTR), their origin (Google/DORA's research program) and the throughput-vs-stability axis framing that shows elite performers are strong on both simultaneously — a counterintuitive, interview-worthy finding. Most importantly, explicitly connected DORA metrics back to Agile ceremonies and backlog health already covered elsewhere in this guide: a team can post great velocity while Change Failure Rate/MTTR quietly deteriorate, because velocity only measures work *started and finished inside a sprint*, not what happens to that work *after* it reaches production — exactly the blind spot DORA metrics are designed to close. Tied this into retrospectives (reviewing DORA trends, not just burn-down), backlog prioritization (rising Change Failure Rate as a real, data-backed reliability-investment signal a PO should weigh against new feature work), and this candidate's Deployment Strategies knowledge (low Deployment Frequency as a proxy for large, risky release batches).

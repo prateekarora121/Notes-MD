@@ -248,6 +248,44 @@ Applies at step **or** job level. Common expressions: `github.event_name == 'pul
 
 **Gotcha:** if a prior step fails, subsequent steps are **skipped by default** unless you explicitly use `if: always()` or `if: failure()` — a frequent cause of "why didn't my cleanup/notification step run?" bugs.
 
+### Build/Deploy Notifications (Slack & Email)
+
+Wiring up notifications is one of the most common "glue" requests on top of a CI/CD pipeline, and it leans directly on the `if: always()`/`if: failure()` conditionals above — a notification step is exactly the kind of step you *want* to run regardless of (or specifically because of) upstream failure.
+
+**Sending a Slack notification on build/deploy status:**
+
+```yaml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: dotnet build
+
+      - name: Notify Slack on success
+        if: success()
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_MESSAGE: 'Build completed successfully! :white_check_mark:'
+          SLACK_COLOR: good
+
+      - name: Notify Slack on failure
+        if: failure()
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_MESSAGE: 'Build failed on ${{ github.ref_name }} — check the run.'
+          SLACK_COLOR: danger
+```
+
+- `rtCamp/action-slack-notify@v2` (and similar Marketplace actions) posts to a **Slack Incoming Webhook URL** stored as a repo/environment secret (`SLACK_WEBHOOK`) — no OAuth app install required for the simple case, just a webhook per channel.
+- Split success/failure into separate steps with `if: success()` / `if: failure()` (rather than one `if: always()` step) when you want different messages/colors per outcome; use `if: always()` only when a single step should run unconditionally and branch on `${{ job.status }}` internally.
+- **Email** notifications follow the same pattern with an SMTP-based action, e.g. `dawidd6/action-send-mail@v3`, fed server/credentials via secrets and gated the same way (`if: failure()` for an on-call alert, `if: success()` for a deploy confirmation).
+- **The reverse direction — triggering a workflow *from* Slack:** a Slack bot/slash-command can call the GitHub REST API (or `gh workflow run`) to fire a `workflow_dispatch` event, effectively giving you ChatOps ("`/deploy staging`" in Slack kicks off a GitHub Actions run). This requires a PAT or GitHub App token with `actions: write` on the target repo — `GITHUB_TOKEN` isn't usable here since the call originates outside any workflow run.
+
+**Interviewer angle:** they're checking that you know *where* the coupling point is — notifications aren't a special GitHub Actions primitive, they're ordinary steps (Marketplace action or a `curl`/SMTP call) gated by the same `if:` conditional logic used for cleanup steps, driven by a webhook/SMTP secret rather than `GITHUB_TOKEN`.
+
 ### Branch/path filters
 
 ```yaml
@@ -1018,4 +1056,47 @@ Here the **artifact** (not cache) is the correct primitive — the zip is the ac
 - Uploading multiple matrix legs to one artifact name under v4 semantics (now disallowed) — must use unique names per leg.
 - Treating secret masking as a real security boundary against determined exfiltration (encoding/splitting bypasses naive log redaction).
 - Forgetting `fetch-depth: 0` when a step needs full git history (versioning tools, `git log`-based changelogs).
-- Long-lived, non-ephemeral self-
+- Long-lived, non-ephemeral self-hosted runners on public repos — a significant attack surface.
+
+---
+
+## Sample Interview Q&A
+
+**Q: Walk me through what happens end-to-end when a developer opens a PR, from trigger to merge, in a well-designed GitHub Actions setup for a .NET service.**
+A: PR opened → `pull_request` event fires with a restricted, secret-less token → build/test/lint jobs run in parallel where possible, with matrix across relevant TFMs/OS if needed → NuGet cache restored by lockfile hash → `dotnet build`/`dotnet test` run, results published via a TRX-aware reporter as PR checks → on success, artifacts (build output, coverage report) uploaded → branch protection requires these checks green before merge → merge to main triggers a separate `push`-triggered workflow that runs the trusted deployment path (potentially through a reusable workflow), gated by an `environment` requiring manual approval for production, using OIDC to assume a cloud deploy role rather than static secrets.
+
+**Q: Your GitHub Actions bill is too high — walk me through how you'd reduce it without hurting developer velocity.**
+A: Instrument first — identify which workflows/jobs consume the most minutes (Actions usage reports). Then: switch unnecessary Windows/macOS runners to Linux where feasible (biggest per-minute multiplier lever); add `concurrency`+`cancel-in-progress` to kill stale superseded runs; add/verify NuGet and Docker layer caching; add path-based change detection in monorepos so unrelated services don't rebuild; tighten `timeout-minutes` to catch hangs; evaluate self-hosted runners for the highest-volume, most predictable workloads if the infra/ops cost is lower than the aggregate GitHub-hosted minute cost; consider larger runner SKUs only where benchmarking shows net wall-clock/cost improvement.
+
+**Q: How do you securely deploy to AWS/Azure without storing cloud credentials as GitHub secrets?**
+A: OIDC federation — configure a trust relationship between GitHub's OIDC provider and an IAM role (AWS) or federated credential (Azure App Registration), scoped via claims to the specific repo/branch/environment. The workflow requests `id-token: write` permission, exchanges a short-lived signed token for temporary cloud credentials scoped to that single job run, and no static secret exists anywhere in the system.
+
+**Q: What's the difference between a reusable workflow and a composite action, and how do you decide which to use?**
+A: Reusable workflow = one or more full jobs, own runner, invoked with `workflow_call`, secrets must be explicitly passed (or `inherit`); good for standardizing an entire pipeline stage across many repos with central governance. Composite action = a sequence of steps executed inside the *caller's* existing job/runner, defined in `action.yml`; good for smaller shared step sequences (e.g. standard checkout+setup+restore) embedded within otherwise-different jobs.
+
+**Q: What is a "pwn request" and how do you prevent it?**
+A: A vulnerability class where a workflow triggered by `pull_request_target` (or `workflow_run`) — which runs with the base repo's full token/secrets — checks out and executes code from an untrusted PR head, letting a malicious contributor run arbitrary code with privileged access/secrets. Prevention: never check out/execute PR head content in a `pull_request_target` context; split untrusted build/test (via plain `pull_request`, no secrets) from privileged deploy logic (via `push`/manual/gated triggers operating only on trusted, already-merged code or vetted artifacts).
+
+**Q: How would you migrate an existing Azure DevOps YAML pipeline to GitHub Actions?**
+A: Map stage→job(s), Azure DevOps `template`→reusable workflow or composite action, variable groups→repo/environment secrets and variables (re-linking Key Vault via OIDC-authenticated steps rather than a service connection), self-hosted agent pools→self-hosted runners or ARC, and approvals/checks→GitHub environments with required reviewers. The mechanical translation is usually straightforward; the real work is re-auditing the security model — GitHub's default `GITHUB_TOKEN` permissions, secret scoping, and OIDC trust policies differ from Azure DevOps service connection semantics, so don't assume a 1:1 lift-and-shift is secure by default.
+
+**Q: Explain caching vs artifacts, and a scenario where using the wrong one causes a bug.**
+A: Cache speeds up repeated restores (NuGet/npm/Docker layers) and is best-effort/evictable/immutable-per-key; artifacts are durable, guaranteed-for-retention-period outputs meant to be passed between jobs or downloaded by humans. Using cache to pass a build output between jobs is a bug waiting to happen — a cache miss (eviction, key change) silently produces a build with stale/missing output instead of a hard failure, whereas a missing artifact download fails loudly. Always use artifacts for job-to-job data dependencies, cache only for dependency-restore acceleration.
+
+---
+
+## Summary of Additions
+
+The following `[new content]` sections were added to close gaps versus what's commonly asked in current (2026) senior .NET interviews. The original notes were Q&A-format and already answered — no bare/unanswered questions were found in the source, so this pass focused entirely on gap-filling and reorganization:
+
+1. **.NET-Specific CI/CD** — the original notes were generic/language-agnostic; senior .NET interviews expect fluency in `dotnet restore --locked-mode`, TRX test reporting, coverage collection, and versioning tools (GitVersion/nbgv/MinVer), none of which were covered.
+2. **Containerized .NET Apps — Build & Push** — modern .NET deployment is overwhelmingly container-based; Docker Buildx + GHA cache layer wasn't mentioned at all in the source.
+3. **Pwn Requests and `pull_request_target` Risk** — the single most-tested current GitHub Actions security topic; entirely absent from the source notes.
+4. **Pinning Actions to Commit SHAs** — supply-chain security (real 2024-2025 incidents like compromised Marketplace actions) is a standard follow-up; not mentioned.
+5. **`GITHUB_TOKEN` Least Privilege** — the source never discussed `permissions:` blocks at all, a major omission for senior-level security expectations.
+6. **Third-Party Action Vetting** — extends the supply-chain theme; not covered.
+7. **Environment Protection Rules as a Security Control** — original notes covered environments only for approvals, missing the secret-scoping security angle.
+8. **OIDC Federation for Cloud Auth** — the source's only deployment example used long-lived static AWS keys; OIDC is now the standard/expected answer and was entirely missing.
+9. **Change-Detection-Based Selective Builds** (monorepo) — not addressed; a near-certain question if the role touches a monorepo.
+10. **Nx/Turborepo-Aware CI** — extends monorepo coverage for mixed-stack shops.
+11. **Where Runner Minutes Actually Go** / **Workflow-Level Timeout Hygiene** — cost/performance optimization wasn't 

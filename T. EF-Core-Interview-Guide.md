@@ -855,4 +855,82 @@ A: One query to fetch a parent set, then one additional query per parent row to 
 A: Eager (`Include()`) loads related data in the same/split query up front — preferred for APIs. Lazy loads on first property access via a dynamic proxy — dangerous, hides DB calls in ordinary code. Explicit loads on demand via `context.Entry(...).Collection(...).Load()` — controlled, useful for conditional graph loading.
 
 **Q: Does EF Core always load all columns?**
-A: No — only columns needed to materialize the shape you asked for. A `Select` projection to an anonymous type/DTO only pulls the referenced columns; 
+A: No — only columns needed to materialize the shape you asked for. A `Select` projection to an anonymous type/DTO only pulls the referenced columns; a full entity query pulls all mapped columns.
+
+**Q: What is a shadow property?**
+A: A property that exists in the EF model/DB column but isn't declared on the CLR entity class — EF tracks its value internally, accessible via `context.Entry(e).Property("Name")`.
+
+**Q: What is optimistic concurrency, and how do you implement it?**
+A: A strategy that detects conflicting concurrent updates using a version/timestamp column rather than locking rows. Implemented via `[Timestamp]`/`[ConcurrencyCheck]`/`.IsRowVersion()`; a conflicting update throws `DbUpdateConcurrencyException`, which you handle by reloading and either discarding or reapplying changes.
+
+**Q: How does EF Core handle transactions?**
+A: `SaveChanges()` wraps its generated SQL in an implicit transaction automatically. For multi-`SaveChanges()` atomicity, use an explicit `context.Database.BeginTransaction()`.
+
+**Q: `Add()` vs `Attach()`?**
+A: `Add()` marks the entity `Added` → `INSERT`. `Attach()` marks it `Unchanged` (tracked, no DB write) — used to start tracking an entity you know already exists without re-inserting it.
+
+**Q: What is a compiled query, and when do you actually need one?**
+A: A LINQ query pre-bound via `EF.CompileQuery`/`EF.CompileAsyncQuery` to skip EF's internal per-call query-cache lookup, squeezing out extra performance on very hot, very frequently repeated query shapes. Not a default optimization — reach for it only after profiling shows the internal caching EF already does isn't enough.
+
+**Q: Can EF Core generate bad SQL?**
+A: Yes — poorly structured LINQ (large `Include` graphs, avoidable client-evaluation, missing projections) can generate inefficient or even untranslatable queries. The framework isn't inherently slow; misuse is the usual root cause.
+
+**Q: How do you debug/inspect EF Core-generated SQL?**
+A: `.LogTo(Console.WriteLine, LogLevel.Information)` for full query logging, or call `.ToQueryString()` on an `IQueryable` to get the SQL without executing it. Also useful: `IncludeSensitiveData` config option in dev to see parameter values in logs (never enable in prod — leaks data into logs).
+
+**Q: `Include()` vs projection — which is "better"?**
+A: `Include()` loads the full related-entity graph (all columns of the included type) and enables tracking/updates on it. Projection (`Select`) fetches only the fields you actually need and is materialized as a DTO/anonymous type — faster and lighter, but not update-able as a tracked entity. Use projection for read paths, `Include()` when you need to mutate/save the related data.
+
+**Q: Can EF Core work without migrations?**
+A: Yes, via `EnsureCreated()` — but it's for tests/prototypes only; it can't evolve an existing schema incrementally and can't be mixed with migrations on the same model.
+
+**Q: Difference between EF Core and EF6?**
+A: EF Core is a ground-up rewrite — cross-platform (.NET Core/5+), modular, generally faster, supports modern patterns (owned types, JSON columns, `ExecuteUpdate`/`ExecuteDelete`, interceptors) that EF6 never got. EF6 remains Windows/.NET Framework-oriented and is effectively legacy at this point (still supported for existing apps, not for new development).
+
+**Q: Does EF Core support stored procedures?**
+A: Yes — via `FromSqlRaw`/`FromSqlInterpolated` for queries returning entity-shaped results, or `context.Database.ExecuteSqlRaw`/`ExecuteSqlInterpolatedAsync` for non-query procedure calls. EF Core 7+ also supports mapping stored procedures directly for insert/update/delete operations on an entity (verify exact version support for your provider).
+
+**Q: How does EF Core prevent SQL injection?**
+A: All LINQ-translated queries and `FromSqlInterpolated`/parameterized `FromSqlRaw` calls use parameterized SQL commands by default — values are sent as command parameters, not concatenated into the SQL text. The risk reappears only if you manually concatenate raw strings into `FromSqlRaw` — always use `FromSqlInterpolated` or explicit `SqlParameter`s instead.
+
+**Q: What's the biggest EF Core performance killer?**
+A: Over-fetching (loading full graphs/entities when a projection would do) combined with unnecessary change tracking — the two multiply together on large result sets.
+
+**Q: Can you mix EF Core and Dapper?**
+A: Yes, and it's common in production — EF Core for transactional/write-side domain logic, Dapper for high-performance reporting/read paths, potentially sharing the same underlying `DbConnection` via `context.Database.GetDbConnection()`.
+
+---
+
+## 11. One-Minute Interview Summaries
+
+**EF Core fundamentals:** EF Core is an ORM that lets developers work with relational databases using C# objects. `DbContext` manages the database session, tracks entity changes via the change tracker, translates LINQ into SQL through a provider-specific pipeline, and executes it only at a terminal operation (deferred execution). It supports migrations for schema versioning, relationships via navigation properties/foreign keys, and multiple loading strategies (eager/lazy/explicit), with eager loading and projections preferred for APIs. `SaveChanges()` applies all tracked changes inside an implicit transaction.
+
+**Production reality:** Most EF Core production issues trace back to over-tracking, over-fetching, lazy-loading misuse, and ignoring generated SQL — not the framework itself. The fixes are consistently the same: `AsNoTracking()` for reads, projections over `Include()` where you don't need to mutate the graph, `AsSplitQuery()` for multi-collection includes, `ExecuteUpdate`/`ExecuteDelete` for bulk writes, RowVersion-based optimistic concurrency for conflicting writes, and disciplined, reviewed, staged migrations for schema changes — never manual production DB edits.
+
+---
+
+## Summary of Additions
+
+The following `[new content]` sections were added because they are frequently probed in senior .NET/EF Core interviews (2026, EF Core 8/9) but were missing or only mentioned as a one-line Q&A in the original notes:
+
+1. **Change Tracker Internals — Snapshots vs Proxies** — explains *how* change detection actually works (snapshot comparison vs `INotifyPropertyChanged` proxies) and the `DetectChanges()` performance cost — the original notes only listed entity states, not the mechanism.
+2. **AsNoTrackingWithIdentityResolution** — the original notes only covered `AsNoTracking()`; the identity-resolution variant is a common "do you know the difference" follow-up.
+3. **Split Queries vs Single Query for Collection Includes** — cartesian explosion with multiple `Include()`s and `AsSplitQuery()` trade-offs were entirely absent, despite being a top modern performance topic.
+4. **The N+1 Problem — Spotting and Fixing It** — the original notes mentioned N+1 repeatedly but never explained how to actually *detect* it in a real system (logging, APM, code-review heuristics) — added the diagnostic angle.
+5. **Migrations in a Team / CI-CD Workflow** — original notes covered disaster recovery but not the proactive pipeline practices (idempotent scripts, expand/contract schema changes, pipeline-driven migration steps, least-privilege credentials).
+6. **Shadow Properties** — only defined in one line; expanded with real-world usage (implicit FKs, audit columns) and how to discover them.
+7. **Value Converters and Owned Types** — completely missing; essential for modeling enums-as-strings, value objects, and JSON columns (EF Core 7+ `ToJson()`).
+8. **Global Query Filters** — completely missing; core mechanism for soft-delete and multi-tenancy, with a call-out on evaluation-time gotchas.
+9. **DbContext Pooling** — only a one-line definition; expanded with configuration, constraints (constructor-only options, no per-request scoped deps), and the "stale state" pooling bug.
+10. **Compiled Queries** — only a one-line definition; expanded with syntax, and — importantly — when it's *actually* warranted vs premature optimization.
+11. **EF Core Interceptors** — entirely missing from the original notes; a major modern cross-cutting-concerns mechanism (audit, soft delete, query tagging) that senior interviews increasingly probe.
+12. **Bulk Operations — ExecuteUpdate/ExecuteDelete** — entirely missing; the EF Core 7+ answer to the "large transactions"/"over-tracking" pitfalls the notes already flagged, and a near-guaranteed scenario question in 2026 interviews.
+13. **EF Core vs Dapper — Choosing Deliberately** — the original comparison was a shallow feature checklist; replaced/expanded with an explicit trade-off framing ("both, deliberately") that senior interviewers expect over a rote table.
+
+**Contradictions flagged:** None found requiring resolution — the two "1-Minute Summary" passages and the two entity-state tables in the source were overlapping restatements (not conflicts) and were consolidated rather than duplicated. One nuance corrected: the notes' blanket claim "EF updates everything automatically" was clarified as "EF generates UPDATE statements only for changed columns," which is the technically precise behavior.
+
+## Summary of [gaps] Additions (This Pass)
+
+This pass added targeted content identified by a formal gap-analysis review, tagged `[gaps]` to distinguish it from the earlier `[new content]` pass:
+
+1. **Multi-Tenancy Architectures — Which One Would You Choose?** (§5.6) — the guide already covered the EF Core *mechanism* for shared-database multi-tenancy (global query filters, §5.5), but had nothing on the higher-level architectural decision senior interviewers actually ask about first: DB-per-tenant vs shared-database-with-`TenantId` vs schema-per-tenant, compared across isolation, cost, operational complexity, and blast radius, with explicit guidance on how to reason through "which would you choose and why" rather than just naming the three options. Placed directly after §5.5 and explicitly cross-references it, since the query-filter technique is the concrete implementation of the shared-DB option in this new comparison.

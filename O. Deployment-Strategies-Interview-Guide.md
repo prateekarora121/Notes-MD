@@ -564,4 +564,76 @@ The candidate's actual IaC tooling is Terraform/CDKTF, and while Terraform is fu
   ```
 - **What Terraform does *not* do**: it doesn't itself perform the live traffic shift or watch CloudWatch Alarms mid-deployment — that's CodeDeploy's runtime job once a new task definition/Lambda version triggers a deployment. Running `terraform apply` on every code release (re-applying the whole stack per deploy) is the wrong mental model and a common junior mistake; the correct split is: Terraform/CDKTF manages the *infrastructure* (rarely changes), while the CI/CD pipeline (GitHub Actions, in this candidate's case) triggers a CodeDeploy deployment or updates an ECS task definition/Lambda alias on each release — infrastructure changes and application deployments are two different change cadences using two different mechanisms, even though both are "IaC-adjacent."
 - **CDKTF specifically** — since CDKTF lets you express the same HCL-equivalent resources in TypeScript/C#, this is also where a .NET-background candidate can note that CDKTF's typed constructs make it straightforward to build a reusable "blue-green ECS service" construct/module shared across services, rather than copy-pasting the CodeDeploy/Target-Group/Listener HCL block per repo — the same DRY argument the GitHub Actions guide makes for reusable workflows applies structurally to CDKTF constructs.
-- **Interviewer angle**: expect a direct question like 
+- **Interviewer angle**: expect a direct question like "does Terraform do your blue-green deploys?" — the precise, senior-level answer is *no, not directly* — Terraform/CDKTF provisions and updates the deployment infrastructure (CodeDeploy config, Target Groups, Lambda alias routing config, Route 53 weighted records) declaratively, but the actual progressive traffic shift at release time is executed by CodeDeploy (or a custom pipeline step updating alias weights/Route 53 weights directly), driven from the CI/CD pipeline, not from a `terraform apply` per release.
+
+---
+
+## Best Practices
+
+- **Automate the rollback decision, don't rely on humans watching dashboards** — wire canary/progressive delivery to SLO-based automated analysis (Flagger, Argo Rollouts, or custom pipeline gates on Application Insights/Datadog metrics).
+- **Decouple deploy from release using feature flags** wherever the risk is in *logic*, and reserve deployment-strategy rollback (blue-green/canary abort) for risk in the *runtime/infrastructure* (bad image, crash loops, resource exhaustion).
+- **Design for N/N+1 compatibility always** — any rolling, canary, or blue-green strategy implies two versions coexist temporarily; API contracts and DB schemas must tolerate this, not just "the deploy day."
+- **Treat database migrations as a separate, ordered pipeline stage** using expand/contract, never bundled into app startup in a multi-instance deployment.
+- **Instrument before you need it** — canary/progressive delivery is worthless without per-version metrics (error rate, latency, business KPIs) segmented by version/cohort.
+- **Practice rollback, don't just plan it** — regularly exercise the rollback path (game days/chaos exercises) so it's proven to work under pressure, not theoretical.
+- **Keep flag lifecycle hygiene** — track flag age, alert on stale flags, remove release flags promptly after full rollout.
+- **Prefer immutable infrastructure/artifacts** — containers/images built once and promoted, not mutated in place.
+
+## Common Pitfalls
+
+- Using DNS-based blue-green switching and forgetting DNS TTL/client-side caching means "instant" cutover isn't actually instant for all clients.
+- Running EF Core auto-migrations on every instance's startup during a rolling deployment — race conditions and partial-migration states.
+- Confusing canary (risk mitigation, converges to 0/100%) with A/B testing (experimentation, can run indefinitely).
+- Treating feature flags as free — accumulating flag debt, untested flag combinations, and flags left in code long after the experiment/rollout ended.
+- Assuming blue-green gives you a clean database story "for free" — it doesn't; the DB is usually shared and needs its own expand/contract discipline.
+- Misconfigured Kubernetes readiness probes causing rolling updates to send traffic to unready pods (brief user-facing errors during a deploy that was supposed to be zero-downtime).
+- Rolling back application code without considering schema/message/cache compatibility with the older version — the rollback itself causes an outage.
+- Copy-pasting Ingress YAML with a bare `weight` field (as in many tutorials/notes) and assuming vanilla Kubernetes Ingress supports canary weighting out of the box — it doesn't; you need an ingress controller extension, mesh, or progressive-delivery controller.
+
+## Sample Interview Q&A
+
+**Q: Walk me through how you'd deploy a breaking database schema change with zero downtime.**
+A: Never ship the breaking change in one step. Use expand/contract: (1) add the new column/table additively while old code keeps working; (2) deploy new app code that writes to both old and new (dual-write) or backfills asynchronously; (3) once 100% of instances run code that only needs the new shape, deploy again to stop writing to the old column; (4) in a final, later deploy, drop the old column. Each step is independently deployable and rollback-safe because the schema is always a superset that both old and new code can tolerate.
+
+**Q: Blue-green deployment gives you instant rollback — what's the catch?**
+A: The instant rollback claim is really about the *app tier* only. If Blue and Green share the same database (the common case), any data written by Green that's incompatible with Blue's expectations (new schema, new message formats) means "switching traffic back" doesn't actually undo that state. True instant, safe rollback requires the schema/API to already be backward compatible — the traffic switch is the easy part; the compatibility discipline is the hard part.
+
+**Q: When would you choose canary over blue-green, or vice versa?**
+A: Canary when you want the smallest possible blast radius and have strong per-cohort metrics/traffic-splitting infrastructure — good for high-traffic consumer services where a small percentage of affected users is an acceptable trade for gradual confidence-building. Blue-green when you need a clean, fully-tested cutover with instant total rollback and can tolerate (or already have) duplicate infrastructure — common in regulated environments (e.g., banking) where partial exposure to a broken version for *any* user is unacceptable, but a full pre-switch validation window is achievable. Cost-sensitive teams with mature CI/CD often default to rolling deployments instead of either, accepting slightly slower rollback for much lower infra cost.
+
+**Q: How do feature flags change your incident response?**
+A: They give you a sub-second "rollback" lever that doesn't require touching the deployment pipeline at all — disable the flag, and the risky code path stops executing immediately for all users, no redeploy, no waiting for a rolling/canary process to reverse. This should typically be your first response for a *logic* bug behind a flag; full deployment rollback remains necessary for issues the flag doesn't cover (bad binary, crash loops, infra misconfiguration).
+
+**Q: How does feature-flag evaluation change in a microservices architecture versus a monolith?**
+A: In a monolith, flag evaluation is a single in-process call with consistent state. In microservices, the same logical request may hit multiple services, and each needs to evaluate the flag *consistently* for that request — which requires propagating targeting context (user/tenant ID) across service boundaries, typically via headers or trace context, and relying on a centralized flag platform so all services agree on current flag state rather than each polling/caching independently and drifting out of sync.
+
+**Q: What would you monitor to decide whether to promote or abort a canary?**
+A: Golden signals segmented by version: error rate, p95/p99 latency, saturation (CPU/memory/thread pool), plus at least one business metric relevant to the feature (conversion rate, checkout completion) — compared statistically between canary and baseline cohorts, not eyeballed. Ideally wired to an automated analysis tool (Flagger/Argo Rollouts) with defined SLO thresholds that auto-abort, rather than a human on-call watching a dashboard during the bake window.
+
+---
+
+## Summary of Additions
+
+The following `[new content]` sections were added because they're standard senior/lead-level deployment-strategy topics that were missing or only implicitly present in the original notes (which focused on blue-green, canary, and LaunchDarkly feature flags only):
+
+- **Comparison Table: Blue-Green vs Canary vs Rolling vs Recreate** — interviewers expect a side-by-side trade-off view (cost, speed, rollback, risk), not three isolated definitions.
+- **Feature Flags in a Microservices Architecture** — directly answers the open question left dangling at the end of the source notes ("Would you like help setting up feature flags in a microservices architecture?").
+- **Feature Flag Types and Anti-Patterns** — distinguishes release/experiment/ops/permission flags and flags common flag-debt mistakes; a frequent senior-level probe.
+- **Zero-Downtime Database Migrations** — the biggest gap in the original notes; blue-green/canary/rolling all assume a compatible shared database, which none of the source material addressed.
+- **Rollback Strategy for Stateful Services** — rollback is trivial for stateless apps but the real senior question is state (schema, queues, cache) compatibility during rollback.
+- **Deployment in Kubernetes / AKS / EKS** — platform-level detail (probes, PDBs, managed-cluster specifics) behind the raw YAML the notes already included.
+- **Progressive Delivery** — the current (2026) umbrella term combining canary + flags + automated analysis; shows currency with modern practice.
+- **GitOps** — ArgoCD/Flux-driven declarative deployment and rollback via Git, a now-standard part of Kubernetes-based delivery pipelines.
+- **Deployment Strategies: Microservices vs Monolith** — explicit trade-off comparison requested as a gap-analysis topic.
+- **Dark Launches / Shadow Traffic / A-B Testing at Infrastructure Level** — clarifies distinctions interviewers listen for (validation vs. rollout vs. experimentation).
+- **CI/CD Pipeline Design for .NET (Azure DevOps / GitHub Actions)** — concrete, current pipeline shape tying together build-once/promote-everywhere, approval gates, and migration-as-a-stage.
+
+**Contradictions/accuracy flags noted inline (not true contradictions between notes, but corrections to the source):**
+1. The Kubernetes `Ingress` YAML with a bare `weight: 20` field is not valid on vanilla Kubernetes Ingress — canary traffic weighting requires an ingress controller extension (e.g., NGINX canary annotations), a service mesh (Istio), or a progressive-delivery controller (Flagger/Argo Rollouts). Flagged inline in the Canary section.
+2. The LaunchDarkly `appsettings.json` example stores the SDK key directly — flagged as a secrets-management gap; use Key Vault/User Secrets/environment variables in real deployments, not a literal key in a checked-in config file.
+
+## Summary of `[gaps]` Additions (This Pass)
+
+A follow-up gap-analysis review flagged that this guide's deployment mechanics were entirely Kubernetes-centric (Ingress, Flagger, Argo Rollouts, ArgoCD/Flux) with no AWS-native equivalents and no connection to the candidate's actual IaC tooling (Terraform/CDKTF). One `[gaps]`-tagged section was added to close this:
+
+1. **AWS-Specific Deployment Mechanics** — added the AWS-native alternatives to every Kubernetes-flavored mechanism already in the guide: **AWS CodeDeploy** blue/green across its three distinct compute targets (EC2, ECS, Lambda — each with a different notion of "blue" and "green" and a different traffic-shift mechanism), a deeper look at **ECS blue/green** specifically (the `CODE_DEPLOY` deployment controller, dual Target Groups behind an ALB, pre/post-traffic Lambda hooks, and CloudWatch-Alarm-driven auto-rollback — the direct analog to Flagger/Argo Rollouts' automated canary analysis), and **Route 53 weighted routing** as the DNS-layer alternative for gradual traffic shifting (including the same DNS TTL/caching gotcha already flagged elsewhere in this guide for blue-green cutovers). Also added a dedicated subsection connecting **Terraform/CDKTF** to this picture precisely: Terraform/CDKTF provisions the deployment *rails* (CodeDeploy config, Target Groups, Lambda alias routing config, Route 53 weighted records) declaratively, but does not itself execute the live progressive traffic shift — that's CodeDeploy's runtime job, triggered from the CI/CD pipeline on each release, not from a `terraform apply` per deploy. This matters because the candidate's resume references Terraform/CDKTF elsewhere, but this guide never previously tied deployment strategy back to it at all — a senior AWS interview would expect this distinction to be crisp (IaC provisions the mechanism; a separate orchestrator/pipeline step drives the release).

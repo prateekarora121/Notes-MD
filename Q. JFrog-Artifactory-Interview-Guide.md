@@ -452,4 +452,44 @@ A: Ensure the virtual repo's resolution order checks local (internal) repos befo
 A: You build a binary exactly once in CI, then move/copy that same artifact (with its build-info and checksum intact) through repository stages representing dev → staging → release, typically gated by Xray scan results and/or approvals. This guarantees the artifact tested in staging is byte-for-byte what ships to production — no rebuild-induced drift.
 
 **Q: How do you keep Artifactory storage costs under control?**
-A: Retention/cleanup policies (or AQL-driven scripts) on dev/snaps
+A: Retention/cleanup policies (or AQL-driven scripts) on dev/snapshot repos based on age and download activity, remote-repo cache eviction for unused cached artifacts, and explicitly exempting release/audit-relevant repos from any automated deletion.
+
+**Q: What's the role of JFrog Xray, and where does it plug into the pipeline?**
+A: Xray does recursive dependency-graph vulnerability and license scanning, both continuously at the repository level (catching newly disclosed CVEs in already-stored artifacts) and at build time (`build-scan`), where it can fail a pipeline or block promotion on policy violations (critical CVEs, disallowed licenses like GPL in closed-source code).
+
+**Q: How should CI authenticate to Artifactory — and what's wrong with a shared username/password in pipeline YAML?**
+A: Prefer scoped, short-lived access tokens, or better, OIDC federation between the CI provider and Artifactory so no long-lived secret is stored at all. A shared password baked into YAML/secrets is a single point of compromise, hard to rotate without downtime across all consuming pipelines, and typically over-privileged relative to least-privilege RBAC on specific repos.
+
+**Q: When would you choose Artifactory over Azure Artifacts in an all-Azure-DevOps shop?**
+A: When you need polyglot package support beyond what Azure Artifacts covers well, multi-cloud/on-prem flexibility, deeper security/license scanning (Xray vs. what's bundled in Azure DevOps), or governed multi-stage promotion workflows — otherwise Azure Artifacts is the lower-overhead default.
+
+**Q: What guarantees immutability of a released NuGet package, and why does it matter?**
+A: Repository configuration that disallows overwriting an existing version's artifact, combined with semantic versioning discipline (never reuse a version number) and checksum verification. It matters because deployments, rollbacks, and audits all assume that "version 1.0.0" means exactly one set of bytes, forever — mutable release artifacts break reproducibility and can mask supply-chain tampering.
+
+**Q: What is build-info and how does it relate to SBOM/provenance?**
+A: Build-info is metadata Artifactory captures per CI build — artifacts produced, dependencies resolved (with checksums), source revision, environment. It's the foundation for promotion, build comparison, and generating an SBOM (CycloneDX/SPDX) — together giving full chain-of-custody from commit to deployed artifact, which is increasingly a compliance requirement (SLSA framework, government SBOM mandates).
+
+---
+
+## Summary of Additions
+
+The original source was a generic, AI-style overview of Artifactory with no genuine personal notes, unanswered questions, or TODOs to resolve — so no "answer everything" work was needed on existing content. All original material was preserved and reorganized. The following `[new content]` sections were added to close real gaps for a senior .NET interview:
+
+1. **Resolution Order in Virtual Repositories** — covers dependency confusion attacks, a live supply-chain-security interview topic entirely absent from the source.
+2. **NuGet-Specific Repository Setup for .NET Teams** — the source only spoke generically about "supports NuGet"; added concrete `.NET`-relevant config (`NuGet.Config`, v2 vs v3 protocol) since this audience is a .NET dev.
+3. **Azure DevOps / dotnet CLI Integration** — source only had a GitHub Actions example; added the more relevant Azure DevOps YAML pattern and credential-handling follow-up.
+4. **Artifact Promotion Between Environments** — "build once, promote many" is a core Artifactory value proposition and a near-guaranteed senior interview question; was completely missing.
+5. **Retention and Cleanup Policies** — storage/cost management was only mentioned as a "disadvantage" with no mitigation discussion; added policy mechanics and AQL example.
+6. **Build-Info, Provenance, and SBOM** — supply-chain traceability/compliance (SLSA, SBOM mandates) is a hot current topic and wasn't mentioned at all.
+7. **JFrog Xray — Security & License Scanning** — original notes only name-dropped Xray; added mechanism (recursive scanning, repo-level vs build-level), license-compliance angle, and licensing-tier gotcha.
+8. **Immutability, Versioning, and Reproducible Builds** — critical for reasoning about deployment safety and rollback; not covered in source.
+9. **Access Tokens, Identity, and Securing Feeds** — source had a bare bullet ("supports access tokens, LDAP, SSO, RBAC"); added the real depth interviewers probe (API keys vs access tokens vs OIDC federation, least-privilege RBAC).
+10. **Artifactory vs Azure Artifacts vs Nexus** — comparison table for a highly likely "why not just use X" interview question, especially relevant since the audience is in the Azure/.NET ecosystem.
+
+**Contradictions flagged:** None — the source content was internally consistent (a single generic pass, not conflicting personal notes from multiple sessions). No genuine contradictions required flagging; where the source was thin rather than wrong, it was supplemented rather than corrected.
+
+## Summary of `[gaps]` Additions (This Pass)
+
+A follow-up gap-analysis review flagged that this guide described all repository/permission-target setup as manual UI configuration, with no connection to infrastructure-as-code — a real gap given the candidate's actual IaC tooling is Terraform/CDKTF. One `[gaps]`-tagged section was added to close this:
+
+1. **Terraform Provider for Artifactory and CDKTF-Driven Provisioning** — added the `jfrog/artifactory` Terraform provider as the concrete mechanism for provisioning local/remote/virtual NuGet repos and permission targets as code, with a worked example that mirrors the exact repo-triple pattern already described in the NuGet-Specific Repository Setup section earlier in this guide. Explicitly connected this to three things already covered elsewhere in the guide: least-privilege RBAC (permission targets as reviewable code instead of a UI checkbox grid nobody audits), "build once, promote many" (parameterized modules provisioning the dev/staging/release repo layout consistently per environment), and GitOps-style drift detection (`terraform plan` surfacing manual out-of-band UI changes). Also connected CDKTF specifically — since that's the candidate's actual day-to-day IaC surface — as the way Artifactory provisioning can live in the same codebase/language as the rest of the platform's infrastructure rather than being treated as an out-of-band, UI-managed system.

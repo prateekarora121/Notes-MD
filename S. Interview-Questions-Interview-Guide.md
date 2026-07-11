@@ -16,6 +16,7 @@
 10. [Coding Round](#coding-round)
 11. [Gap Analysis — Senior-Level Topics Not in the Original List](#gap-analysis--senior-level-topics-not-in-the-original-list)
 12. [Summary of Additions](#summary-of-additions)
+13. [Contradictions / Ambiguities Flagged](#contradictions--ambiguities-flagged)
 
 ---
 
@@ -50,6 +51,50 @@ Follow-up to expect: "Why did the team choose X over Y?" — have at least one r
 ---
 
 ## C# Language & OOP
+
+### 3a. What is .NET and how does it work?
+
+.NET is a general-purpose development platform — a runtime, a set of base class libraries, and tooling — that lets code written in multiple languages (C#, F#, VB.NET) compile down to a common format and run on a shared execution engine. The pipeline every .NET dev should be able to draw on a whiteboard:
+
+```mermaid
+flowchart LR
+    A[Source code - C#/F#/VB] --> B[Language compiler - Roslyn for C#]
+    B --> C["Intermediate Language (IL/MSIL) + metadata, packaged into an Assembly (.dll/.exe)"]
+    C --> D[CLR loads the assembly at runtime]
+    D --> E[JIT compiles IL to native machine code, method-by-method, on first call]
+    E --> F[Native code executes under the managed execution model]
+    F --> G[GC / type safety / exception handling / security enforced by CLR throughout]
+```
+
+**Managed execution model** — the phrase that ties this together — means the CLR, not the raw OS, is in control of: memory (allocation + GC), type safety (IL is verified so code can't do arbitrary pointer arithmetic outside `unsafe` blocks), structured exception handling (uniform across every .NET language, since they all target the same IL), and security boundaries.
+
+**Senior-level nuance to volunteer**: JIT is not one-shot-and-done. Modern .NET uses **tiered compilation** — Tier 0 does a fast, minimally-optimized JIT pass to get code running quickly, and the runtime instruments hot methods and re-JITs them at Tier 1 with full optimizations once they're proven to matter — a startup-latency vs steady-state-throughput trade-off resolved automatically. For scenarios where even Tier-0 JIT latency is unacceptable (serverless cold starts, CLI tools, containers), .NET 8+ offers **Native AOT**, which compiles straight to native code ahead of time and skips the CLR/JIT step entirely at the cost of losing some dynamic features (reflection-heavy code, runtime codegen).
+
+### 3b. What is CLR (Common Language Runtime)?
+
+The CLR is the managed execution engine that actually hosts and runs compiled .NET assemblies — it's the "runtime" half of ".NET is a runtime + libraries." Its core responsibilities, worth naming explicitly rather than hand-waving as "it runs the code":
+
+- **JIT compilation** — translates IL to native machine code per method, on demand, with tiered (re-)compilation as described above.
+- **Memory management** — owns the managed heap and runs the generational GC (Gen 0/1/2 + LOH, detailed under Garbage Collector below); this is what makes C# "managed" instead of manually `malloc`/`free`d like C++.
+- **Type safety / verification** — IL is checked so managed code can't perform illegal casts or stray memory access outside explicit `unsafe` blocks — this is a large part of why buffer overruns are rare in pure managed code.
+- **Structured exception handling** — a single, uniform exception model that works across every CLR-targeting language, because they all compile to the same IL-level exception constructs.
+- **GC hosting and thread/AppDomain management** — schedules and coordinates collections, finalizer queues, and (historically) AppDomain isolation; also provides interop (P/Invoke, COM interop) for crossing into unmanaged code.
+
+**Implementations to know**: **CoreCLR** is the cross-platform CLR that ships with modern .NET (Windows/Linux/macOS); **Mono** is an alternative used historically for mobile/Unity; **Native AOT** removes the need for a CLR/JIT at runtime entirely by compiling ahead of time. Knowing there's more than one CLR implementation, and that "the CLR" isn't synonymous with "Windows," is a good currency signal.
+
+### 3c. What are Assemblies in .NET?
+
+An assembly is the fundamental unit of **deployment, versioning, and type-scoping** in .NET — the physical output of compilation (a `.dll` or `.exe`) containing:
+- **IL code** for every type/member it defines,
+- **Metadata** describing those types and their signatures (what makes Reflection possible),
+- A **manifest** — assembly name, version, culture, and the list of other assemblies it references,
+- Optionally embedded resources (strings, images, etc.).
+
+**Assembly vs namespace vs module — a distinction worth being crisp about**: a namespace is purely a logical, compile-time naming construct with no physical existence; an assembly is the physical deployable unit. A single assembly commonly contains many namespaces, and (less commonly but validly) a namespace can span multiple assemblies — they are orthogonal concepts, not synonyms, despite `MyCompany.MyApp.dll` often lining up 1:1 with a `MyCompany.MyApp` namespace by convention.
+
+**Loading and isolation**: the CLR resolves and loads assembly references at runtime. .NET Core replaced the old Framework-era GAC/strong-naming/AppDomain model with **`AssemblyLoadContext`**, which supports side-by-side loading of multiple versions of the same assembly in the same process — the mechanism that makes robust plugin architectures (e.g., loading several plugins that each depend on a different version of a shared library) practical without "assembly binding redirect" hell.
+
+**Why this matters day-to-day**: metadata-driven Reflection is what powers DI container auto-registration, EF Core's convention-based entity scanning, JSON serializers, and AutoMapper — all of them "walk assemblies looking for types/attributes" under the hood, so understanding assemblies as more than "the dll that comes out of the build" pays off when debugging why a type isn't being picked up.
 
 ### 4. What is a string in C#? Why is it immutable?
 
@@ -445,6 +490,26 @@ app.UseMiddleware<RequestTimingMiddleware>();
 
 Minimal API style also allows inline middleware via `app.Use(async (context, next) => { ... await next(); ... });`.
 
+### 22a. Explain the MVC architecture
+
+MVC (Model-View-Controller) separates an application into three responsibilities, and ASP.NET's controller/routing plumbing (already covered in the request pipeline and filters sections) is built directly on top of it:
+
+```mermaid
+flowchart LR
+    Req[HTTP Request] --> Routing[Routing matches Controller + Action]
+    Routing --> Controller[Controller]
+    Controller -->|invokes| Model[Model / Service / Domain layer]
+    Model -->|returns data| Controller
+    Controller -->|selects + populates| View[View / ViewModel]
+    View --> Resp[Rendered HTML or serialized response]
+```
+
+- **Model**: the domain/data layer — entities, DTOs, ViewModels, and the business rules/validation that govern them. It knows nothing about HTTP or rendering.
+- **View**: the presentation layer — in classic server-rendered ASP.NET MVC, Razor views/pages that render a Model into HTML. In an API-only backend (the far more common shape for a modern Angular/SPA front end), there is no View in the rendering sense — the "view" role is pushed to the client, and the controller returns serialized data (JSON) directly.
+- **Controller**: the traffic cop — receives the request, delegates to the model/service layer, and either selects a view (`View(model)`) or returns data (`ActionResult`/`IActionResult`). It should be thin: no business logic, just an adapter between HTTP transport and the domain/service layer.
+
+**Senior-level framing worth stating explicitly**: for a pure Web API, "MVC" effectively narrows to Model + Controller, but ASP.NET Core still routes API controllers through the same base infrastructure (`ControllerBase`, model binding, filters — see #23) as full MVC, which is why the framework calls it all "MVC" even when there's no View being rendered. It's also worth drawing the parallel to the frontend: Angular's component (orchestration) + template (presentation) + service/state (model) maps conceptually onto the same separation, which is a good cross-stack signal to volunteer if asked to compare. The discipline that actually matters in code review is **"thin controller, fat service"** — business logic belongs in the service/domain layer, not scattered across controller actions, so it stays testable independent of the HTTP pipeline.
+
 ### 23. Filters in MVC — where do they fit vs Middleware?
 
 Filters are MVC/Web-API-specific hooks that run **inside** the MVC action-invocation part of the pipeline (after routing has matched an endpoint), giving access to MVC-specific context (action arguments, model binding results, `ActionResult`) that generic middleware doesn't have.
@@ -477,6 +542,21 @@ Already answered in depth under [Async, Threading & Concurrency](#15-explain-asy
 ---
 
 ## Authentication, Authorization & API Design
+
+### 26a. Explain REST API in ASP.NET (Core)
+
+REST (**RE**presentational **S**tate **T**ransfer) is an architectural style, not a protocol — defined by Roy Fielding's dissertation as a set of constraints for building networked systems. The six constraints worth being able to name (the last one almost never used in practice, but knowing it exists signals depth):
+
+1. **Client-Server separation** — client and server evolve independently behind a contract.
+2. **Statelessness** — every request carries all the context needed to process it; the server holds no client session state between requests (this is the same principle behind the horizontal-scalability discussion elsewhere in this guide — a stateless API is what makes any instance able to serve any request behind a load balancer).
+3. **Cacheability** — responses explicitly declare whether/how they can be cached (`Cache-Control`, `ETag`).
+4. **Uniform Interface** — resources are identified by URIs and manipulated through a small, standard verb set (`GET`/`POST`/`PUT`/`PATCH`/`DELETE`), with self-descriptive representations (typically JSON).
+5. **Layered System** — the client can't (and shouldn't need to) tell whether it's talking directly to the origin server or through intermediaries (API gateway, reverse proxy, CDN).
+6. **Code on Demand** (optional) — the server can extend client behavior by sending executable code; rarely used for typical CRUD APIs.
+
+**How ASP.NET Core realizes this in practice**: attribute routing (#30) maps URIs to resources; HTTP verbs map to CRUD operations on those resources; `IActionResult`/`ActionResult<T>` return types let a controller honor proper HTTP status codes (`200`, `201 Created` with a `Location` header, `204 No Content`, `400`, `404`, `409 Conflict`, etc.) instead of always `200`; content negotiation via the `Accept` header drives serialization format; model binding + validation attributes (#24) enforce the "self-descriptive representation" constraint.
+
+**Richardson Maturity Model** (a good follow-up to bring up unprompted): Level 0 is a single RPC-style endpoint over HTTP; Level 1 introduces multiple resource URIs; Level 2 uses HTTP verbs and status codes properly (where the vast majority of real-world "REST APIs," including most senior candidates' production systems, actually sit); Level 3 adds **HATEOAS** (Hypermedia As The Engine Of Application State) — responses include links describing available next actions, so clients discover the API dynamically instead of hardcoding URLs. **Senior-level honesty**: almost nobody ships true Level 3/HATEOAS APIs in industry; the pragmatic, defensible answer to "is your API RESTful?" is that it's "RESTish" at Level 2 by design choice, not ignorance — and that's the same trade-off space as the API versioning/backward-compatibility discussion later in this guide.
 
 ### 27. Login mechanism / What is JWT Authentication? / Logging user identity via JWT claims
 

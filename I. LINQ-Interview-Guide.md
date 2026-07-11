@@ -1154,4 +1154,64 @@ var top3PerYear = orders.GroupBy(o => o.OrderDate.Year)
 ```
 This is the general "top N per group" pattern — nested `GroupBy` (outer key = partition, inner key = ranking dimension), rank within each partition, `Take(N)`. The same shape solves Q22 (top customer per city) and this question; recognizing that both are instances of one pattern is exactly the kind of abstraction senior interviewers are listening for.
 
-**Note on translating "top N per group" to SQL/EF Core:** this pattern (window functions like `ROW_NUMBER() OVER (PARTITION BY ... ORDER BY ..
+**Note on translating "top N per group" to SQL/EF Core:** this pattern (window functions like `ROW_NUMBER() OVER (PARTITION BY ... ORDER BY ...)`) is historically one of the hardest LINQ-to-Entities translations. Modern EF Core (5+) can translate the nested-GroupBy shape above in many cases, but always verify the generated SQL — older EF Core/EF6 versions frequently forced client evaluation for this exact pattern. (verify against your EF Core version and actual generated SQL before trusting this in a large production dataset.)
+
+---
+
+## Sample Interview Q&A
+
+**Q: What's the practical difference between `IEnumerable<T>` and `IQueryable<T>`, and why does it matter for a method signature?**
+A: `IEnumerable<T>` represents an in-memory-executable sequence via compiled delegates; `IQueryable<T>` represents an expression tree that a provider translates into another query language (typically SQL) before executing at the source. Accepting `IQueryable<T>` as a repository method's return type lets callers compose additional filtering that gets pushed to the database; returning `IEnumerable<T>` (or worse, `List<T>`) forces the entire result set to materialize before any further filtering, which is a common performance anti-pattern in layered architectures ("repository returns `List<T>`, then the service layer filters it in memory").
+
+**Q: I have `var query = employees.Where(e => e.Age > minAge); minAge = 50;` — then I enumerate `query`. What filters — 30 or 50?**
+A: 50 (or whatever `minAge` is at enumeration time). LINQ's deferred execution captures the *variable* by reference in the lambda's closure, not its value at query-definition time — the predicate re-reads `minAge` every time it runs.
+
+**Q: Why might an EF Core query silently return correct results but perform terribly, even though the LINQ "looks" fine?**
+A: Client evaluation fallback — some part of the predicate/projection isn't translatable to SQL, so EF Core pulls the untranslated slice into memory (often the *entire* table) and finishes evaluating in C#. It's silent (a log warning, easy to miss) rather than a compile or runtime error, which is exactly why it's dangerous. Diagnose by inspecting generated SQL (EF Core logging, `ToQueryString()` in EF Core 5+) and checking whether the `WHERE` clause you expect is actually present in the SQL, not just in the C#.
+
+**Q: What's wrong with `if (collection.Count() > 0)` as an existence check against an `IQueryable`?**
+A: It forces (in the worst case) a full `COUNT(*)` scan/materialization to get a number you only compare against zero. `.Any()` translates to `EXISTS(...)` in SQL and short-circuits on the first match — always cheaper or equal, never worse.
+
+**Q: When would you deliberately choose query syntax over method syntax?**
+A: Multi-table joins (especially left joins via `GroupJoin` + `DefaultIfEmpty`), and queries needing `let` for a named intermediate value used more than once — both are meaningfully more readable in query syntax. Everything else, especially anything using `Sum`/`Count`/`Take`/`Distinct` (no query-syntax keyword), defaults to method syntax.
+
+**Q: How would you find, for each department, the employee with the highest salary — and what mistake do people commonly make solving this?**
+A: `employees.GroupBy(e => e.DepartmentId).Select(g => g.OrderByDescending(e => e.Salary).First())`. The common mistake is using `.Max(e => e.Salary)` directly on the group, which returns only the numeric maximum, not the employee record — you lose the association between the max value and which entity produced it. Need `OrderByDescending().First()` (or `MaxBy`, .NET 6+) to keep both.
+
+**Q: What's the danger of `AsParallel()` combined with EF Core's `DbContext`?**
+A: `DbContext` is not thread-safe — a single context instance must not be used concurrently across threads. `AsParallel()` fans work out across threads; running it directly over an `IQueryable` backed by a shared `DbContext` risks concurrent access exceptions or corrupted state. PLINQ is a LINQ-to-Objects tool for CPU-bound in-memory work, not a way to parallelize database queries.
+
+**Q: Explain what happens, step by step, when you write `dbContext.Employees.Where(e => e.Salary > 50000).ToList()`.**
+A: The `Where` call builds an expression tree node (not executable IL) wrapping the underlying `DbSet<Employee>`'s query provider. Nothing executes yet — `.ToList()` triggers enumeration, at which point EF Core's query provider walks the accumulated expression tree, translates it into SQL (`SELECT ... WHERE Salary > 50000`), executes it against the database, and materializes the returned rows into `Employee` objects, tracked by the context's change tracker (unless `AsNoTracking()` was used).
+
+---
+
+## Summary of Additions
+
+The following `[new content]` sections were added because they are high-frequency senior/lead .NET interview topics that were missing or only implicitly touched on in the original notes:
+
+1. **Closures Over Variables — The Classic Deferred Execution Trap** — extends the notes' bare deferred-execution examples into the actual gotcha interviewers ask about: variable capture by reference, and the historical `for`-loop closure bug.
+2. **Expression Trees and How LINQ-to-Entities Translates to SQL** — the notes mentioned expression trees in one line with no explanation of the translation pipeline that makes `IQueryable` fundamentally different from `IEnumerable`.
+3. **Client-Eval Fallback and Query Translation Limits (EF Core)** — the single highest real-world-impact gap: EF Core silently falling back to in-memory evaluation is a common, hard-to-spot production performance bug.
+4. **yield return and Custom Iterators** — explains the mechanism (compiler-generated state machine) behind how LINQ operators actually achieve deferred, streaming execution, plus the eager-validation gotcha.
+5. **LINQ Method Chaining vs Query Syntax — When to Use Which** — the notes presented both syntaxes with no decision framework; added a concrete rule of thumb.
+6. **The Multiple Enumeration Pitfall** — extremely common, high-signal interview and code-review topic entirely absent from the original notes.
+7. **Hidden O(n²) Traps — Nested Where/Any Inside Select** — a very common real-world performance bug pattern, not covered in the source at all.
+8. **IAsyncEnumerable and System.Linq.Async** — modern (C# 8+/.NET Core 3+) async streaming LINQ, standard for current EF Core / high-throughput API interviews.
+9. **EF Core: AsNoTracking, Split Queries, and Compiled Queries** — concrete, current (EF Core 5+) performance levers that go beyond the notes' generic "use IQueryable / AsEnumerable" advice.
+
+### Contradictions / Bugs Flagged from Original Notes
+
+- **Q6 (highest-average-salary department):** the original `Day2` sample code used `.Max(f => f.AverageSalary)`, which discards the department key and returns only the numeric maximum. Corrected to `OrderByDescending(...).First()` to retain the department association.
+- **Q13 (departments where every employee earns > 50,000):** the original code used `.TakeWhile(u => u.Emps.Min(x => x.Salary) >= 70000)`, which stops at the first failing group and silently drops all subsequent groups — even ones that would pass. This is a genuine logic bug, not a style choice; corrected to `.Where(g => g.All(...))`.
+- **Q19 (per-department stats):** the original code called `Average`/`Max`/`Min` directly on `GroupJoin` results without guarding against departments with zero employees; these throw `InvalidOperationException` on an empty sequence. Corrected with an `emps.Any() ? ... : 0` guard.
+- Minor duplication: the source repeats the deferred/immediate execution explanation and the `First/FirstOrDefault/Single/SingleOrDefault` comparison table three times with slightly different wording (sections 2–3, questions 41–43, and questions 81–83). These were merged into single canonical sections in this guide, keeping the most complete phrasing from each pass.
+
+---
+
+## Summary of [gaps] Additions (This Pass)
+
+This second pass adds two more gap topics, tagged `[gaps]` to distinguish them from the `[new content]` additions made in the previous pass:
+
+1. **MaxBy, MinBy, DistinctBy, and Chunk (.NET 6+) [gaps]** — the original guide already cross-referenced `MaxBy` and `DistinctBy` in two places ("see gap below" / "see .NET 6+ gap below," under Q6 and under `ToDictionary`) but never actually defined them. These four operators are now standard senior-interview material since .NET 6 made them mainstream, and `MaxBy`/`MinBy` in particular directly fix the exact "`.Max()` loses the associated entity" bug this guide already flags in Q6/Q15 — matters because interviewers expect current-idiom answers, not the older `OrderByDescending().First()` workaround, once you're targeting .NET 6+.
+2. **Window-Function Alternatives for Ranking Queries (Nth Highest Salary in Production) [gaps]** — the guide's Q2 and Q11 solve "Nth highest salary" with `Distinct().OrderByDescending().Skip(n)`, which is correct for LINQ-to-Objects but is not how a senior engineer would answer "how would you do this in production against a large table." Matters because it tests whether a candidate knows to push ranking down to the database via `RANK()`/`DENSE_RANK()`/`ROW_NUMBER()` (via `FromSqlRaw` or EF Core 8's `SqlQuery<T>`) instead of materializing rows into memory to rank them in C# — a common real-world performance/scalability question that goes beyond what pure LINQ syntax can answer.

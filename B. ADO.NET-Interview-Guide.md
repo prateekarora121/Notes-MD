@@ -785,4 +785,73 @@ await conn.OpenAsync();
 - Explicitly type and size parameters (`SqlDbType` + length) rather than relying purely on `AddWithValue` inference.
 - Catch `SqlException` specifically (not bare `Exception`) so you can branch on error number for retry/no-retry decisions.
 - Rethrow after `Rollback()` — don't swallow transaction failures.
-- Set `Comma
+- Set `CommandTimeout` deliberately for long-running reports/batch jobs rather than accepting the default blindly.
+
+---
+
+## 6. Common Pitfalls
+
+1. **Not understanding connection pooling** — misreading "open late, close early" as wasteful, when closing just returns the connection to the pool rather than tearing it down.
+2. **String concatenation SQL** — SQL injection risk, defeats plan-cache reuse.
+3. **Keeping connections open unnecessarily** — blocks other requests, risks pool exhaustion, hurts scalability.
+4. **Not disposing readers/connections/transactions** — leaks, pool starvation, lingering locks.
+5. **Ignoring async programming** — sync DB calls on a web API's request thread cause thread-pool starvation under load.
+6. **Using `DataSet`/`DataTable` by default/habit** — heavier, slower; pick the connected model or a mapper unless disconnected semantics are actually needed.
+7. **Not handling transactions** — partial multi-statement writes leave the DB in an inconsistent state.
+8. **Not being able to explain performance differences** — DataReader vs DataSet, ADO.NET vs ORM, parameterized vs inline SQL, sync vs async throughput impact.
+9. **[new content] Blind retries on transient faults** — retrying non-idempotent writes without a transaction/dedupe boundary, or retrying non-transient errors and masking real bugs.
+10. **[new content] Assuming async makes a single query faster** — async buys concurrency/scalability, not lower latency for one call.
+11. **[new content] Forgetting `TransactionScopeAsyncFlowOption.Enabled`** — ambient transaction doesn't flow correctly across `await`, or enlisting two connections unexpectedly escalates to a DTC distributed transaction.
+
+---
+
+## 7. Sample Interview Q&A
+
+**Q: Why is ADO.NET faster than an ORM like EF Core?**
+A: No change-tracking overhead, no LINQ-to-SQL translation layer, no entity materialization/proxying — you execute SQL directly and map only the columns you asked for. The trade-off is you write and maintain that mapping and SQL yourself, and lose migrations, navigation properties, and LINQ composability.
+
+**Q: When would you choose `DataReader` over EF Core?**
+A: High-throughput read scenarios, large/streamed result sets, reporting queries, or any hot path where profiling shows ORM overhead matters. For CRUD-heavy business logic where maintainability and development speed matter more than micro-level latency, EF Core wins.
+
+**Q: Explain the impact of connection pooling, including a failure mode you've seen.**
+A: Pooling reuses physical connections keyed by connection string, avoiding the cost of a new TCP/TDS handshake and auth per logical `Open()`. `Close()`/`Dispose()` returns the connection to the pool rather than destroying it — that's why "open late, close early" is cheap and correct. The failure mode is a connection leak: code that opens a connection but fails to dispose it on some exception path exhausts the pool, and every subsequent `Open()` call blocks until `Connect Timeout` and then throws.
+
+**Q: How do you handle transactions correctly, and what do isolation levels have to do with it?**
+A: Keep the transaction scope minimal — only the statements that must be atomic — commit or rollback promptly, and always rethrow after rollback. Isolation level controls how much concurrent transactions can see of each other's uncommitted/committed-but-changing data; `ReadCommitted` is SQL Server's default and a reasonable baseline, but `Serializable` or `Snapshot` may be needed to prevent phantom reads or non-repeatable reads in specific business scenarios, at the cost of more blocking/versioning overhead.
+
+**Q: Does async ADO.NET make a single query run faster?**
+A: No — the query itself takes the same time on the server. Async frees the calling thread from blocking on I/O wait, so the *server* can handle more concurrent requests with the same thread pool. The win is throughput/scalability under load, not per-call latency.
+
+**Q: How would you insert 2 million rows efficiently?**
+A: Not row-by-row `INSERT` via `ExecuteNonQuery` — use `SqlBulkCopy`, which streams rows via SQL Server's native bulk-load protocol, bypassing much of the per-row overhead. Stream from an `IDataReader` source rather than materializing everything into a `DataTable` first if memory is a concern. Be aware it skips triggers and constraint checks by default unless you opt in via `SqlBulkCopyOptions`.
+
+**Q: What's the difference between `AddWithValue` and explicitly-typed parameters, and why does it matter?**
+A: `AddWithValue` infers `SqlDbType` and size from the runtime value, which can produce different parameter signatures (e.g., varying `nvarchar` lengths) across calls with the same query text, fragmenting the plan cache. Explicit `Add(name, SqlDbType, size)` pins the signature so SQL Server reuses one execution plan — better performance and more predictable behavior at scale.
+
+**Q: When would you use `TransactionScope` instead of `SqlTransaction`?**
+A: When a logical unit of work spans multiple `SqlConnection` instances (or even multiple resource managers), or when you want to keep transaction-demarcation code separate from the data-access code (`scope.Complete()` at the outer service layer without threading a `SqlTransaction` object through every method). Watch for accidental DTC escalation if two distinct connections enlist, and remember it defaults to `Serializable` isolation unless overridden.
+
+---
+
+## Summary of Additions
+
+The following sections were added because they are commonly probed at a senior .NET interview level and were missing or only lightly covered in the original notes:
+
+- **[new content] Connection Pooling Internals & Tuning** — the original notes stated pooling exists and should be used correctly, but didn't explain the pool-key mechanism, blocking/timeout behavior at exhaustion, or tuning keywords (`Max Pool Size`, `Min Pool Size`, `Connection Lifetime`) — this is exactly the depth senior interviewers probe for.
+- **[new content] Transaction Isolation Levels & TransactionScope (Ambient Transactions)** — original notes said "mention isolation levels if asked" without defining them; added the full isolation-level comparison table plus `TransactionScope`/ambient-transaction mechanics and its DTC-escalation and default-`Serializable` gotchas.
+- **[new content] Multiple Active Result Sets (MARS)** — not mentioned at all in source notes; a real gotcha (`InvalidOperationException` with concurrent readers) and a common connection-string interview question.
+- **[new content] SqlBulkCopy for High-Volume Inserts** — bulk loading is a standard senior ADO.NET topic (how do you insert millions of rows efficiently) and was entirely absent from the source.
+- **[new content] Reading & Streaming Large Objects (BLOBs/CLOBs)** — `CommandBehavior.SequentialAccess` and streaming accessors were missing; relevant for file-serving/large-payload interview scenarios.
+- **[new content] Retry & Resilience for Transient Faults** — cloud/Azure SQL resiliency (transient fault classification, idempotency concerns, Polly/`SqlRetryLogicBaseProvider`) is a hot modern topic not covered in the original notes.
+- **[new content] ADO.NET vs Dapper vs EF Core Trade-offs** — original notes only compared ADO.NET vs EF Core in passing; Dapper (a near-universal middle-ground choice in senior teams) was entirely absent, so a full three-way comparison table and guidance were added.
+
+**Contradictions flagged:** none of genuine substance were found — the "Common Interview Pitfalls" section and the later "Detailed Explanation" section covered the same eight pitfalls twice with consistent content; these were merged rather than duplicated. One factual nuance was clarified rather than contradicted: the notes' claim that "async improves API performance" was refined to explicitly distinguish throughput/scalability gains from (the absence of) single-query latency gains, since interviewers specifically probe that distinction.
+
+## Summary of [gaps] Additions (This Pass)
+
+This second pass targeted two specific gaps identified in the ADO.NET vs Dapper vs EF Core comparison and in the connection-string authentication coverage:
+
+- **[gaps] ExecuteUpdate / ExecuteDelete (EF Core 7+) — Closing the Bulk-Operation Gap** — section 4.2 previously only had a single passing line mentioning `ExecuteUpdate`/`ExecuteDelete`. This pass expanded it into a full dedicated subsection (4.3) with a working code example, an explicit explanation of how it bypasses change tracking/`SaveChanges()` for set-based bulk writes, and — critically — the nuance that this closes the performance gap only for `UPDATE`/`DELETE`, not bulk `INSERT` (which still favors `SqlBulkCopy`). This matters at a senior level because "EF Core is always slower for bulk ops" is now an outdated blanket answer, and interviewers probing current EF Core versions expect the update/delete-vs-insert distinction.
+- **[gaps] Managed Identity / Azure AD Authentication with Microsoft.Data.SqlClient** — section 1.4 listed "Azure AD/Managed Identity" as a bare bullet with no elaboration. This pass added a full subsection (4.4) explaining what managed identity is, how the `Authentication` connection-string keyword and `Azure.Identity`'s `DefaultAzureCredential` acquire tokens in place of SQL login credentials, and why this is the modern recommended posture (no secret sprawl, automatic rotation, centralized Entra ID-based access control). This matters because passwordless/secretless cloud data access is now a standard senior-level expectation for anyone deploying to Azure, and interviewers commonly probe whether a candidate still defaults to SQL-login-in-a-connection-string thinking.
+
+**Contradictions flagged:** none — both additions are elaborations of existing bullets/lines, not corrections.

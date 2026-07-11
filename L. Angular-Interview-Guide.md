@@ -6,11 +6,13 @@
 
 1. [Core Concepts](#core-concepts)
    - [Angular vs AngularJS](#angular-vs-angularjs)
+   - [Hybrid Angular Apps and Upgrading from AngularJS (ngUpgrade)](#hybrid-angular-apps-and-upgrading-from-angularjs-ngupgrade)
    - [Architecture Overview](#architecture-overview)
    - [TypeScript in Angular](#typescript-in-angular)
    - [Modules (NgModule)](#modules-ngmodule)
    - [Components](#components)
    - [[new content] Standalone Components (Angular 14+, default since v17)](#new-content-standalone-components-angular-14-default-since-v17)
+   - [UI Component Libraries: Angular Material and Bootstrap](#ui-component-libraries-angular-material-and-bootstrap)
    - [Templates, Metadata, Decorators](#templates-metadata-decorators)
    - [Data Binding](#data-binding)
    - [Directives](#directives)
@@ -48,6 +50,7 @@
    - [[new content] Deferrable Views: @defer (Angular 17+)](#new-content-deferrable-views-defer-angular-17)
    - [Lazy Loading and Preloading](#lazy-loading-and-preloading)
    - [Bundle Size, Tree Shaking, Build Optimization](#bundle-size-tree-shaking-build-optimization)
+   - [Angular CLI vs Webpack](#angular-cli-vs-webpack)
    - [[new content] esbuild / Vite-based Application Builder (Angular 17+)](#new-content-esbuild--vite-based-application-builder-angular-17)
    - [Angular Build & Runtime Lifecycle](#angular-build--runtime-lifecycle)
    - [HTTP Request Lifecycle](#http-request-lifecycle)
@@ -57,6 +60,7 @@
    - [Progressive Web Apps and Service Workers](#progressive-web-apps-and-service-workers)
    - [Angular Security](#angular-security)
    - [[gaps] Accessibility (a11y): ARIA, CDK a11y Module, Focus Management](#gaps-accessibility-a11y-aria-cdk-a11y-module-focus-management)
+   - [Deployment: Firebase and GitHub Pages](#deployment-firebase-and-github-pages)
 6. [Enterprise Architecture Case Study (BFF + CQRS + .NET)](#enterprise-architecture-case-study-bff--cqrs--net)
 7. [Testing](#testing)
 8. [Best Practices](#best-practices)
@@ -84,7 +88,23 @@ Angular (v2+) is a full TypeScript rewrite of AngularJS (1.x). Key differences:
 
 **Key features of Angular** (from source, still accurate): component-based architecture, two-way data binding, directives & pipes, DI, routing, HttpClient, template-driven & reactive forms, lazy loading, AOT compilation.
 
+**What is Ivy?** Ivy is Angular's rendering and compilation engine — it compiles components and templates ahead of time into a set of low-level JavaScript instructions rather than relying on a larger, more generic runtime interpreter. It has been the default engine since Angular 9 (replacing the older "View Engine"), and it's called out specifically for what it delivers: smaller bundle sizes (better tree-shaking, since each component emits its own minimal instructions instead of large shared runtime metadata), faster compilation, and better debugging (component instances become directly inspectable in the browser console, and template errors map more precisely back to source locations).
+
 **Follow-up an interviewer will ask:** "Angular is not MVC — what would you call it?" Answer: it's closer to a component/MVVM-flavored architecture — the component class is the view-model, the template is the view, and services/DI supply the model/business logic layer. There's no single canonical controller layer like classic MVC.
+
+### Hybrid Angular Apps and Upgrading from AngularJS (ngUpgrade)
+
+A **Hybrid Angular App** is an application that runs AngularJS (1.x) and Angular (2+) side by side on the same page during a migration — both framework runtimes are bootstrapped simultaneously, with components/services shared or communicated between the two.
+
+Angular ships the **`ngUpgrade`** module (package `@angular/upgrade`) specifically to support this:
+
+```bash
+npm install @angular/upgrade
+```
+
+- `UpgradeModule` bootstraps the hybrid app and lets AngularJS directives be used from Angular templates, and Angular components be used from AngularJS templates (via `downgradeComponent`/`downgradeInjectable`).
+- Typical migration strategy: introduce Angular alongside an existing AngularJS app, migrate one route/feature/component at a time to Angular, and keep `ngUpgrade` as the bridge until the AngularJS code is fully retired — rather than attempting a risky "big bang" rewrite of the whole app at once.
+- **Why this comes up in interviews:** most enterprises with a codebase older than ~2016 went through exactly this migration path. A senior/lead candidate is expected to know the mechanism exists (`ngUpgrade`, `@angular/upgrade`) even without having personally run a migration — it signals awareness of Angular's history and how legacy-modernization projects actually get staffed and scoped, which maps directly onto the WebForms → MVC → .NET Core migrations a 10-year .NET developer has likely lived through.
 
 ### Architecture Overview
 
@@ -265,6 +285,25 @@ export const appConfig: ApplicationConfig = {
 **Why it matters for interviews:** Angular CLI has generated standalone-by-default projects since v17. Interviewers will ask you to contrast the old (`NgModule` + `RouterModule.forRoot`) and new (`bootstrapApplication` + `provideRouter`) bootstrap flows, and to explain *why* Angular made this move — primarily to simplify the mental model (no more "which module do I declare this in?"), improve tree-shakability (each component declares its own exact dependencies), and better align Angular with how React/Vue/Svelte components are consumed (self-contained, importable units). NgModules are **not deprecated** — you can mix standalone components into an NgModule-based app incrementally, which is the recommended migration path (`ng generate @angular/core:standalone` schematic can assist).
 
 **Gotcha:** a standalone component's `imports` array is analogous to an NgModule's `imports`, but scoped per-component rather than shared app-wide — every standalone component must import `CommonModule` (or specific directives) itself if it uses `*ngIf`/`*ngFor`/pipes like `date`, unlike NgModule apps where `CommonModule` was often imported once in a shared module.
+
+### UI Component Libraries: Angular Material and Bootstrap
+
+Two of the most common UI options paired with Angular:
+
+| Library | What it is | Notes |
+|---|---|---|
+| **Angular Material** | Google's official Material Design component library, built specifically for Angular | Deep Angular integration (built on the CDK, works naturally with reactive forms), theming via SCSS, accessible-by-default components (see the CDK `a11y` module covered later) |
+| **Bootstrap** | A general-purpose, framework-agnostic CSS framework | Not Angular-specific — used via plain CSS classes, or through a wrapper library like `ngx-bootstrap`/`ng-bootstrap` for Angular-idiomatic components (directives instead of jQuery-driven widgets) |
+
+Installing Angular Material via the CLI schematic:
+
+```bash
+ng add @angular/material
+```
+
+This single command installs the package, runs an interactive theme picker, wires up typography/animations in `angular.json`/`main.ts`, and optionally sets up gesture support (`hammerjs`) — the same schematic-driven `ng add` convention used elsewhere in the CLI ecosystem (`@angular/pwa`, `@angular/ssr`, `@ngrx/store`).
+
+**Senior framing:** reach for Angular Material when you want a component library with baked-in accessibility, theming, and Angular-native APIs, and Material Design's visual language is acceptable; reach for Bootstrap (or a wrapper) when the org already has Bootstrap-based design conventions/branding to match, or the team wants a CSS-only approach that isn't tied to one component framework's JS.
 
 ### Templates, Metadata, Decorators
 
@@ -1680,6 +1719,18 @@ export class AppRoutingModule {}
 - **Angular DevTools** — browser extension to inspect component trees and change-detection cycles, and profile which components are checked/re-rendered on each cycle.
 - **Budgets** in `angular.json` — configure warnings/errors when bundle sizes exceed thresholds (e.g., fail the build if `main` bundle exceeds X KB), enforced in CI.
 
+### Angular CLI vs Webpack
+
+A frequent point of confusion for developers newer to Angular: the **Angular CLI** and **Webpack** operate at different layers and aren't really competitors.
+
+| Aspect | Angular CLI | Webpack |
+|---|---|---|
+| Purpose | Scaffolds, builds, serves, and tests entire Angular projects (`ng new`, `ng generate`, `ng build`, `ng serve`, `ng test`) | A general-purpose JavaScript module bundler |
+| Configuration | Minimal, convention-based (`angular.json`) | Highly customizable, but verbose (`webpack.config.js`) |
+| Relationship | Historically used Webpack **internally** as its bundler | Consumed *by* the CLI (and by many other frameworks) as a building block, not a replacement for it |
+
+The practical answer interviewers want: the Angular CLI is the higher-level tool developers interact with day to day; Webpack was, for years, the bundler running underneath it, hidden behind the CLI's builder abstraction (`@angular-devkit/build-angular:browser`) — so most Angular developers never had to hand-write a `webpack.config.js` (unlike, say, Create-React-App-era React projects, which often required `eject`-ing to customize Webpack directly). As covered next, the CLI has since swapped its default bundler to esbuild/Vite — the CLI itself didn't change conceptually, only what it delegates to underneath.
+
 ### [new content] esbuild / Vite-based Application Builder (Angular 17+)
 
 Angular's CLI has moved from a webpack-based build pipeline to a new **esbuild + Vite** based builder (`@angular-devkit/build-angular:application`, the default for new projects since Angular 17), replacing the older `browser` builder.
@@ -1998,6 +2049,32 @@ The three steps a senior candidate should narrate without prompting: **(1)** cap
 
 **Interview framing:** "Accessibility on custom Angular widgets isn't automatic — anything built from generic elements needs explicit ARIA roles/states, keyboard interaction handling, and deliberate focus management. The CDK's `a11y` module (`FocusTrap`, `LiveAnnouncer`, `FocusMonitor`) exists specifically so teams don't have to hand-roll these genuinely tricky, easy-to-get-subtly-wrong behaviors per component." If asked how you'd verify this, mention automated tooling (axe-core / `@angular-eslint` a11y lint rules / Lighthouse accessibility audit) as a baseline, but be honest that automated tools catch maybe a third of real WCAG issues — actual keyboard-only and screen-reader (NVDA/VoiceOver) manual testing is what catches the rest.
 
+### Deployment: Firebase and GitHub Pages
+
+Before reaching for the full enterprise S3+CloudFront/ECS pipeline covered in the [Enterprise Architecture Case Study](#enterprise-architecture-case-study-bff--cqrs--net) below, it's worth knowing the two lightest-weight, most common deployment targets for demos, side projects, and take-home assignments — these come up as a quick "how would you ship this today" follow-up in interviews.
+
+**Deploying to Firebase Hosting:**
+
+```bash
+npm install -g firebase-tools   # 1. install the Firebase CLI
+firebase login                  # 2. authenticate with a Google account
+firebase init                   # 3. select Hosting, point it at dist/<project-name>
+firebase deploy                 # 4. build first (ng build), then push to Firebase's CDN
+```
+
+Firebase Hosting gives free HTTPS, a global CDN, and easy custom-domain support with almost no configuration — a common choice for quick production-like deployments without standing up cloud infrastructure.
+
+**Deploying to GitHub Pages:**
+
+```bash
+ng add angular-cli-ghpages
+ng deploy --base-href=/repo-name/
+```
+
+`angular-cli-ghpages` is a CLI builder that wires up `ng deploy` to build the app and push the `dist/` output to a `gh-pages` branch automatically. The `--base-href` flag matters specifically here: GitHub Pages serves a project site from a subpath (`https://username.github.io/repo-name/`), not the domain root, so the Angular router and asset URLs need that base path baked in at build time — forgetting `--base-href` is the single most common reason a GitHub Pages Angular deployment shows a blank page with broken asset/route links.
+
+**Senior framing:** Firebase Hosting and GitHub Pages are appropriate for static SPA hosting, demos, and portfolios — they don't fit scenarios needing server-side rendering with a custom Node server, backend proxying, or enterprise compliance/observability requirements, which is exactly where the BFF/CloudFront architecture below becomes the right answer instead.
+
 ---
 
 ## Enterprise Architecture Case Study (BFF + CQRS + .NET)
@@ -2033,4 +2110,199 @@ flowchart TD
 
 **Security model:** zero trust, least privilege, defense in depth. Angular holds no secrets; the BFF stores tokens securely; the API Gateway validates JWTs; microservices sit privately inside a VPC, never directly internet-reachable. AWS mechanics: IAM roles, Secrets Manager, private subnets.
 
-**CI/CD:** Frontend — build Angular, upload to S3, invalidate CloudFront 
+**CI/CD:** Frontend — build Angular, upload to S3, invalidate CloudFront cache. Backend — build .NET Core services, build Docker images, push to ECR, deploy via ECS/EKS, using blue/green or rolling deployments with health checks.
+
+**Observability:** structured logs with correlation IDs, centralized logging; monitoring latency/error-rate/throughput; distributed tracing end-to-end from Angular UI → BFF → microservices.
+
+**Common interview Q&A on this architecture (answered from the notes):**
+- *Why BFF?* Security (tokens never reach the browser), API aggregation, frontend/backend decoupling.
+- *Why CQRS?* Independent read/write scaling, performance optimization, clearer responsibility separation.
+- *How are tokens secured?* Never exposed to the browser; stored server-side in the BFF.
+- *How do you version APIs?* Versioning is handled at the BFF layer, insulating the frontend from internal microservice API churn.
+- *What if a downstream service fails?* Circuit breakers, retries with backoff, graceful degradation (partial UI rendering rather than a hard failure).
+
+**When *not* to use this architecture:** small applications, MVPs, low-traffic systems — this stack is optimized for enterprise scale and security posture, not simplicity, and the notes explicitly (and correctly) call this out. A senior/lead candidate should proactively make this trade-off explicit rather than presenting BFF+CQRS+microservices as a universal default — over-engineering a small app this way is itself a red flag interviewers listen for.
+
+**Interview summary statement (from source, strong as-is):** "Angular acts as a pure UI behind CloudFront, authentication is centralized using Okta, API Gateway secures ingress, the BFF manages tokens and frontend orchestration, and CQRS-based .NET Core microservices scale independently with strong security boundaries."
+
+---
+
+## Testing
+
+Types of testing: **unit** (individual components/services), **integration** (interactions between units), **end-to-end/E2E** (full application flows, e.g., via Cypress).
+
+**Jasmine** — the default JS testing framework for Angular: provides `describe`/`it`/`expect`, assertions, spies, mocking; runs without a real browser rendering pipeline for pure logic tests.
+
+```typescript
+describe('Calculator', () => {
+  it('should add numbers', () => {
+    expect(1 + 1).toBe(2);
+  });
+});
+```
+
+**Karma** — a test runner that launches a real browser (Chrome/Firefox headless typically in CI) and executes Jasmine tests inside it, watching files and re-running on change; configured via `karma.conf.js`. **[new content — currency note]:** newer Angular CLI versions (17+) increasingly default new projects to **Jest** or **Web Test Runner** instead of Karma/Jasmine for unit testing, and Karma itself is a maintenance-mode/deprecated project in the broader JS ecosystem. If interviewing for a role using a recent Angular version, ask/clarify which test runner the codebase actually uses — don't assume Karma by default the way you would have for an "Angular 7" app. Jasmine's `describe`/`it`/`expect` syntax itself is often still used even under Jest, since Jest's API is intentionally Jasmine-compatible.
+
+`TestBed` — Angular's utility for configuring and initializing a test module environment:
+
+```typescript
+beforeEach(() => {
+  TestBed.configureTestingModule({ declarations: [MyComponent] }).compileComponents();
+});
+```
+
+Testing a service:
+
+```typescript
+let service: MyService;
+beforeEach(() => {
+  TestBed.configureTestingModule({ providers: [MyService] });
+  service = TestBed.inject(MyService);
+});
+
+it('should return expected data', () => {
+  expect(service.getData()).toEqual(expectedData);
+});
+```
+
+Testing a component via `ComponentFixture`:
+
+```typescript
+let fixture: ComponentFixture<MyComponent>;
+beforeEach(() => {
+  fixture = TestBed.createComponent(MyComponent);
+});
+
+it('should render title', () => {
+  const compiled = fixture.nativeElement;
+  expect(compiled.querySelector('h1').textContent).toContain('Welcome');
+});
+```
+
+Mocking dependencies:
+
+```typescript
+spyOn(myService, 'getData').and.returnValue(of(mockData));
+```
+
+Testing async code synchronously with `fakeAsync`/`tick`:
+
+```typescript
+it('resolves after timeout', fakeAsync(() => {
+  let value = false;
+  setTimeout(() => value = true, 1000);
+  tick(1000);
+  expect(value).toBe(true);
+}));
+```
+
+**E2E testing** — **Protractor** was Angular's original official E2E framework but has been **deprecated and removed from new Angular CLI projects**; the ecosystem has moved to **Cypress** and **WebdriverIO** (and **Playwright** is also widely adopted, though not called out in the original notes — **[new content]**: Playwright is now a very common choice for Angular E2E in 2025-2026 alongside Cypress, and is worth naming if asked "what would you use for E2E today" since Protractor is fully gone).
+
+**[new content] Component testing with Angular Testing Library:** worth mentioning as an alternative/complement to raw `TestBed`+`ComponentFixture` — `@testing-library/angular` encourages testing components the way a user interacts with them (querying by visible text/role rather than internal implementation details/CSS selectors), which tends to produce tests that survive refactors better. Not required knowledge, but signals current testing-philosophy awareness if it comes up.
+
+---
+
+## Best Practices
+
+- Prefer **standalone components** for new code; migrate NgModule-based code incrementally rather than in one disruptive rewrite.
+- Default to **`OnPush`** change detection for anything beyond trivial components, paired with immutable data patterns (or Signals, which satisfy OnPush natively).
+- Use **`trackBy`** (or mandatory `track` in `@for`) for all non-trivial list rendering.
+- Prefer the **`async` pipe** (or Signals via `toSignal`) over manual `.subscribe()` in components — it handles subscription lifecycle and change-detection integration for you, eliminating a whole class of leak bugs.
+- Keep **components thin** — push business logic, data access, and orchestration into services; components should mostly wire template ↔ service.
+- Use **Reactive Forms** (ideally **typed**) for anything beyond the simplest form; reserve template-driven forms for genuinely small, simple cases.
+- **Lazy load** feature areas by route, and use **`@defer`** for heavy in-page content that doesn't need to ship in the initial bundle.
+- Centralize cross-cutting HTTP concerns (auth headers, error handling, loading indicators) in **interceptors**, not repeated per-call code.
+- Unsubscribe deliberately — `async` pipe first, `takeUntilDestroyed()` second, manual `Subscription.unsubscribe()` in `ngOnDestroy()` as the fallback for cases the first two don't cover.
+- Enforce **bundle budgets** in `angular.json` and profile regularly with Angular DevTools + Lighthouse rather than optimizing blind.
+- Treat `bypassSecurityTrustX` sanitizer calls, `[innerHTML]` on user content, and `localStorage`-stored tokens as things that require an explicit, justified security decision — not defaults.
+- Choose state-management tooling (plain service/Signal, NgRx Signals, classic NgRx) proportionate to actual app complexity — be ready to justify the choice, not just name-drop NgRx.
+
+## Common Pitfalls
+
+- **Mutating objects/arrays in place** under `OnPush` — silently breaks change detection because the input reference never changes.
+- **Overusing impure pipes** (or writing filtering/sorting logic as pipes at all) — recomputes on every CD cycle across the whole app.
+- **Forgetting to unsubscribe** from manually-subscribed Observables in long-lived components/services — classic memory leak source; compounded in SPAs where components are created/destroyed frequently without full page reloads to "reset" memory.
+- **Using `route.snapshot.paramMap` when the same component instance is reused across a param-only navigation** — the snapshot goes stale; use the observable form instead.
+- **Business logic in the constructor** instead of `ngOnInit` — inputs/DI context aren't guaranteed ready, and it undermines testability.
+- **Directly mutating `ElementRef.nativeElement` styles/attributes** instead of using `Renderer2` — breaks under SSR and platform-agnostic rendering.
+- **`forkJoin` on a source Observable that never completes** — silently hangs forever with no emission and no error.
+- **Assuming `*ngFor` without `trackBy` is "fine"** on large or frequently-updated lists — leads to unnecessary DOM churn and janky UI.
+- **Storing JWTs in `localStorage`** for anything beyond a low-stakes app — XSS-exposed; contrast with the more defensible BFF/HttpOnly-cookie pattern (see the contradiction flagged in [Angular Security](#angular-security)).
+- **Treating NgRx as a default** rather than a deliberate choice for apps/teams that actually need its guarantees — adds real complexity cost for simpler apps.
+- **Assuming Signals replace RxJS** — they solve different problems (synchronous view state vs asynchronous streams); expect to explain the interop (`toSignal`/`toObservable`), not a wholesale migration.
+- **Forgetting `track` is mandatory in the new `@for` syntax** while porting old `*ngFor` templates that never had a `trackBy` — the migration schematic will flag this, but manual conversions can silently omit it (falling back to identity-based tracking, reintroducing the exact problem `@for` was meant to force you to avoid).
+- **Calling `inject()` outside an injection context** (e.g., inside an unrelated `setTimeout`/`Promise.then` callback) — throws at runtime; capture dependencies beforehand or use `runInInjectionContext()`.
+
+## Version Feature Comparison Table
+
+| Feature | Angular 7 (2018, source notes' baseline) | Current Angular (2025-2026 class) |
+|---|---|---|
+| Component definition | NgModule-declared only | Standalone by default; NgModules still supported |
+| Bootstrap | `platformBrowserDynamic().bootstrapModule(AppModule)` | `bootstrapApplication(AppComponent, appConfig)` |
+| Template control flow | `*ngIf` / `*ngFor` / `*ngSwitch` | `@if` / `@for` / `@switch` (new syntax), old syntax still valid |
+| Reactive state | RxJS only (`BehaviorSubject`, services) | Signals (`signal`/`computed`/`effect`) + RxJS, with interop |
+| Change detection | Zone.js-based Default/OnPush | Zone.js Default/OnPush **plus** experimental zoneless (Signal-driven) |
+| Dependency injection | Constructor injection | Constructor injection **and** `inject()` function |
+| Forms | Untyped `FormGroup`/`FormControl` | Strictly typed reactive forms |
+| Lazy content within a template | Not available (route/module level only) | `@defer` for template-region-level lazy loading |
+| Build tooling | Webpack via Angular CLI | esbuild + Vite-based `application` builder (default since v17) |
+| SSR | Angular Universal (`@nguniversal`) with destructive rehydration | `@angular/ssr`, non-destructive hydration + event replay |
+| E2E testing | Protractor (then-current) | Protractor removed; Cypress/Playwright/WebdriverIO |
+| Rendering engine | View Engine (Ivy shipped in v9) | Ivy |
+| HTTP interceptors | Class-based `HttpInterceptor` + `HTTP_INTERCEPTORS` multi-provider | Functional interceptors via `withInterceptors()` (class-based still supported) |
+| Route guards | Class-based `CanActivate` etc. | Functional guards (`CanActivateFn`, etc.); class-based still supported |
+
+## Sample Interview Q&A
+
+**Q: Walk me through what happens, end-to-end, when a user clicks a button that triggers an HTTP call, under `OnPush`.**
+A: The click is a native DOM event; because it originates from within the `OnPush` component's own template, Angular is guaranteed to run change detection for that component regardless of strategy. The click handler calls a service method, which calls `HttpClient.get()` — this returns a cold Observable, so nothing happens yet. On `.subscribe()` (or via the `async` pipe), the request passes forward through the interceptor chain (e.g., auth header injection), goes out via Fetch/XHR, and the response comes back through the same interceptors in reverse (error handling, logging). The Observable emits, the subscriber callback (or `async` pipe) assigns the result — critically, if that assignment replaces an object/array reference (not mutates it), the `OnPush` component correctly picks up the new `@Input` reference (if the data flows to a child) or is already being checked because the initiating event was local. Change detection then diffs bindings and patches only the changed DOM nodes.
+
+**Q: Why would you choose Signals over a `BehaviorSubject` for a piece of component state, and when would you still reach for RxJS instead?**
+A: For simple, synchronous, always-has-a-value UI state (e.g., a toggle, a selected tab, a computed total), Signals are simpler — no subscription management, and templates read them directly with automatic, fine-grained change detection integration (even under `OnPush`/zoneless). I'd still reach for RxJS when the state is inherently asynchronous or needs operator composition — debounced search input, retryable HTTP calls, combining multiple async sources with `combineLatest`/`forkJoin`, or WebSocket streams — none of which Signals model natively. In practice, I bridge the two with `toSignal()`/`toObservable()` rather than picking one exclusively.
+
+**Q: A colleague says "we should always use `ChangeDetectionStrategy.OnPush` everywhere." Do you agree?**
+A: Directionally yes for anything non-trivial, but with a caveat: `OnPush` demands discipline around immutability — if the team mutates objects/arrays in place instead of creating new references, `OnPush` components silently stop updating, which is a worse bug than the performance problem it was meant to solve. I'd pair a blanket `OnPush` policy with lint rules or code review discipline enforcing immutable update patterns (or push teams toward Signals, which sidestep the reference-equality gotcha entirely since Signal reads are tracked individually).
+
+**Q: What's the actual difference between `providers` and `viewProviders` on a component, and can you give a real scenario where it matters?**
+A: Both register a service scoped to the component (new instance for that subtree), but `providers` is visible to the component's own view *and* to any content projected into it via `<ng-content>`, while `viewProviders` is visible only to the component's own template. It matters, for example, building a reusable `TabsComponent` that provides a `TabsService` to coordinate internal tab state among its own child `TabComponent`s in its template — if a consumer projects arbitrary content into a tab via `ng-content` and that content tries to inject the same token expecting the tab's service, `viewProviders` would hide it from them (by design), while `providers` would expose it. Getting this wrong causes confusing "why can't my projected content see this service" bugs.
+
+**Q: In the enterprise architecture with Okta + API Gateway + BFF + CQRS microservices, why does the Angular app never hold tokens?**
+A: Because any token that reaches browser JavaScript is exposed to XSS — if any dependency or injected script can read `localStorage`/`sessionStorage`, it can exfiltrate the token. By keeping token exchange and storage entirely server-side in the .NET BFF (using HttpOnly, secure cookies for the browser-BFF session instead), even a successful XSS injection in the Angular app can't steal a bearer token, because there isn't one anywhere the browser can read. This is a deliberate trade-off — added backend complexity (the BFF) in exchange for meaningfully reduced token-theft blast radius — appropriate for enterprise-scale apps, and probably overkill for a low-stakes internal tool.
+
+**Q: You inherited an Angular 7 codebase using NgModules everywhere. How would you approach modernizing it without a risky big-bang rewrite?**
+A: Incrementally: first update Angular itself version-by-version using `ng update` (each major version has its own migration schematics — skipping versions is unsupported and risky). Once on a version supporting standalone components (14+), use the `ng generate @angular/core:standalone` schematics to convert components/directives/pipes to standalone one feature area at a time, since standalone and NgModule-based code can coexist. In parallel, opportunistically adopt `@if`/`@for` via the control-flow migration schematic, move new state to Signals where it's genuinely simpler, and swap `HttpInterceptor` classes for functional interceptors as they're touched. I would not attempt to flip the whole build system (webpack → esbuild) and the whole component model in the same change — that combination is very hard to bisect if something regresses.
+
+---
+
+## Summary of Additions
+
+The following **[new content]** sections were added to close the gap between the "Angular 7" (2018) baseline and current (2025-2026) senior-level Angular interview expectations:
+
+1. **Standalone Components (Angular 14+, default since v17)** — the biggest structural shift since the source notes; interviewers assume you can bootstrap and structure an app without NgModules.
+2. **The inject() Function (Angular 14+)** — required for functional guards/interceptors/resolvers and now the idiomatic DI style in standalone apps; also a common gotcha question (injection context rules).
+3. **New Control-Flow Syntax: @if / @for / @switch (Angular 17+)** — replaces `*ngIf`/`*ngFor`/`*ngSwitch` in new code; mandatory `track` in `@for` is a direct, testable improvement over optional `trackBy`.
+4. **Typed Reactive Forms (Angular 14+)** — closes a real type-safety gap (typo'd control names failing silently) highly relevant to a background emphasizing compile-time safety.
+5. **Functional Interceptors (Angular 15+)** — the modern `provideHttpClient(withInterceptors(...))` pattern, replacing `HTTP_INTERCEPTORS`/`multi:true` boilerplate.
+6. **Angular Signals (Angular 16+)** — arguably the single most-asked "what's new in Angular" question right now; a new reactive primitive Angular's runtime itself understands.
+7. **RxJS vs Signals — When to Use Which** — directly answers the trade-off question every interviewer asks once Signals come up.
+8. **SignalStore / NgRx Signals (Angular 17+)** — the lighter-weight, Signal-native alternative to classic NgRx ceremony; interviewers expect you to contrast the two.
+9. **Dependency Injection: Hierarchical Injectors Deep Dive** — unpacks `@Optional`/`@Self`/`@SkipSelf`/`@Host` and multi-providers, which the original notes only touched on shallowly.
+10. **Zoneless Change Detection (Angular 18+)** — removes Zone.js, enabled by Signals; a forward-looking but real topic (flagged as evolving/verify exact stability).
+11. **Deferrable Views: @defer (Angular 17+)** — declarative template-region lazy loading beyond route-level code splitting; directly targets Core Web Vitals.
+12. **esbuild / Vite-based Application Builder (Angular 17+)** — the CLI's build pipeline changed materially; affects troubleshooting and `angular.json` configuration.
+13. **Hydration (Angular 16+) and Event Replay (Angular 17+)** — fixes the old "destructive rehydration" flicker/wasted-work problem in Angular Universal SSR; strong evidence of production SSR experience if discussed well.
+
+**Contradictions flagged inline (for your review):**
+- **Token storage:** the `AuthInterceptor` example (`localStorage.getItem('token')`) contradicts the explicit "tokens never stored in localStorage/sessionStorage" security guidance elsewhere in your notes and in the BFF architecture section. Both are real-world patterns, but they represent different security postures — flagged and explained under [Angular Security](#angular-security) rather than silently picking one.
+- **`ng build --prod` vs `--configuration production`:** the source notes use both `ng build --prod` (older CLI syntax) and `ng build --configuration production` (current syntax) in different places. `--prod` is deprecated/removed in current CLI versions — use `--configuration production` (or the shorthand `-c production`) going forward; kept both in context since your notes used both, but flagging `--prod` as outdated.
+- No other substantive factual contradictions were found — most apparent duplication in the source (e.g., two `HttpInterceptor` examples, two `ViewChild` explanations, repeated lifecycle-hook lists) was straightforward repetition, which was de-duplicated rather than flagged as conflicting.
+
+## Summary of [gaps] Additions (This Pass)
+
+This pass added three sections identified by a formal gap-analysis review, tagged **[gaps]** to distinguish them from the earlier **[new content]** pass:
+
+1. **NgRx Entity Adapters, Facade Pattern, and Selector Memoization** (inserted in State Management, after SignalStore/NgRx Signals) — the original NgRx coverage stopped at the surface-level Store/Actions/Reducers/Effects/Selectors building blocks. This closes three real gaps: `@ngrx/entity`'s `EntityAdapter` (normalized CRUD state + generated `selectAll`/`selectEntities` selectors, which matters for O(1) lookups vs. array scans at scale), the facade pattern (the NgRx-recommended way to keep components decoupled from Store internals, which also makes component unit tests dramatically simpler), and the actual reference-equality mechanics behind `createSelector` memoization — including the real-world gotcha of a single-slot cache getting thrashed by parameterized selectors or defeated by reducers that create unnecessary new references.
+2. **Micro-Frontends / Module Federation for Angular** (inserted in Advanced, after the DI Hierarchical Injectors deep dive) — a lead-level system-design topic entirely absent before. Covers Webpack Module Federation mechanics, the `@angular-architects/module-federation` schematic Angular teams actually use, shared-singleton dependency negotiation risk, and — the framing interviewers actually want — when this complexity is justified (independent deployment cadence across teams) versus when an Nx monorepo with enforced library boundaries solves the same organizational problem far more cheaply.
+3. **Accessibility (a11y): ARIA, CDK a11y Module, Focus Management** (inserted in SSR, PWA & Cross-Cutting, after Angular Security) — a11y had zero coverage in the prior guide despite being a hard compliance requirement on many enterprise projects. Covers ARIA roles/states/roving-tabindex on custom widgets, the Angular CDK's `FocusTrap`/`LiveAnnouncer`/`FocusMonitor` primitives, and the full three-step focus-management sequence for modals/dynamic content (capture trigger focus → trap and move focus in → restore focus on close) that most home-grown implementations get wrong.
+
+All three are marked forward-looking/conceptual relative to this candidate's hands-on Angular 4/7 experience where relevant (Module Federation in particular), consistent with the honest framing used throughout the rest of the guide for version-sensitive content.

@@ -1099,4 +1099,211 @@ using System.Text;
 
 public class JwtTokenService
 {
-    private readonly IConfiguratio
+    private readonly IConfiguration _config;
+
+    public JwtTokenService(IConfiguration config) => _config = config;
+
+    public string GenerateToken(string userId, string email, string role)
+    {
+        var jwtSettings = _config.GetSection("Jwt");
+        var key = Encoding.UTF8.GetBytes(jwtSettings["Key"]!);
+
+        var claims = new List<Claim>
+        {
+            new(JwtRegisteredClaimNames.Sub, userId),
+            new(ClaimTypes.Email, email),
+            new(ClaimTypes.Role, role),
+            new("token_use", "access") // dedicated type claim — prevents refresh/access confusion
+        };
+
+        var credentials = new SigningCredentials(
+            new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256);
+
+        var token = new JwtSecurityToken(
+            issuer: jwtSettings["Issuer"],
+            audience: jwtSettings["Audience"],
+            claims: claims,
+            expires: DateTime.UtcNow.AddMinutes(int.Parse(jwtSettings["ExpiryMinutes"]!)),
+            signingCredentials: credentials);
+
+        return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+}
+```
+
+**Dual-mode auth: cookie for browsers, header for Postman/mobile.** This solves a real constraint your notes call out explicitly: HttpOnly cookies (the right choice for browser XSS protection) are invisible to non-browser clients like Postman or native mobile apps, which naturally use the `Authorization` header instead. Supporting both from one backend:
+
+```csharp
+[HttpPost("login")]
+public IActionResult Login(LoginRequest request)
+{
+    if (!IsValidUser(request)) return Unauthorized();
+
+    var token = _tokenService.GenerateToken("1", "admin@test.com", "Admin");
+
+    // Browser support
+    Response.Cookies.Append("access_token", token, new CookieOptions
+    {
+        HttpOnly = true,
+        Secure = true,
+        SameSite = SameSiteMode.Strict,
+        Expires = DateTime.UtcNow.AddMinutes(30)
+    });
+
+    // Postman/mobile support
+    return Ok(new { access_token = token });
+}
+```
+
+```csharp
+.AddJwtBearer(options =>
+{
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            // Priority 1: Authorization header (Postman/mobile)
+            var authHeader = context.Request.Headers["Authorization"].FirstOrDefault();
+            if (!string.IsNullOrEmpty(authHeader) && authHeader.StartsWith("Bearer "))
+            {
+                context.Token = authHeader["Bearer ".Length..];
+            }
+            // Priority 2: cookie (browser)
+            else if (context.Request.Cookies.TryGetValue("access_token", out var cookieToken))
+            {
+                context.Token = cookieToken;
+            }
+            return Task.CompletedTask;
+        }
+    };
+});
+```
+
+Controllers need no special handling either way:
+```csharp
+[Authorize]
+[HttpGet("orders")]
+public IActionResult GetOrders() => Ok("Secure Data");
+```
+
+**Production settings checklist (from source notes):**
+- HTTPS always enforced.
+- CORS configured to allow credentials for the browser cookie flow.
+- `SameSite`: `Strict`/`Lax` for same-domain; `None; Secure` for cross-domain SPA scenarios.
+- CSRF protection required whenever cookies are in play.
+- Access token expiry 10–30 minutes; refresh token for seamless re-auth.
+
+**Refresh endpoint (concept, with rotation):**
+```csharp
+[HttpPost("refresh")]
+public IActionResult RefreshToken(RefreshRequest request)
+{
+    var savedToken = _refreshTokenStore.Get(request.RefreshToken);
+
+    if (savedToken is null || savedToken.IsExpired || savedToken.IsConsumed)
+    {
+        // IsConsumed = true → reuse of an already-rotated token: possible theft.
+        if (savedToken?.IsConsumed == true)
+            _refreshTokenStore.RevokeFamily(savedToken.FamilyId);
+        return Unauthorized();
+    }
+
+    var newAccessToken = _jwtService.GenerateToken(savedToken.UserId, savedToken.Email, savedToken.Role);
+    var newRefreshToken = Guid.NewGuid().ToString();
+
+    _refreshTokenStore.MarkConsumedAndIssueNext(request.RefreshToken, newRefreshToken);
+
+    return Ok(new { accessToken = newAccessToken, refreshToken = newRefreshToken });
+}
+```
+
+**Policy-based authorization:**
+```csharp
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("ITOnly", policy => policy.RequireClaim("Department", "IT"));
+});
+
+[Authorize(Policy = "ITOnly")]
+public IActionResult InternalData() => Ok();
+```
+
+---
+
+## 8. Sample Interview Q&A
+
+**Q1. How does JWT validation work internally?**
+Extract the token from the `Authorization` header (or cookie). Select the correct key (by `kid` from a trusted JWKS if asymmetric). Verify the signature using a *server-configured* algorithm (never the token's own `alg` claim). Validate `exp`, `nbf`, `iss`, `aud` with small clock-skew tolerance. Extract claims into `HttpContext.User`. Only then does the authorization stage evaluate roles/policies. Reject on any failure.
+
+**Q2. Difference between Authentication and Authorization?**
+Authentication answers "who are you" (the login process; JWT/cookie validates identity). Authorization answers "what can you do" (claims/roles/policies validate access to a specific resource). Failure modes differ too: authentication failure → 401; authorization failure → 403.
+
+**Q3. Why is Basic Authentication insecure?**
+Credentials travel on every request, Base64 is encoding not encryption, there's no expiration or revocation, and a captured request can be replayed. It's still used in legacy/internal systems purely for compatibility, always mandatorily over HTTPS.
+
+**Q4. How do you revoke JWT tokens?**
+JWT is stateless, so revocation isn't native — you add state: short-lived access tokens (primary strategy), a `jti` blacklist in Redis, token versioning, refresh-token revocation, or signing-key rotation as a nuclear option. Each reintroduces some server-side state/lookup, which is the fundamental trade-off against JWT's original statelessness.
+
+**Q5. Difference between JWT and OAuth?**
+JWT is a token *format*; OAuth 2.0 is an *authorization framework* for how a client obtains and uses tokens to access resources on a user's behalf. OAuth commonly uses JWT as its access/ID token format, but they solve different problems and aren't interchangeable concepts.
+
+**Q6. When should you use Windows Authentication?**
+Internal enterprise apps within an Active Directory domain needing SSO; not suitable for public internet-facing APIs (no cross-domain/external client support, ties you to Kerberos/NTLM infrastructure).
+
+**Q7. How do you secure microservices communication?**
+JWT between services (often with a service-specific `aud`), mutual TLS for transport-level service identity, API gateway-level validation, and network isolation — typically combined (mTLS + JWT), not either/or (see [4.5](#45-new-content-mtls-for-service-to-service-auth)).
+
+**Q8. Claims vs Roles — which is better?**
+Claims provide fine-grained, scalable access control; roles are coarse and tend to multiply combinatorially as requirements narrow. In production, policy-based authorization built from claims (and roles where appropriate) is the recommended default because it centralizes decision logic.
+
+**Q9. How do you handle token expiration?**
+Short-lived access tokens, a refresh-token flow to obtain new ones, and silent refresh on the frontend (interceptor pattern) so the user experience isn't interrupted by re-login.
+
+**Q10. How do you prevent token replay attacks?**
+HTTPS everywhere, short token lifetime, secret/key rotation, device binding where feasible, and nonce/idempotency-key tracking for critical operations (payments, state-changing actions) regardless of token validity.
+
+**Q11. [new content] Why is PKCE now recommended even for confidential clients, not just public ones like SPAs?**
+PKCE was designed to protect public clients that can't hold a secret, but it also defends against authorization-code interception at the redirect step regardless of client type, and using it universally simplifies configuration guidance ("always use PKCE" vs a conditional rule), with no real operational cost. See [3.3](#33-pkce--why-its-now-mandatory-even-for-confidential-clients).
+
+**Q12. [new content] Walk me through an algorithm confusion attack on JWT.**
+If a server verifies RS256 tokens with a public key but its library also accepts HS256 using the same key-lookup path, an attacker can craft an HS256 token and use the (publicly available) RSA public key bytes as the HMAC secret — producing a signature the server incorrectly accepts. Mitigation: pin the expected algorithm(s) server-side, never trust the token's own `alg` header, never share key material across symmetric/asymmetric verification paths. See [4.3](#43-new-content-jwt-validation-pitfalls-algorithm-confusion--algnone).
+
+**Q13. [new content] What's the BFF pattern and why would you use it over a token-in-browser approach for a SPA?**
+Backend-for-Frontend: the SPA holds only a plain session cookie with its own backend, which performs the OAuth dance server-side and never exposes an OAuth/JWT token to the browser at all. It removes the "where do I safely store a token in JS" problem entirely, at the cost of an extra backend component. See [3.9](#39-new-content-securing-spa-to-api-auth-bff-pattern-vs-token-in-browser).
+
+**Q14. [new content] How would you design refresh token reuse detection?**
+Mark each refresh token "consumed" (not deleted) after use rather than just replacing it. If a consumed token is presented again, treat it as a signal of theft and revoke the entire token family, forcing full re-authentication — even though this also logs out the legitimate user, it's the safer failure mode. See [3.8](#38-new-content-refresh-token-rotation--reuse-detection).
+
+---
+
+## Summary of Additions
+
+New `[new content]` sections added because they are commonly probed at a senior .NET interview level and were missing or only mentioned as unexplained one-liners in the original notes:
+
+- **2.7 The 7 ASP.NET Core Authorization Styles** — the original notes only listed 7 items with no explanation; expanded each with definitions and examples, including resource-based authorization, which is the mechanism for data-dependent access rules.
+- **3.2 OAuth2 Grant Types: Which Are Deprecated/Unsafe** — clarifies the full grant-type landscape and explicitly flags Implicit and ROPC as deprecated/removed in OAuth 2.1, a frequent interview trap.
+- **3.5 SAML vs OIDC for SSO/Federation** — not covered at all; essential for enterprise/lead roles that touch legacy IdP integrations alongside modern OIDC.
+- **3.8 Refresh Token Rotation & Reuse Detection** — the notes named rotation as a pitfall but never explained reuse detection, the mechanism that actually turns rotation into a real security control.
+- **3.9 Securing SPA-to-API Auth: BFF Pattern vs Token-in-Browser** — names and contrasts the current OAuth BCP-recommended architecture against the cookie/header dual-mode design the notes describe in depth.
+- **3.10 ASP.NET Core Identity Customization** — entirely absent; critical since most real .NET systems build on Identity rather than hand-rolling user management.
+- **3.11 Multi-Tenant Authentication & Authorization** — entirely absent; a near-guaranteed SaaS/senior topic (tenant claim design, per-tenant issuers, cross-tenant leakage prevention).
+- **4.2 Opaque Tokens vs JWT for Revocation — the Real Trade-off** — reframes an existing bullet as the fundamental latency-vs-revocability architectural decision it actually is.
+- **4.3 JWT Validation Pitfalls: Algorithm Confusion & alg:none** — the notes reduced this to one sentence; expanded with the actual attack mechanics and concrete mitigation, since "explain this attack" is a common follow-up.
+- **4.4 (session fixation addition)** — session fixation wasn't mentioned at all; added alongside the existing CSRF/XSS explanations since all three are the standard trio of auth-adjacent web attacks.
+- **4.5 mTLS for Service-to-Service Auth** — the notes had a single unexplained bullet ("Mutual TLS for service identity"); expanded into a full explanation with .NET-specific notes.
+- **4.6 API Keys vs OAuth Client Credentials for Machine-to-Machine** — entirely absent; a very common real-world design question for partner/service integrations.
+- **Q11–Q14 in Sample Interview Q&A** — added to directly answer the new gap topics in interview-answer format.
+
+**Contradictions flagged during consolidation:**
+- Access token lifetime guidance varied across source sections (5–15 min in one place, 5–30 min, 10–30 min, and 15–60 min in others). Kept the more conservative senior-level guidance (5–30 minutes, with 5–15 as the tighter/preferred end) and noted the range rather than picking one number as absolute, since real systems vary by risk tolerance.
+- One code sample set `ClockSkew = TimeSpan.Zero` while the prose elsewhere recommended allowing 1–2 minutes of skew. Flagged in the implementation reference and changed the illustrative code to `TimeSpan.FromMinutes(2)` to match the (more correct) prose guidance, since `TimeSpan.Zero` contradicts the notes' own stated best practice and causes exactly the "random clock-skew auth failures" pitfall the notes separately warn about.
+
+---
+
+## Summary of [gaps] Additions (This Pass)
+
+New `[gaps]` sections added in this second pass, covering topics increasingly probed in current (2025/2026) senior .NET interviews as passwordless auth and bearer-token hardening move from "emerging" to "expected knowledge":
+
+- **3.12 WebAuthn / FIDO2 / Passkeys** — entirely absent from the original notes and from the first `[new content]` pass. Passkeys have become the default passwordless recommendation across Apple, Google, and Microsoft platforms, and enterprise IdPs (Azure AD/Entra ID, Okta) are rolling out native support. Interviewers use this topic to check whether a candidate understands *why* it's phishing-resistant (origin-bound cryptographic signatures, no shared secret to steal or mistype into a phishing site) rather than just knowing the buzzword — a meaningful step up from OTP-based MFA, which remains vulnerable to real-time phishing proxies.
+- **3.13 DPoP (RFC 9449 — Demonstrating Proof of Possession)** — entirely absent from the original notes. Directly addresses the fundamental weakness already discussed in [4.1](#41-why-jwt-revocation-is-hard--and-the-real-strategies) and [4.2](#42-new-content-opaque-tokens-vs-jwt-for-revocation--the-real-trade-off) (a bearer token, once stolen, is fully usable by an attacker) without requiring the heavier certificate infrastructure of mTLS ([4.5](#45-new-content-mtls-for-service-to-service-auth)). As DPoP adoption grows in modern OAuth/OIDC providers, it's an increasingly likely follow-up whenever a candidate says "just use short-lived JWTs" as their complete answer to token theft.
+- No other substantive factual contradictions were found — the notes are largely consistent repeats/rephrasings of the same core JWT/OAuth concepts across multiple source passes.

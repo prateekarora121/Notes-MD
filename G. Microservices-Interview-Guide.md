@@ -1104,4 +1104,61 @@ services.AddStackExchangeRedisCache(options =>
 A: Start with Event Storming / domain modeling with business stakeholders to identify bounded contexts (Ordering, Payments, Inventory, Shipping, Catalog). Boundaries should align with team ownership and align with where transactional consistency is actually required (aggregates) — never split a single aggregate's invariants across two services. If unsure, start as a modular monolith with clean internal module boundaries and extract into real services once a specific scaling or team-autonomy pain justifies the operational cost of doing so.
 
 **Q: A downstream payment service is intermittently slow. What do you put in place, end to end?**
-A: Timeout on the HTTP client call, retry with exponential backoff + jitter (only if the call is idempotent, ideally with an idempotency key), circuit breaker to stop hammering a failing service, bulkhead to isolate the payment client's resource pool from other outbound calls, and a fallback/degraded response path (e.g., queue the payment for async
+A: Timeout on the HTTP client call, retry with exponential backoff + jitter (only if the call is idempotent, ideally with an idempotency key), circuit breaker to stop hammering a failing service, bulkhead to isolate the payment client's resource pool from other outbound calls, and a fallback/degraded response path (e.g., queue the payment for async processing and tell the user "processing" instead of failing outright). Instrument with distributed tracing so you can see exactly where the latency originates across the call chain.
+
+**Q: How do you keep data consistent across services without distributed transactions?**
+A: Saga pattern (choreography for simple flows, orchestration for complex/long-running ones) with compensating transactions per step, backed by the Outbox pattern so the local DB update and event publish are atomic. Accept eventual consistency and design the UI/business process to tolerate the intermediate states.
+
+**Q: What's the difference between a message queue and an event bus, and when would you use each?**
+A: Queue (RabbitMQ) is point-to-point/competing-consumers, good for distributing work items; event bus (Kafka) is publish/subscribe with a persistent, replayable log, good when multiple independent consumers need the same event stream (analytics, notifications, fraud detection all reacting to "OrderPlaced" independently) or when replay/audit is needed.
+
+**Q: How would you roll out a breaking database schema change with zero downtime across multiple running instances?**
+A: Expand/contract migration — add the new column/table alongside the old one (expand), deploy code that writes to both old and new during the transition, verify, then remove the old schema once fully rolled out (contract). Never make a single-step breaking change while more than one version of the service could be running concurrently (which is always true during a rolling deployment).
+
+**Q: Would you use a service mesh or a resilience library like Polly, and why?**
+A: Depends on organizational scale and stack diversity. A single/few-language .NET shop generally gets more value, less operational overhead, and easier debugging from Polly/`Microsoft.Extensions.Http.Resilience` in-process. A large polyglot organization needing uniform mTLS, traffic policy, and observability enforced consistently across many teams/languages benefits from a service mesh (Istio/Linkerd) despite its added infrastructure complexity and latency hop.
+
+**Q: How do you prevent a breaking API change from silently breaking a consumer?**
+A: Consumer-driven contract testing (Pact) in CI — the provider's build fails if it no longer satisfies a contract a real consumer depends on. Combine with deliberate API versioning and a preference for additive, backward-compatible changes over breaking ones.
+
+**Q: What happens if the same message gets delivered twice — how do you prevent double-processing?**
+A: Design consumers to be idempotent — dedupe by a unique message/idempotency key against a processed-messages store, or make the operation naturally idempotent (upsert instead of insert, "set status" instead of "increment"). At-least-once delivery is the norm with message brokers and the Outbox pattern, so idempotent consumers are a requirement, not an edge case.
+
+---
+
+## Summary of Additions
+
+All headings below are prefixed **[new content]** in the guide body; listed here with why each matters for a senior interview:
+
+1. **When NOT to use microservices** — tests judgment, not just pattern recall; a very common senior trap question.
+2. **Service decomposition strategy & DDD bounded contexts / context mapping** — the actual "how do you decide service boundaries" mechanics were missing; this is the most-asked senior microservices question.
+3. **Strangler Fig migration — expanded mechanics** — original notes only had the one-line concept; added the dual-write/CDC risk that's the real-world failure mode.
+4. **Choosing sync vs async — trade-off table** — notes defined both but never contrasted when to use which.
+5. **API Gateway vs BFF (Backend-for-Frontend)** — a standard companion pattern to API Gateway that was entirely absent.
+6. **YARP as the current .NET-native gateway** — notes only showed Ocelot; flagged the more current Microsoft-maintained option.
+7. **Choreography vs Orchestration trade-off table** — notes described both but never compared them directly.
+8. **Transactional Outbox implementation nuance (polling vs CDC, idempotent consumers)** — notes stated the concept but not the mechanics or its idempotency dependency.
+9. **How to actually implement idempotency** — notes only showed the header, not the server-side mechanism.
+10. **Expand/contract DB migrations for zero-downtime rollout** — critical, frequently-asked operational detail missing from the migrations section.
+11. **Circuit breaker state machine (Closed/Open/Half-Open)** — the states themselves were never described, only the effect.
+12. **Polly v8+ resilience pipelines** — notes used the deprecated policy-chaining API; updated to current idiom.
+13. **Retry pattern as its own topic (backoff, jitter, idempotency requirement)** — was only implied, never covered directly.
+14. **Service Mesh vs library-based resilience trade-off table** — mesh tools were named but never compared architecturally to Polly.
+15. **OAuth 2.0 vs OpenID Connect vs JWT disambiguation** — commonly conflated terms that interviewers specifically probe.
+16. **Zero Trust networking principle** — the "why" behind mTLS internally was missing.
+17. **Observability three-pillars framing + OpenTelemetry as the current standard** — logging/tracing were scattered; consolidated and updated to reflect OTel's unification of the space.
+18. **API versioning strategies comparison table** — notes showed only URI versioning with no alternatives/trade-offs.
+19. **Full microservices testing pyramid (unit/integration/contract/E2E + Testcontainers + WireMock.NET)** — testing was the thinnest section in the original notes; this is now a standard senior topic.
+20. **Event Sourcing definition and trade-offs** — implied by CQRS/Outbox mentions but never explicitly defined.
+21. **Rate limiter algorithm comparison (fixed/sliding window, token bucket, concurrency)** — notes showed one implementation with no discussion of alternatives.
+22. **Backpressure** — missing performance/resilience concept for overload scenarios.
+23. **Monorepo vs Polyrepo — added explicit trade-off framing** — original was a bare feature table with no guidance on when to pick which.
+24. **Premature decomposition, distributed monolith, eventual-consistency UX planning as anti-patterns** — expanded the anti-patterns list beyond the original three bullet points.
+
+**Contradictions flagged:** None found. The source material contained many duplicate/repeated Q&A entries (e.g., Circuit Breaker at Q21/Q61/Q100, Saga at Q23/Q66/Q90, CQRS at Q31/Q62, Sidecar at Q34/Q72, DLQ at Q48/Q92, Blue-Green at Q52/Q83, Canary at Q53/Q84, Monorepo/Polyrepo at Q55/Q86) but all restatements were consistent with each other — no genuine factual conflicts to flag. One minor factual staleness was corrected rather than flagged as a contradiction: the Dockerfile base image (.NET 6, now out of support) and the HPA API version (`autoscaling/v2beta2`, deprecated) were updated to current equivalents with a note to verify against the actual target environment.
+
+## Summary of [gaps] Additions (This Pass)
+
+This is a second gap-fill pass over the guide, tagged **[gaps]** to distinguish it from the earlier **[new content]** pass.
+
+1. **Zero Trust Architecture & mTLS Deep Dive** — the existing notes only carried a single brief paragraph each on Zero Trust and on mTLS (a one-line mention that "both client and server present certificates"). That's enough to name-drop the terms but not enough to survive a senior-level follow-up. This pass added: the explicit castle-and-moat vs Zero Trust contrast and the concrete drivers behind the industry shift (ephemeral cloud-native infra, lateral-movement risk, compliance mandates); the actual mTLS mechanics (per-service X.509 identity, a private CA — e.g., Istio's `istiod`/Citadel or Linkerd's identity component — issuing and auto-rotating short-lived certs, and the mutual-verification handshake) with a sequence diagram; the operational pain of hand-rolling certificate distribution/rotation/revocation per service versus offloading it to a mesh; and a high-level Istio vs Linkerd comparison table. This is what separates "I know mTLS means mutual TLS" from a senior-level answer that can reason about *why* and *how* it's implemented — while being explicit that this is conceptual/trade-off knowledge rather than hands-on service-mesh experience, cross-referenced against the existing Service Mesh vs Polly table rather than duplicating it.

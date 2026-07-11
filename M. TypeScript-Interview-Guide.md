@@ -1206,4 +1206,114 @@ try {
   } else if (error instanceof Error) {
     console.error(error.message);
   } else {
-    console.error("Unexpected
+    console.error("Unexpected throw value", error);
+  }
+}
+```
+
+---
+
+## Performance
+
+### [new content] Compiler Performance & Type-Checking Cost
+
+Not covered in source notes. Senior/lead-level interviews increasingly probe build-time performance since large Angular monorepos routinely hit multi-minute `tsc` times.
+
+- **Project references** (`tsconfig` `references` + `composite: true`) let you split a large codebase into independently type-checked/build-cached projects, enabling incremental builds — critical in monorepos (Nx/Angular workspace libraries).
+- **`skipLibCheck: true`** skips type-checking of `.d.ts` files in `node_modules`, often cutting build time significantly at the cost of not catching type errors that originate purely in third-party type definitions.
+- Deep conditional/recursive types (template-literal-based route parsers, deep mapped types) can measurably slow the type checker or hit the compiler's recursion depth limit — a known real-world cost of "clever" type-level programming that's worth acknowledging (trade-off: expressive types vs. IDE responsiveness).
+- `isolatedModules: true` is required by modern single-file transpilers (esbuild, swc, Babel) that transpile files independently without full program type information — it forbids constructs that need cross-file type knowledge to compile correctly (e.g., re-exporting a type without `export type`).
+
+### [new content] Runtime Performance: Erasure, Enums, and Bundle Size
+
+- **Types are 100% erased at runtime** — there is zero runtime performance cost to using types, generics, interfaces, or type aliases themselves. This is a common interview trick question ("does TypeScript make my code slower?") — the honest answer is no, *except* for constructs that emit real runtime code (see below).
+- Constructs with a real runtime cost: numeric/string `enum` (emits an object + reverse mapping unless `const enum`), decorators + `reflect-metadata` (adds metadata emission and a runtime dependency), parameter properties (trivial constructor assignment, negligible), namespaces (emit IIFE wrappers).
+- Prefer literal unions over enums, and prefer plain interfaces/types over classes when you only need a compile-time shape with no runtime behavior — every `class` emits real constructor/prototype JS, while an `interface`/`type` emits nothing.
+
+---
+
+## Best Practices
+
+- Turn on `strict` (and, ideally, `noUncheckedIndexedAccess` + `exactOptionalPropertyTypes`) from day one — retrofitting strictness onto a large codebase is far more expensive than starting with it.
+- Prefer `unknown` over `any` at every I/O boundary (HTTP responses, `JSON.parse`, third-party callbacks); narrow explicitly before use.
+- Prefer literal union types over `enum` for new code; reserve `const enum` only when you fully control the build pipeline and don't need ESM/isolatedModules compatibility.
+- Use discriminated unions + exhaustiveness (`never`) checks for any domain modeling with multiple variants (API responses, Redux/NgRx actions, state machines).
+- Use `satisfies` for typed constant objects/config instead of a type annotation, to keep literal type precision.
+- Validate untrusted data at runtime with a schema library (`zod`, `io-ts`, class-validator) rather than trusting a type assertion — types don't exist at runtime and cannot protect you from malformed API payloads.
+- Keep function/module boundary types explicit (parameters and exported return types); let inference handle everything internal.
+- Avoid `as` type assertions except as a last resort, and never chain `as unknown as T` without a comment justifying why no safer narrowing was possible.
+- Use `readonly`/`Readonly<T>` on inputs you don't intend to mutate, and prefer immutable update patterns (spread, `structuredClone`, immer) over in-place mutation, especially in Angular change-detection-sensitive code.
+- Enable `noImplicitOverride` once on a class hierarchy of any depth to catch silent override drift.
+
+---
+
+## Common Pitfalls
+
+- **Treating `any` as a "fix the red squiggly" escape hatch** instead of using `unknown` + narrowing — reintroduces exactly the bug class TypeScript exists to prevent.
+- **Assuming `readonly` is deep** — it's shallow; nested objects/arrays remain mutable.
+- **Forgetting exhaustiveness checks on discriminated unions** — adding a new variant silently compiles and produces `undefined` at runtime instead of a compile error.
+- **Confusing `??` with `||`** — `||` incorrectly treats `0`, `""`, `false` as "missing."
+- **Excess property check blind spot** — assigning via an intermediate variable bypasses the literal freshness check that would otherwise catch a typo'd property name.
+- **`private`/`protected` are compile-time only** — don't rely on them for actual runtime data hiding/security; use `#privateFields` if runtime enforcement matters.
+- **`const enum` + `isolatedModules`/modern bundlers** — incompatible in many current build setups (esbuild/swc-based tooling, Angular's esbuild builder); leads to confusing build errors on otherwise "correct" code.
+- **Assuming index signatures guarantee presence** — without `noUncheckedIndexedAccess`, `dict[key]` is typed as `T`, not `T | undefined`, hiding real `undefined` risk.
+- **Assuming caught errors are always `Error` instances** — `throw` accepts any value in JS; code that does `error.message` without narrowing will crash on non-`Error` throws.
+- **Mixing legacy (`experimentalDecorators`) and standard (TS 5+) decorator semantics** in one project/library boundary, causing subtle metadata or execution-order differences.
+- **Over-engineering type-level logic** (deeply recursive conditional types) that technically works but tanks IDE responsiveness and compiler performance for marginal type-safety gain.
+
+---
+
+## Sample Interview Q&A
+
+**Q: Why would you choose `unknown` over `any` for a function that parses an external API response?**
+A: `any` disables type checking entirely, so any property access or method call on the parsed result compiles even if wrong, deferring the bug to runtime. `unknown` forces the caller to narrow (via `typeof`, a type guard, or a schema validator like `zod`) before doing anything with the value, which means the compiler actively catches unsafe usage of unvalidated external data — exactly the boundary where bugs from malformed payloads are most likely and most costly.
+
+**Q: How do you guarantee a `switch` over a discriminated union stays exhaustive as new variants are added?**
+A: Add a `default` branch that assigns the remaining (narrowed) value to a variable typed `never`. If every case is handled, the compiler has narrowed the union down to nothing (`never`) by the time it reaches `default`, so the assignment type-checks. If a new variant is added and a case is missing, the unhandled variant remains in the type at the `default` branch, and assigning it to `never` becomes a compile error — turning a silent runtime bug into a build failure.
+
+**Q: What's the practical difference between `interface` and `type` today, and which do you default to?**
+A: Both describe object shapes and are structurally interchangeable in most cases — an interface can extend a type alias and vice versa. The real differences are: interfaces support declaration merging (multiple declarations combine) and `extends`-based multiple inheritance; type aliases can express unions, tuples, and mapped/conditional types that interfaces cannot. I default to `interface` for object/class contracts that might be extended or merged (public DTOs, Angular component inputs), and `type` for unions, function signatures, and type-level utilities.
+
+**Q: Your team wants to disable `strictNullChecks` to speed up a legacy migration. What do you push back with?**
+A: `strictNullChecks` is the single highest-value strict flag — without it, `null`/`undefined` are implicitly assignable to every type, so the compiler can't distinguish a guaranteed value from a possibly-missing one anywhere in the app. Turning it off doesn't just "unblock the migration," it silently reintroduces the exact `TypeError: cannot read property of undefined` bug class TypeScript is meant to eliminate, across the *entire* codebase, not just the migrated files — and most modern `.d.ts` files from `node_modules` assume `strictNullChecks` is on, so inference from third-party libraries becomes less trustworthy too. A better path is incremental adoption via per-file `// @ts-strict-ignore`-style suppressions or `strict` flag rollout scoped by project references, not a blanket global disable.
+
+**Q: Explain structural typing and one place it causes a surprising result.**
+A: TypeScript compares types by shape, not by declared name/hierarchy — any object with a compatible set of members satisfies a type, regardless of what interface/class it claims to implement. The surprising case: excess property checks only apply to object *literals* assigned directly to a typed location; if you first assign the literal to a variable (inferred as a wider/looser type) and then pass that variable, the check doesn't fire, and an extra/typo'd property slips through silently — because at that point it's a structural assignability check, not a literal freshness check.
+
+**Q: How do generics differ in TypeScript vs C#, and where does that matter in practice?**
+A: C# generics are reified — the CLR knows the concrete type argument at runtime (you can do `typeof(T)`, runtime `is T` checks work correctly per closed generic type). TypeScript generics are fully erased at compile time — there's no `T` at runtime at all, so patterns like runtime type-checking against a generic parameter, or `new T()`, aren't directly possible; you have to pass a constructor/class reference or a runtime discriminant explicitly as a value if you need that behavior. This matters when porting patterns like generic factories or repository base classes from C# — the TS equivalent needs an explicit constructor parameter (`new (...args: any[]) => T`) rather than relying on `T` being inspectable at runtime.
+
+**Q: What's the risk of using `enum` in a modern Angular app built with esbuild, and what do you use instead?**
+A: Regular (non-const) enums emit real runtime objects with reverse mappings, adding to bundle size and defeating tree-shaking. `const enum` avoids that by inlining values at compile time, but is incompatible with `isolatedModules`, which esbuild-based builds (including Angular's esbuild builder since Angular 17) require, since it single-file-transpiles without full program knowledge. The idiomatic replacement is a literal union type, optionally paired with an `as const satisfies Record<...>` object if you need an iterable/enumerable value list — this gives the same type safety with zero runtime cost and full build-tool compatibility.
+
+---
+
+## Summary of Additions
+
+New sections/headings added during consolidation (all prefixed `[new content]` in the document), and why each matters for a senior/lead .NET-full-stack + Angular interview:
+
+1. **any vs unknown vs never vs void** — extends the notes' partial `any`/`unknown` table into the full four-way comparison interviewers actually ask for, with a diagram of top/bottom type relationships.
+2. **Enums, and Why Senior Devs Avoid Them** — the notes introduced enums with no mention of their real-world downsides (bundle size, `const enum`/`isolatedModules` incompatibility) or the modern literal-union replacement pattern.
+3. **Structural Typing vs Nominal Typing** — the single most common "coming from C#" conceptual question; entirely missing from the source.
+4. **strictNullChecks and the strict Family of Flags** — the notes mention enabling the flag in one line; this expands it into the full flag-by-flag breakdown senior interviewers expect (including flags outside `strict` like `noUncheckedIndexedAccess`).
+5. **Generic Variance (Covariance/Contravariance)** — directly bridges from C# `in`/`out` generic variance, a natural comparison point for this candidate's background, and was entirely absent.
+6. **Decorators & Metadata (Angular Relevance)** — critical since the candidate does Angular work; explains Angular DI's reliance on `reflect-metadata` and the TS 5 standard-decorators migration risk.
+7. **Module Resolution: ESM vs CommonJS** — real, common build-failure territory (tree-shaking, esbuild/Angular 17+ builder warnings) with zero coverage in the source.
+8. **Parameter Properties Shorthand** — used implicitly in the source's own example without being named/explained; now explicit.
+9. **Typed Catch Clauses (unknown in catch)** — corrects an inaccuracy in the original try/catch example under a properly strict project and shows the safe pattern.
+10. **Compiler Performance & Type-Checking Cost** and **Runtime Performance: Erasure, Enums, and Bundle Size** — an entire Performance section the source lacked, addressing build-time and runtime cost questions common at senior/lead level.
+11. Smaller inline additions: labeled/variadic tuples, key remapping in mapped types (`as`), distributive conditional types, template literal type composition with `infer`, `Awaited<T>` and `DeepPartial<T>`, the `override` keyword, and native `#privateFields`.
+
+**Contradictions/imprecisions flagged (not true contradictions, but corrected for accuracy):**
+- The notes describe type aliases as "not extendable" (Q17, Q69) — clarified that this is true only for the `extends` keyword; type aliases compose via intersections (`&`), so "not extendable" is an oversimplification, not a hard limitation.
+- No outright factual contradictions were found between duplicate Q&A pairs (e.g., the two `keyof`, `infer`, `mapped types`, and utility-type explanations at Q28/Q88, Q30/Q90, Q31/Q91, Q32-40/Q92-97 said the same thing in different words) — these were de-duplicated and merged rather than flagged as conflicts.
+
+## Summary of [gaps] Additions (This Pass)
+
+This pass added three sections identified by a formal gap-analysis review, tagged **[gaps]** to distinguish them from the earlier **[new content]** pass:
+
+1. **Branded/Nominal Typing — Full Worked Example** (inserted after Structural Typing vs Nominal Typing) — the original notes mentioned the `UserId`/`OrderId` branding pattern in a single line without a usable implementation. This adds the full pattern: the `string & { readonly __brand: ... }` type, a constructor function as the sole sanctioned way to produce a branded value (where real validation lives), and a worked example showing the compiler actually rejecting a misused `OrderId` passed where a `UserId` is expected — plus the `unique symbol`-brand variant for large codebases with many branded types.
+2. **`ReadonlyArray<T>` / `readonly T[]` as Defensive API Design** (inserted after Tuples) — not previously covered at all. Shows the concrete mutation bug this pattern prevents (a function silently `sort()`-ing the caller's array), explains that it's a compile-time-only contract (mutating methods removed from the type, no `Object.freeze` involved), and flags the shallow-immutability boundary case (`readonly Point[]` doesn't stop `arr[0].x = 5`).
+3. **Recursive Type Alias Depth Limits (TS2589)** (inserted after Template Literal Types) — the notes used recursive/conditional types (`ExtractParams`, `DeepPartial`) without ever addressing their real-world failure mode. Adds a concrete trigger for `TS2589`, the mechanical reason it happens (recursive types must be fully expanded at check time, unlike a recursing function), and four concrete mitigation strategies (depth-limiting counter types, breaking circularity in the modeled shape, preferring vetted utility libraries, and simplifying distributive conditional types).
+
+All three are self-contained, senior-level additions with working code — no version-sensitive framing was needed for this file since these are core-language TypeScript mechanics, not Angular-version-dependent APIs.

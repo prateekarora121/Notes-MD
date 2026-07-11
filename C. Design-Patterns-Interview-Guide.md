@@ -43,6 +43,12 @@
 10. [Common Pitfalls](#common-pitfalls)
 11. [Sample Interview Q&A](#sample-interview-qa)
 12. [Summary of Additions](#summary-of-additions)
+13. [Summary of \[gaps\] Additions (This Pass)](#summary-of-gaps-additions-this-pass)
+8. [Performance Considerations](#performance-considerations)
+9. [Best Practices](#best-practices)
+10. [Common Pitfalls](#common-pitfalls)
+11. [Sample Interview Q&A](#sample-interview-qa)
+12. [Summary of Additions](#summary-of-additions)
 13. [Summary of [gaps] Additions (This Pass)](#summary-of-gaps-additions-this-pass)
 
 ---
@@ -319,6 +325,33 @@ services.AddTransient<IGuiFactory>(sp =>
 | Use case | Vary a single product's concrete type | Guarantee compatibility across several products |
 | Extension | Add new `Creator` subclass | Add new concrete factory implementing the family interface |
 
+#### Factory vs Strategy
+
+A common senior follow-up: "Factory and Strategy both hide a concrete type behind an interface — what's actually different?"
+
+| | Factory | Strategy |
+|---|---|---|
+| **Decides** | *How/what object gets created* | *Which algorithm/behavior runs* |
+| **Chosen by** | A creation-time key/config (type name, platform, provider) | The client/caller, per invocation or per context |
+| **Output** | A new object instance | The result of executing behavior on existing collaborators |
+| **Relationship** | Often **constructs and returns** a Strategy implementation | Is frequently the *product* a Factory hands back |
+
+```csharp
+// Factory picks WHICH strategy to construct...
+public static IDiscountStrategy DiscountStrategyFactory(string customerTier) => customerTier switch
+{
+    "Gold"   => new GoldDiscount(),
+    "Silver" => new SilverDiscount(),
+    _        => new NoDiscount()
+};
+
+// ...Strategy then decides HOW the chosen behavior executes
+var strategy = DiscountStrategyFactory(customer.Tier);
+var finalTotal = strategy.Apply(orderTotal);
+```
+
+**Interview one-liner:** "Strategy answers *which behavior runs*; Factory answers *how that object gets built*. They're not competing patterns — factories very often exist specifically to construct and hand back a Strategy implementation selected by a runtime key."
+
 #### How DI containers reduce the need for hand-rolled factories
 
 Modern DI containers already provide object creation, lifetime management (Singleton/Scoped/Transient), and implementation selection — the exact responsibilities of a factory:
@@ -375,6 +408,58 @@ var plugins = AppDomain.CurrentDomain.GetAssemblies()
 foreach (var plugin in plugins) plugin.Execute();
 ```
 > Modern alternative (verify against your target runtime): `System.Runtime.Loader.AssemblyLoadContext` for isolated/unloadable plugin contexts, and `System.Composition`/MEF for attribute-based discovery, are more robust than raw `Assembly.LoadFrom` + `Activator.CreateInstance` in production plugin systems because they support unloading and version isolation.
+
+#### Plugin Factory Versioning & Backward Compatibility
+
+Dynamic plugin loading solves *discovery*; production plugin systems also need to survive **plugin versions evolving independently of the host**. Four techniques come up repeatedly in senior interviews:
+
+- **Adapter layers** — wrap an older plugin's interface behind the current `IPlugin` contract so the host never has to special-case legacy plugins; the adapter absorbs the shape mismatch.
+- **Versioned interfaces** — ship `IPlugin`, `IPluginV2`, etc. (or a `Version` property/attribute on the plugin) instead of silently breaking older plugins when the contract changes; the host resolves against whichever version a given plugin DLL actually implements.
+- **Feature negotiation** — instead of one fat interface, plugins implement small optional capability interfaces (`ISupportsAsyncExecute`, `ISupportsCancellation`); the host probes via `is`/`as` (or a capabilities descriptor) and calls only what the plugin actually supports.
+- **Fallback factories** — if a plugin fails to load, is an incompatible version, or is missing entirely, the factory returns a safe default/no-op implementation (a Null Object — see Behavioral Patterns below) rather than throwing and taking down the host.
+
+```csharp
+public interface IPluginV1 { string Name { get; } void Execute(); }
+public interface IPluginV2 : IPluginV1 { Task ExecuteAsync(CancellationToken ct); }
+
+// Adapter layer: bridges an old sync-only plugin onto the current async contract
+public class PluginAdapter : IPluginV2
+{
+    private readonly IPluginV1 _legacy;
+    public PluginAdapter(IPluginV1 legacy) => _legacy = legacy;
+    public string Name => _legacy.Name;
+    public void Execute() => _legacy.Execute();
+    public Task ExecuteAsync(CancellationToken ct) { _legacy.Execute(); return Task.CompletedTask; }
+}
+
+// Fallback factory target: a Null Object plugin, never a thrown exception
+public class NoOpPlugin : IPluginV2
+{
+    public string Name => "NoOp";
+    public void Execute() { }
+    public Task ExecuteAsync(CancellationToken ct) => Task.CompletedTask;
+}
+
+public static IPluginV2 LoadPluginWithFallback(Type pluginType)
+{
+    try
+    {
+        var instance = Activator.CreateInstance(pluginType);
+        return instance switch
+        {
+            IPluginV2 v2 => v2,
+            IPluginV1 v1 => new PluginAdapter(v1), // versioned interface + adapter layer
+            _            => new NoOpPlugin()       // unrecognized/incompatible — fall back safely
+        };
+    }
+    catch
+    {
+        return new NoOpPlugin(); // load failure (bad DLL, missing dependency) also falls back safely
+    }
+}
+```
+
+**Interview line:** "Class explosion and version drift are the two real risks in plugin factories at scale — versioned interfaces plus small capability interfaces (feature negotiation) let the host and plugins evolve independently, while adapter layers and fallback factories keep one bad or outdated plugin from taking down the whole host process."
 
 ---
 
@@ -1042,6 +1127,8 @@ public class Order
 
 **Interview one-liner:** "Strategy answers 'which algorithm should run', chosen externally; State answers 'what should this object do now', decided internally as part of a lifecycle. If you see transition logic living *inside* the swappable classes, it's State; if the classes are peers with zero transition awareness, it's Strategy."
 
+**Factory vs Strategy, revisited:** don't conflate "which pattern is this" with "which pattern chooses it." Strategy is about which *algorithm* executes at runtime; Factory (see Creational Patterns above) is about which *object gets constructed* at runtime — and the two compose constantly, since a factory is often exactly what hands back the chosen Strategy instance based on a runtime key.
+
 ---
 
 ### [new content] Template Method
@@ -1369,6 +1456,21 @@ public class OrderPlacedProjectionHandler : IEventHandler<OrderPlacedEvent>
 **Checklist — is CQRS worth it here?**
 - Many expensive/divergent read queries? Complex write-side domain logic? Asymmetric read/write scaling needs? Need for audit/event history? If most are "yes," CQRS fits; otherwise it's likely over-engineering for the problem size.
 
+#### Incremental Rollout (a good answer to "how would you introduce this without a big-bang rewrite")
+
+Senior/lead interviews often follow the "is CQRS worth it" question with "okay, walk me through how you'd actually ship it." A realistic phased rollout for a single bounded context, roughly 4–6 weeks:
+
+| Phase | Focus |
+|---|---|
+| 1 | Design commands/events/queries for one bounded context; stand up the write API + basic write DB |
+| 2 | Implement command handlers, the outbox table, and the event publisher |
+| 3 | Implement the projection service, read DB, and query API |
+| 4 | Wire up the message broker end-to-end; add idempotency checks; run integration tests |
+| 5 | Add observability — projection-lag metrics, DLQ alerting — before declaring it production-ready |
+| 6 | Add saga/orchestration *only if* cross-service workflows actually exist — don't build it speculatively |
+
+**Why this matters as an answer:** it signals you'd introduce CQRS per bounded context incrementally, with the outbox and idempotency in place *before* going live, rather than attempting a big-bang rewrite of read and write models simultaneously.
+
 **Common pitfalls:** splitting read/write for trivial CRUD services; skipping the outbox (silent event loss); non-idempotent projections (duplicate side effects); ignoring projection lag/DLQ monitoring; expecting strong consistency across services (CQRS embraces eventual consistency, not strict consistency).
 
 ---
@@ -1393,6 +1495,18 @@ ItemAdded           → adjust OrderItemsView
 | Poison-message isolation | After N retries, message routes to a Dead Letter Queue (DLQ) instead of blocking the queue forever |
 | Buffering/elasticity | Queue absorbs traffic spikes; projection workers autoscale on queue depth |
 | Ordering | FIFO queues / partition keys (`MessageGroupId = OrderId`) preserve per-entity order |
+
+#### Choosing the Read Store by Query Shape
+
+A Projection Service isn't tied to one storage technology — the whole point of separating read/write models is picking a read store that matches how the data will actually be queried, not just reusing the write-side RDBMS:
+
+| Query need | Read store | Why |
+|---|---|---|
+| Complex search, filters, faceting, free text | Elasticsearch / OpenSearch | Built for full-text search, ranking, and multi-field filtering that relational indexes handle poorly |
+| Fast key-value lookups (e.g., "get order summary by ID") | Redis | Sub-millisecond reads at high throughput for simple access patterns |
+| Analytical/aggregation queries, reporting, dashboards | Read-optimized RDBMS or a data warehouse | Columnar/indexed storage suited to scans, joins, and aggregations rather than point lookups |
+
+**Senior framing:** it's common — and often correct — to run *multiple* read stores off the same event stream, each projection tuned to one query shape (e.g., Redis for the order-status widget, Elasticsearch for the "search my orders" page), rather than forcing every read pattern through a single denormalized table.
 
 **Interview-ready one-liner:** "The Projection Service subscribes to domain events (via SNS/SQS or equivalent) and builds materialized read models; the broker gives reliability, retries, ordering, and fault isolation, which is what makes CQRS practical at scale rather than just a theoretical split."
 
@@ -1668,4 +1782,108 @@ public class Order
 - **Repository/UoW cargo-culted onto EF Core** without a reason (covered above) — adds ceremony without benefit for simple CRUD.
 - **Overusing MediatR/CQRS for trivial CRUD apps** — indirection tax without payoff when there's no real read/write divergence.
 - **Premature Abstract Factory / Strategy for a single implementation** — "just in case we need another payment provider someday" is a YAGNI smell; add the abstraction when the second implementation actually shows up.
-- **Interface for every class ("Java-itis")** — creating `IFoo` for every `Foo` with only one implementation, "for testability," when the real testability lever is separatin
+- **Interface for every class ("Java-itis")** — creating `IFoo` for every `Foo` with only one implementation, "for testability," when the real testability lever is separating pure logic from I/O, not blanket interface creation.
+
+---
+
+## Performance Considerations
+
+- **Singleton locking overhead:** prefer `Lazy<T>` or static init over manual `lock` on every access — locking on every call (not just initialization) is a needless bottleneck under contention.
+- **Decorator/Proxy chains:** each layer adds a virtual call + potential allocation; deep decorator stacks (common with cross-cutting concerns like logging+caching+retry+circuit-breaker) can add measurable overhead in hot paths — consider source-generated or compiled pipelines (e.g., `Microsoft.Extensions.Http.Resilience`/Polly's `ResiliencePipeline`) over hand-stacked decorators for very hot code.
+- **MediatR/Mediator dispatch:** reflection-based handler resolution has a cost; MediatR caches handler lookups, but very hot paths (thousands of req/sec) should benchmark mediator overhead vs. direct method calls — usually negligible relative to I/O, but worth knowing how to answer "does MediatR add latency?" (answer: yes, small and typically dwarfed by I/O, but non-zero — measure, don't assume).
+- **CQRS/Projection lag:** read-model staleness under load is a real performance/consistency trade-off, not free — monitor queue depth as your leading indicator of user-visible staleness.
+- **Repository over-abstraction:** wrapping `IQueryable` behind non-queryable repository methods forces materializing full result sets in memory before filtering, killing SQL-side filtering/paging — a very real, very common EF Core perf bug caused directly by Repository misuse.
+- **Distributed locks:** each acquire/renew round-trip is a network call; overly fine-grained distributed locking (e.g., per-row) can dominate latency — batch or coarsen lock granularity where correctness allows.
+
+---
+
+## Best Practices
+
+- Choose patterns to resolve a **named force** (variability point, lifecycle concern, coupling problem) — be able to say which force a pattern in your code solves.
+- Prefer **composition over inheritance** by default (Strategy/Decorator over deep class hierarchies) — easier to test, extend, and reason about.
+- Let the **DI container be your factory** by default; write explicit Factory/Abstract Factory classes only when creation logic is genuinely complex or must live outside the container.
+- Keep **Repository/UoW usage intentional** — introduce them for DDD aggregate boundaries or swappable persistence, not by default with EF Core.
+- Make cross-cutting concerns (logging, caching, retries, validation) **pipeline behaviors or decorators**, not copy-pasted into every handler/service.
+- Seal Template Method skeletons; expose only named hook methods for extension.
+- Treat **eventual consistency** (CQRS, event-driven projections) as a UX decision, not just a technical implementation detail — decide and communicate staleness tolerance up front.
+- Favor **records + `with` expressions** over classic Builder/Prototype for simple immutable data; reserve Builder for genuinely multi-step, validated construction.
+
+---
+
+## Common Pitfalls
+
+- Non-thread-safe Singleton via `??=` or unsynchronized null-checks.
+- Storing per-request/mutable state (`HttpContext`, `CurrentUser`) inside a Singleton.
+- Captive dependency: Scoped/Transient service injected into a Singleton's constructor, silently extending its lifetime.
+- Generic `IRepository<T>` leaking `IQueryable` or forcing bespoke methods per query shape.
+- Treating `DbContext` + hand-rolled `IUnitOfWork` as adding new transactional guarantees it doesn't (EF Core's `SaveChanges` already is the transaction boundary).
+- Missing outbox pattern in CQRS → silently lost domain events on crash.
+- Non-idempotent event/projection handlers → duplicated side effects on at-least-once redelivery.
+- Confusing Strategy and State because they look structurally identical — forgetting the "who decides the transition" distinction.
+- Overriding a Template Method's skeleton method because it wasn't sealed.
+- Reaching for MediatR/CQRS on a simple CRUD service "because it's best practice" rather than because read/write divergence justifies it.
+- `IServiceProvider` used as a general-purpose Service Locator throughout business logic instead of at true factory/composition-root boundaries.
+
+---
+
+## Sample Interview Q&A
+
+**Q: What's the difference between Singleton and a static class, and when would you pick one over the other?**
+A: Singleton is instance-based, can implement interfaces, can be injected/mocked via DI, and can carry (careful, ideally read-only) state with lifecycle control; a static class has no instance, can't implement interfaces, can't be substituted in tests, and its state (if any) is effectively uncontrolled global state. Prefer container-managed Singleton registration (`AddSingleton<TInterface, TImpl>`) over hand-rolled static/Singleton classes in almost all modern ASP.NET Core code, reserving static classes for pure, stateless utility functions.
+
+**Q: How would you implement a cluster-wide "only one worker runs this job" guarantee across 5 replicas?**
+A: In-process Singleton doesn't help — each pod has its own. Use a distributed lock/lease (Redis RedLock, SQL Server `sp_getapplock`, or a Kubernetes `Lease` object) with a TTL; the pod that acquires it becomes leader and must periodically renew the lease; if it dies, the lease expires and another pod takes over. The job itself must be idempotent since a lease can expire mid-execution.
+
+**Q: When would you NOT use the Repository pattern with EF Core?**
+A: When `DbContext`/`DbSet<T>` already gives you everything a repository would (querying, tracking, `SaveChanges` as UoW) and you have no need to swap persistence technology, enforce DDD aggregate boundaries, or centralize complex specifications. Wrapping EF in a generic `IRepository<T>` without one of those reasons usually adds ceremony and can degrade performance by hiding `IQueryable` composability.
+
+**Q: What's the difference between Strategy and State?**
+A: Strategy lets a caller choose an algorithm/behavior externally, and the strategies are independent of each other. State represents an object's internal lifecycle, where the state objects themselves decide and drive transitions to the next state. Structurally near-identical (interface + swappable implementations); the difference is intent and who controls transitions.
+
+**Q: What GoF pattern is MediatR built on, and what's the actual benefit of using it?**
+A: It combines Command (each `IRequest`/handler pair encapsulates a request as an object) with Mediator (the `IMediator` dispatches to the right handler without sender/receiver knowing each other). The real benefit isn't "zero coupling" — handlers still depend on what they need — it's thinner controllers and consistent cross-cutting behavior via pipeline behaviors applied uniformly to every request.
+
+**Q: Your team is debating adding CQRS to a service. How do you decide?**
+A: Check whether reads and writes genuinely diverge: many expensive/different read shapes, complex write-side domain logic, asymmetric scaling needs, or a real audit/event-history requirement. If most are "no," plain CRUD with a well-modeled domain is simpler and cheaper to maintain — CQRS's eventual consistency and dual-model complexity is a cost you should only pay when the benefits are concrete, not speculative.
+
+**Q: What's an Anemic Domain Model, and why is it a problem?**
+A: Entities that are pure property bags with all business rules externalized into "Service" classes. It's a problem because nothing prevents an invalid state transition from being triggered from some other code path that forgot the check — the class doesn't protect its own invariants. Fix: move behavior onto the entity (e.g., `order.Cancel()` enforcing its own business rule) for a rich domain model.
+
+**Q: Explain the Outbox pattern and why CQRS/event-driven systems need it.**
+A: When a command handler both writes to a database and publishes a domain event, a crash between the DB commit and the publish call loses the event, leaving the read side permanently stale. The Outbox pattern persists the event to an "outbox" table in the *same* DB transaction as the business write, then a separate reliable dispatcher reads unsent outbox rows and publishes them, retrying until acknowledged — guaranteeing at-least-once delivery without a distributed transaction.
+
+**Q: Is `IServiceProvider` a Service Locator anti-pattern?**
+A: It depends on where it's used. Used pervasively *inside business logic* to fetch arbitrary dependencies at will, it is Service Locator — it hides real dependencies from the class's public constructor signature. Used at legitimate factory/composition-root boundaries (e.g., building a `DI scope` in a background worker via `IServiceScopeFactory`, or a plugin loader resolving types discovered at runtime) it's an accepted, idiomatic use of the container as a factory.
+
+---
+
+## Summary of Additions
+
+The following `[new content]` sections were added because they were missing or too thin in the source notes but are commonly probed at senior/lead .NET interviews:
+
+- **Builder** — a core GoF creational pattern absent from the notes; ties directly to `WebApplicationBuilder`/`DbContextOptionsBuilder` fluency and modern record `with`-expression alternatives.
+- **Builder vs Factory vs Abstract Factory Decision Tree** — interviewers often ask "which would you pick and why"; a decision framework demonstrates judgment, not just recall.
+- **Prototype** — the remaining uncovered GoF creational pattern; relevant to shallow vs. deep clone questions.
+- **Decorator vs Proxy vs Adapter** — one of the most common structural-pattern comparison questions; these three look alike and are frequently confused.
+- **Facade** — quick, commonly-asked pattern for simplifying subsystem access; used to frame `HttpClient` and similar BCL types.
+- **Specification Pattern** — explicitly requested; complements Repository/DDD discussions and keeps query logic composable and out of repository interfaces.
+- **Strategy vs State** — both look structurally identical but differ in intent/control of transitions; a very common "compare these two" senior question, absent from source.
+- **Template Method** — the source file ended on a bare, completely unanswered "Template Method:" stub; fully written out per the "answer everything" requirement, including comparison to Strategy.
+- **Command Pattern** — connects directly to MediatR (already heavily covered) since MediatR's `IRequest`/handler is a Command implementation; interviewers ask "what pattern is MediatR built on."
+- **Chain of Responsibility** — maps directly to ASP.NET Core middleware, a daily-use feature; a very likely "name the pattern behind X" question.
+- **Options Pattern in .NET** — idiomatic strongly-typed configuration binding, ties into DI lifetimes already discussed; a staple modern ASP.NET Core question absent from source.
+- **Repository + Unit of Work vs Raw EF Core / CQRS** — source covered each pattern individually but never the "is this redundant with EF Core?" debate, a very common senior trap question.
+- **SOLID in Practice — Violation-to-Fix Walkthroughs** — source only mentioned SOLID in passing (re: Singleton); added full violation→fix code for all five principles since "spot the SOLID violation" is a frequent live-coding interview format.
+- **God Object, Anemic Domain Model, Service Locator, and Other Overused/Misapplied Patterns** — anti-patterns were entirely absent from source despite being near-guaranteed senior/lead interview material.
+
+**Contradictions flagged:** one minor inconsistency was found — the source presents two different Singleton `Logger` implementations (one using `lock`, one using `Lazy<T>`) as if sequentially superseding each other rather than conflicting; both are technically correct, so both were preserved with a note framing them as a before/after best-practice progression rather than a genuine contradiction. No other factual contradictions were found between sections; where the source was uncertain (e.g., current MediatR registration API version, RedLock correctness debate specifics), this guide marks those points with **(verify)** rather than asserting unverified details.
+
+---
+
+## Summary of [gaps] Additions (This Pass)
+
+The following `[gaps]` sections were added in this second pass to cover recognizable GoF patterns and a common modern-C# design debate that were still missing after the first `[new content]` pass:
+
+1. **Bridge, Composite, and Flyweight** (Structural Patterns) — why it matters: these are recognizable GoF structural patterns that senior candidates are expected to at least define and distinguish from similar patterns (e.g. Bridge vs Adapter, Composite vs Decorator) even though they come up less often than Decorator/Proxy/Adapter; having crisp real-world .NET examples avoids fumbling a "have you used X" follow-up.
+2. **Visitor and Memento** (Behavioral Patterns) — why it matters: Visitor underlies real .NET framework machinery (`ExpressionVisitor`) so interviewers may probe it when discussing LINQ/expression trees; Memento is a common follow-up when discussing undo/redo or state snapshotting design.
+3. **Null Object Pattern** — why it matters: frequently confused with or compared against nullable reference types and Option/Maybe types in modern C# discussions; senior interviews often probe whether a candidate can articulate the trade-off between hiding absence (Null Object) vs surfacing it in the type system (nullable refs / Option types), which is a live design debate in current .NET codebases.

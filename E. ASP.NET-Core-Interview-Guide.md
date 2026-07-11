@@ -10,6 +10,8 @@ Audience: 10-year .NET full-stack developer prepping for senior/lead interviews.
    - [Program.cs / Startup.cs / Minimal Hosting Model](#programcs--startupcs--minimal-hosting-model)
    - [Environments & Configuration Basics](#environments--configuration-basics)
    - [Static Files & Default Files](#static-files--default-files)
+   - [Logging Providers & Configuration](#logging-providers--configuration)
+   - [.NET Application Types, Code Sharing & Multi-Targeting](#net-application-types-code-sharing--multi-targeting)
 2. [Middleware Pipeline (Deep Dive)](#middleware-pipeline-deep-dive)
    - [What Middleware Really Is](#what-middleware-really-is)
    - [Request/Response Flow](#requestresponse-flow)
@@ -30,6 +32,7 @@ Audience: 10-year .NET full-stack developer prepping for senior/lead interviews.
 4. [Minimal APIs, MVC & API Design](#minimal-apis-mvc--api-design)
    - [[new content] Minimal APIs vs Controller-based MVC — Full Comparison](#new-content-minimal-apis-vs-controller-based-mvc--full-comparison)
    - [REST API vs MVC App](#rest-api-vs-mvc-app)
+   - [Angular/React SPA Integration](#angularreact-spa-integration)
    - [API Versioning Strategies](#api-versioning-strategies)
    - [DTOs, Validation & FluentValidation](#dtos-validation--fluentvalidation)
    - [CQRS, Mediator Pattern & MediatR](#cqrs-mediator-pattern--mediatr)
@@ -37,13 +40,20 @@ Audience: 10-year .NET full-stack developer prepping for senior/lead interviews.
    - [Clean Architecture / Folder Structure at Scale](#clean-architecture--folder-structure-at-scale)
    - [Multi-Tenant Applications](#multi-tenant-applications)
    - [API Anti-Patterns](#api-anti-patterns)
+   - [Plugin Architecture (Dynamic Assembly Loading)](#plugin-architecture-dynamic-assembly-loading)
+   - [WebHooks (Outbound Event Callbacks)](#webhooks-outbound-event-callbacks)
 5. [Hosting & Infrastructure](#hosting--infrastructure)
    - [Kestrel, IIS, HTTP.sys & Reverse Proxy Models](#kestrel-iis-httpsys--reverse-proxy-models)
    - [[new content] Native AOT Compilation](#new-content-native-aot-compilation)
    - [Deployment Models (Framework-Dependent vs Self-Contained)](#deployment-models-framework-dependent-vs-self-contained)
+   - [Long-Running Jobs: BackgroundService vs IHostedService](#long-running-jobs-backgroundservice-vs-ihostedservice)
+   - [Feature Flags](#feature-flags)
+   - [Pre-loading / Startup Warmup Tasks](#pre-loading--startup-warmup-tasks)
 6. [Performance & Optimization](#performance--optimization)
    - [Response Caching vs Output Caching vs Distributed Caching](#response-caching-vs-output-caching-vs-distributed-caching)
    - [Response Compression](#response-compression)
+   - [Data Shaping](#data-shaping)
+   - [Optimizing Static Content Delivery](#optimizing-static-content-delivery)
    - [HttpClientFactory & Socket Exhaustion](#httpclientfactory--socket-exhaustion)
    - [[new content] Rate Limiting Middleware (.NET 7+)](#new-content-rate-limiting-middleware-net-7)
    - [[new content] Thread Pool Starvation & Async Gotchas](#new-content-thread-pool-starvation--async-gotchas)
@@ -215,6 +225,93 @@ app.UseStaticFiles(new StaticFileOptions
 ```
 
 Gotcha: `UseDefaultFiles` only *rewrites the URL* to the default document — it does not serve the file itself. It must be paired with `UseStaticFiles` (or `UseFileServer`, which combines both plus directory browsing).
+
+### Logging Providers & Configuration
+
+ASP.NET Core has structured logging built in via the `Microsoft.Extensions.Logging` abstraction, consumed through `ILogger<T>` — injected per-class so log entries are automatically tagged with the category name (the fully-qualified type name of `T`).
+
+```csharp
+public class OrdersController : ControllerBase
+{
+    private readonly ILogger<OrdersController> _logger;
+    public OrdersController(ILogger<OrdersController> logger) => _logger = logger;
+
+    [HttpGet("{id}")]
+    public IActionResult Get(int id)
+    {
+        _logger.LogInformation("Fetching order {OrderId}", id);
+        // ...
+    }
+}
+```
+
+Built-in providers:
+
+| Provider | Notes |
+|---|---|
+| Console | Default in `CreateBuilder`; human-readable dev output |
+| Debug | Writes to the attached debugger's output window |
+| EventSource | Cross-platform ETW-style tracing, consumable by `dotnet-trace`/PerfView |
+| EventLog | Windows Event Log (Windows-only) |
+| Azure App Insights | `Microsoft.ApplicationInsights.AspNetCore` — cloud-native telemetry sink |
+| Third-party (Serilog, NLog) | Structured/sink-based logging (files, Elasticsearch, Seq) plugged in as `Microsoft.Extensions.Logging` provider adapters |
+
+Configuration via `appsettings.json`:
+
+```json
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft": "Warning",
+      "Microsoft.Hosting.Lifetime": "Information"
+    }
+  }
+}
+```
+
+Log-level filtering is hierarchical by category namespace — a more specific category (`Microsoft.AspNetCore`) overrides `Default` for anything under that namespace, which is why noisy framework namespaces are typically pinned to `Warning` while the app's own namespace stays at `Information`/`Debug`.
+
+Senior-level nuance worth raising unprompted: `ILogger<T>`'s structured/semantic logging (named placeholders like `{OrderId}`, not string interpolation) matters because it lets sinks like Serilog/Application Insights index and query on those fields — writing `$"Fetching order {id}"` instead throws away that structure and turns a query-able field back into an opaque string.
+
+### .NET Application Types, Code Sharing & Multi-Targeting
+
+**Application types** under the unified .NET SDK — the same DI/logging/config building blocks apply across all of them, not just web apps:
+
+| Type | Typical use |
+|---|---|
+| Console app | CLI tools, scripts, one-off jobs |
+| Class library | Shared logic, referenced by other projects |
+| Web app (MVC / Razor Pages / Web API) | ASP.NET Core-hosted HTTP apps |
+| Worker service | Long-running background process with no HTTP listener, templated via `dotnet new worker` |
+| Background service | An `IHostedService`/`BackgroundService` running inside any host (web app or worker) — see the dedicated section below |
+| ASP.NET Core hosted service | A background task hosted *inside* a web app's own process, sharing its DI container and lifetime |
+
+**Code sharing between projects** — mechanisms, roughly in order of how "packaged" the sharing is:
+
+| Mechanism | When to use |
+|---|---|
+| Project reference | Same solution, actively co-developed code (e.g., DTOs/utilities shared between a Web API and a Worker in the same repo) |
+| Class library | The general-purpose unit of sharing — compiled once, consumed via project reference or packaged as a NuGet package |
+| Shared project | Legacy pattern (source files compiled directly into each consumer rather than compiled once) — mostly superseded by class libraries today |
+| NuGet package | Cross-repository/cross-team sharing with independent versioning — the right choice once code needs to be consumed outside its own solution |
+
+Typical candidates for sharing: DTOs/contracts between a frontend-facing API and a backend service, cross-cutting utilities (validation helpers, extension methods), and business logic reused between, say, a Web API and a batch Worker service that both need the same domain rules.
+
+**Multi-targeting** compiles a single project for more than one target framework:
+
+```xml
+<PropertyGroup>
+  <TargetFrameworks>net6.0;net8.0</TargetFrameworks>
+</PropertyGroup>
+```
+
+When to use it:
+- Publishing a NuGet library that must support consumers still on an older LTS release alongside the current one.
+- Building cross-platform tooling that needs to build against multiple installed SDKs.
+- Bridging a migration window — supporting both a legacy and a modern .NET version while consumers migrate incrementally.
+
+Gotcha worth mentioning: multi-targeted code often needs `#if NET8_0_OR_GREATER`-style conditional compilation for APIs that only exist on newer TFMs, which adds real maintenance cost. Most application-level projects (as opposed to shared libraries) should target a single current LTS version rather than multi-target — reserve multi-targeting for genuinely reusable library projects.
 
 ---
 
@@ -697,6 +794,38 @@ Practical guidance for a senior answer: minimal APIs and MVC controllers are **n
 | Routing | Controller + Views (conventional routing common) | Controller + attributes, or minimal API route mapping |
 | SPA support | Possible but atypical | Commonly acts as the backend for a SPA |
 
+### Angular/React SPA Integration
+
+Two broad hosting models for pairing an ASP.NET Core backend with an Angular/React SPA:
+
+1. **Separate deployments** — the SPA is built and deployed independently (its own static host/CDN), calling the API cross-origin. Requires CORS configured on the API; simplest to scale and deploy independently, and the more common pattern for greenfield SPA + API projects today.
+2. **Merged/hosted project** — the SPA's build output is served from the ASP.NET Core app's own `wwwroot`, so the API and UI ship as one deployable unit.
+
+Merged-project specifics (the historical ASP.NET Core SPA templates, `Microsoft.AspNetCore.SpaServices.Extensions`):
+
+```csharp
+if (app.Environment.IsDevelopment())
+{
+    app.UseSpa(spa =>
+    {
+        spa.Options.SourcePath = "ClientApp";
+        spa.UseAngularCliServer(npmScript: "start");   // proxies to the Angular CLI dev server
+        // Equivalent for React/CRA: spa.UseReactDevelopmentServer(npmScript: "start");
+    });
+}
+else
+{
+    app.UseSpaStaticFiles();   // serves the pre-built SPA output from wwwroot in production
+}
+```
+
+Key pieces:
+- **CORS** — required whenever the SPA and API are on different origins (different port in dev, different domain in prod): `builder.Services.AddCors(...)` + `app.UseCors(...)`, positioned after `UseRouting()` and before `UseAuthentication()`/`UseAuthorization()` (see the CORS preflight mechanics note earlier).
+- **Static file serving** — the built SPA (`ng build` / `npm run build` output) lands in `wwwroot`, served by the standard `UseStaticFiles()`/`UseDefaultFiles()` pipeline in the merged-project model.
+- **Dev proxy configs** — in development, the SPA's own dev server (Angular CLI, Vite, Webpack Dev Server) proxies API calls to the backend (`proxy.conf.json` for Angular CLI, or the `"proxy"` field in a React `package.json`) so the SPA can call relative API paths locally without hitting CORS at all, even though the same calls are cross-origin under the merged-hosting production model.
+
+Senior framing: the merged-hosting/`UseSpa` template approach has fallen out of favor for new projects in 2024–2026 — most teams now deploy the SPA independently (static hosting/CDN + its own CI/CD) and call the API purely over CORS, decoupling release cadence and scaling between frontend and backend. Know the `UseAngularCliServer`/`UseSpaStaticFiles` mechanics because they still show up in legacy codebases and interview questions about "how would you integrate Angular with ASP.NET Core," but be ready to state independent deployment as the more current default recommendation.
+
 ### API Versioning Strategies
 
 - **URL versioning**: `/api/v1/orders` — most explicit, cache-friendly, easy to route, but "pollutes" the URL and clients must change URLs to upgrade.
@@ -837,6 +966,56 @@ Dependency rule: `Domain` has zero outward dependencies; `Application` depends o
 - No pagination on collection endpoints — leads to unbounded response sizes and DB load as data grows.
 - Ignoring idempotency on POST/PUT under retry-heavy clients (mobile, unreliable networks) — leads to duplicate side effects.
 
+### Plugin Architecture (Dynamic Assembly Loading)
+
+A plugin architecture lets an application load and execute functionality that wasn't compiled into the main deployable — useful wherever third parties or separate teams need to ship extensibility modules independently (CMS-style extensions, integration connectors, tenant-specific customizations).
+
+Core pieces:
+
+```csharp
+public interface IPlugin
+{
+    string Name { get; }
+    void Execute(IServiceProvider services);
+}
+```
+
+- **Reflection-based dynamic loading**: scan a plugins folder for DLLs, load each assembly, use reflection (`assembly.GetTypes().Where(t => typeof(IPlugin).IsAssignableFrom(t))`) to discover implementations, and instantiate them via `Activator.CreateInstance` or through DI.
+- **`AssemblyLoadContext`**: the modern (.NET Core+) mechanism for loading plugin assemblies into an isolated context, so plugins can be loaded — and in principle unloaded — without polluting or version-conflicting with the host application's own assemblies. This replaces the old `AppDomain`-based isolation from .NET Framework (.NET Core has no `AppDomain`s).
+- **Scrutor**: a popular library that adds assembly-scanning registration conventions on top of the built-in DI container:
+  ```csharp
+  services.Scan(scan => scan
+      .FromAssemblies(pluginAssemblies)
+      .AddClasses(c => c.AssignableTo<IPlugin>())
+      .AsImplementedInterfaces()
+      .WithScopedLifetime());
+  ```
+  used to auto-register every discovered plugin without hand-writing a registration line per plugin.
+
+```mermaid
+flowchart LR
+    A[Host App Startup] --> B[Scan /plugins folder for DLLs]
+    B --> C[Load each assembly into an AssemblyLoadContext]
+    C --> D[Reflect: find types implementing IPlugin]
+    D --> E[Register with DI via Scrutor scanning]
+    E --> F[Resolve and Execute IPlugin instances at runtime]
+```
+
+Trade-offs to raise unprompted: dynamic assembly loading is fundamentally incompatible with Native AOT/trimming (see the AOT section below), since it depends on runtime reflection and loading assemblies unknown at compile time — a plugin architecture and an AOT-compiled host are mutually exclusive strategies. Versioning/compatibility between the host's plugin contract (`IPlugin` and any shared types) and independently-shipped plugin DLLs is also a real operational concern — a contract change requires coordinated redeployment of every plugin, which is why plugin interfaces should be kept small and stable.
+
+### WebHooks (Outbound Event Callbacks)
+
+WebHooks are the inverse of a normal API call: instead of a client polling your API, your server proactively sends an outbound HTTP `POST` to a client-registered callback URL when an event occurs (e.g., "order shipped," "payment completed").
+
+Implementation concerns for a production-grade WebHook sender:
+
+- **Signed payloads** — sign the outbound payload (typically HMAC-SHA256 over the raw request body, using a per-subscriber secret) and send the signature in a header (e.g., `X-Webhook-Signature`) so the receiver can verify the payload wasn't tampered with and genuinely came from you.
+- **Retry mechanism** — receivers' endpoints are unreliable by nature (someone else's server): retry with exponential backoff on failure/timeout, cap total retry duration/attempts, and persist delivery attempts so a failed webhook isn't silently lost (an outbox-pattern-style table works well here).
+- **Timestamp validation** — include a timestamp in the signed payload/header, and have receivers reject requests outside an acceptable clock-skew window. This defends against replay attacks even if a signed payload were somehow captured and resent later.
+- **Logging/observability** — log every delivery attempt (success, failure, retry count); webhook delivery failures are otherwise invisible to the receiver, and support teams need this history when a customer reports "we never got the callback."
+
+Practical framing: WebHooks and a message broker (Kafka/RabbitMQ/SQS) solve a similar decoupling problem, but WebHooks target *external, third-party* consumers over plain HTTP with no shared infrastructure assumed, while a broker targets *internal* services that can share infrastructure — don't reach for a broker when the actual requirement is "notify an external customer's endpoint."
+
 ---
 
 ## Hosting & Infrastructure
@@ -896,6 +1075,126 @@ Missing from the original notes entirely, and increasingly asked about since .NE
 - **Framework-dependent**: requires the shared .NET runtime installed on the host; smaller artifact, faster builds, shared runtime patched independently.
 - **Self-contained**: bundles the runtime with the app; larger artifact, no host dependency, useful for containers with minimal base images or environments where you can't guarantee runtime presence.
 - **ReadyToRun (R2R)**: precompiles IL to native code for faster startup while still shipping IL (partial AOT, keeps reflection working) — a middle ground between JIT-only and full Native AOT, useful for reducing cold start without AOT's constraints.
+
+### Long-Running Jobs: BackgroundService vs IHostedService
+
+`IHostedService` is the base abstraction ASP.NET Core's generic host uses to run background work alongside the web app — anything registered via `services.AddHostedService<T>()` gets `StartAsync`/`StopAsync` called by the host at application startup/shutdown.
+
+```csharp
+public interface IHostedService
+{
+    Task StartAsync(CancellationToken cancellationToken);
+    Task StopAsync(CancellationToken cancellationToken);
+}
+```
+
+`BackgroundService` is an abstract base class that **implements** `IHostedService` for you, handling the boilerplate of running a long-lived loop with correctly wired cancellation — you only override `ExecuteAsync`:
+
+```csharp
+public class OrderQueueProcessor : BackgroundService
+{
+    private readonly IServiceScopeFactory _scopeFactory;
+    public OrderQueueProcessor(IServiceScopeFactory scopeFactory) => _scopeFactory = scopeFactory;
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var queue = scope.ServiceProvider.GetRequiredService<IOrderQueue>();
+            await queue.ProcessNextBatchAsync(stoppingToken);
+            await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
+        }
+    }
+}
+
+builder.Services.AddHostedService<OrderQueueProcessor>();
+```
+
+The distinction interviewers want stated precisely: `BackgroundService` **simplifies** implementing `IHostedService` for the common "run a loop for the app's lifetime" case (cancellation token plumbing, exception surfacing, and task tracking are handled for you); raw `IHostedService` is the lower-level interface you'd implement directly only when `StartAsync` needs to *return quickly* without an ongoing loop (e.g., kicking off a fire-and-forget timer or subscribing to an event, rather than running a continuous `while` loop).
+
+**Golden rule: never block the request thread with long-running work.** A hosted service runs on the host's own lifetime, decoupled from any HTTP request — this is the correct place for polling loops, queue consumers, and scheduled cleanup, never inline inside a controller action.
+
+Beyond in-process hosted services, alternatives for genuinely long-running or heavy background work:
+
+| Option | When to reach for it |
+|---|---|
+| `BackgroundService`/`IHostedService` | Lightweight, in-process background work tied to the app's own lifetime — acceptable data-loss risk on a restart, or work that's cheap to resume |
+| **Hangfire** | Persistent, durable background jobs with a dashboard, retries, and scheduling (fire-and-forget, delayed, recurring/cron), backed by a durable store (SQL Server, Redis) — survives app restarts, unlike an in-process `BackgroundService` |
+| **Azure Functions** (or AWS Lambda) | Serverless, event- or timer-triggered work that should scale independently of the web app and not consume its resources at all |
+| **SQS/SNS (or Kafka/RabbitMQ) + dedicated Worker service** | Decoupled, horizontally scalable processing where the producer (web API) and consumer (worker) scale and deploy independently — the standard pattern for high-volume, durable async workloads |
+
+Senior framing: an in-process `BackgroundService` is fine for low-stakes, restart-tolerant work; anything where losing an in-flight job on deploy/restart is unacceptable, or where the workload needs independent scaling, belongs in a durable job system (Hangfire) or a separate worker process behind a queue — not inside the web app's own process.
+
+### Feature Flags
+
+Feature flags let you toggle functionality without a redeploy — essential for progressive rollouts, kill-switches on risky features, and A/B-style experimentation.
+
+```csharp
+// Microsoft.FeatureManagement
+builder.Services.AddFeatureManagement();
+```
+
+```json
+{
+  "FeatureManagement": {
+    "NewCheckoutFlow": true,
+    "BetaDashboard": false
+  }
+}
+```
+
+```csharp
+public class CheckoutController : ControllerBase
+{
+    private readonly IFeatureManager _featureManager;
+    public CheckoutController(IFeatureManager featureManager) => _featureManager = featureManager;
+
+    [HttpPost]
+    public async Task<IActionResult> Checkout()
+    {
+        if (await _featureManager.IsEnabledAsync("NewCheckoutFlow"))
+            return await NewCheckoutAsync();
+        return await LegacyCheckoutAsync();
+    }
+}
+```
+
+Options, roughly by sophistication:
+
+| Approach | Notes |
+|---|---|
+| Boolean config switches (raw `appsettings.json`/`IConfiguration`) | Simplest; requires a config change plus restart/reload to flip, no targeting rules |
+| `Microsoft.FeatureManagement` | First-class ASP.NET Core integration — `[FeatureGate]` attributes on controllers/actions, `IFeatureManager.IsEnabledAsync`, filters for percentage rollout/targeting groups |
+| **Azure App Configuration** (feature flag store) | Centralized, dynamically-refreshable flag store shared across multiple app instances/services; integrates with `Microsoft.FeatureManagement` as the backing provider |
+| **LaunchDarkly** (or similar SaaS) | Full-featured flag management platform — user targeting, percentage rollouts, real-time flag updates via streaming, audit history, experimentation — the choice when flags are a first-class product/release-management concern, not just a dev convenience |
+
+Senior framing: prefer `Microsoft.FeatureManagement` with a centralized store (App Configuration) once you have more than one instance or more than a couple of flags — raw config-file booleans don't support runtime toggling without a redeploy/restart and don't scale past a handful of flags before becoming unmanageable.
+
+### Pre-loading / Startup Warmup Tasks
+
+Some services are expensive to initialize on first use — a large in-memory cache population, a cold ML model load, a connection pool that benefits from being primed before real traffic arrives. Doing that work lazily on the *first* real request means the first user pays the latency cost.
+
+Pattern: run warmup work during startup, before (or concurrently with) the app beginning to accept traffic — commonly implemented as an `IHostedService` whose `StartAsync` does the warmup work:
+
+```csharp
+public class CacheWarmupService : IHostedService
+{
+    private readonly IServiceScopeFactory _scopeFactory;
+    public CacheWarmupService(IServiceScopeFactory scopeFactory) => _scopeFactory = scopeFactory;
+
+    public async Task StartAsync(CancellationToken cancellationToken)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var cache = scope.ServiceProvider.GetRequiredService<IProductCache>();
+        await cache.PreloadAsync(cancellationToken);
+    }
+
+    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+}
+```
+
+Tie this back to health checks: pair a warmup task with the **readiness** probe (not liveness) — the instance shouldn't be marked ready/added to load-balancer rotation until warmup completes, so it never receives traffic while still cold. This is also exactly why liveness and readiness need to be separate endpoints, as covered in the Cloud/DevOps section below.
 
 ---
 
@@ -968,6 +1267,33 @@ app.UseResponseCompression();
 | Brotli | Better compression ratio, recommended for HTTPS APIs, slightly more CPU cost |
 
 Best practices: enable primarily for HTTPS (compression over unencrypted HTTP has historically been linked to attacks like BREACH in some contexts — verify applicability, but it's why `EnableForHttps` is opt-in); don't recompress already-compressed formats (images, video, already-gzipped payloads); monitor CPU usage under load since compression is CPU-bound and can become the bottleneck at very high throughput; prefer Brotli for API/JSON payloads.
+
+### Data Shaping
+
+Data shaping means returning only the fields a client actually needs rather than the full resource representation — reducing payload size and avoiding over-fetching, especially valuable for high-traffic list endpoints or bandwidth-constrained clients (mobile).
+
+```csharp
+var summaries = await _db.Orders
+    .Select(o => new OrderSummaryDto { Id = o.Id, Total = o.Total, Status = o.Status })
+    .ToListAsync();
+```
+
+The key point for a senior answer: do the `Select()` projection **in the query** (translated to SQL by EF Core) rather than materializing full entities and shaping them in memory afterward — the former only pulls the needed columns off the wire from the database, the latter wastes both DB and network bandwidth fetching columns you immediately discard. This is distinct from, but complementary to, DTO mapping in general — the projection *is* the DTO construction, done at the query level.
+
+Related, more dynamic approaches worth naming if pushed further: query-string-driven field selection (`?fields=id,total,status`, as used by APIs like GitHub's) and GraphQL (which makes field-level shaping a first-class part of the query language itself, at the cost of adopting an entirely different API paradigm) — both are heavier-weight than a simple `Select()` projection and only worth it when client needs vary enough to justify the flexibility.
+
+### Optimizing Static Content Delivery
+
+Beyond basic `UseStaticFiles()`, production-grade static asset delivery layers several techniques:
+
+| Technique | What it does |
+|---|---|
+| **CDN** | Serves static assets from edge locations close to the user, offloading the origin server entirely for cacheable content — the single highest-leverage change for global user bases |
+| **Caching headers** | `Cache-Control`/`ETag` on static files (ASP.NET Core sets sensible defaults for `UseStaticFiles`, but tune `max-age` for immutable, fingerprinted assets — e.g. `app.js?v=abc123` — which can be cached essentially forever) |
+| **Compression** | Brotli/Gzip on text-based static assets (JS, CSS, SVG) — the same `AddResponseCompression`/reverse-proxy-level compression discussed above, applied to static content specifically |
+| **SPA static file middleware** | `UseSpaStaticFiles()` (see the SPA integration section above) specifically serves the SPA's pre-built bundle from `wwwroot` through the static-file pipeline, rather than proxying to a dev server, in production |
+
+Senior framing: static content optimization is largely a *caching and offloading* problem, not a code problem — the ASP.NET Core app itself should do the minimum (serve with correct cache headers, compress text assets) and push as much of the actual serving as possible to a CDN, since every request an app server handles for a static asset is capacity not available for dynamic request processing.
 
 ### HttpClientFactory & Socket Exhaustion
 
@@ -1346,4 +1672,144 @@ public class OrdersApiTests : IClassFixture<CustomWebApplicationFactory>
     {
         var response = await _client.GetAsync("/api/users/1");
 
-        response.EnsureSuccessSt
+        response.EnsureSuccessStatusCode();
+        var user = await response.Content.ReadFromJsonAsync<UserDto>();
+
+        Assert.Equal("Test User", user!.Name);
+    }
+
+    [Fact]
+    public async Task CreateOrder_WithInvalidPayload_Returns400()
+    {
+        var response = await _client.PostAsJsonAsync("/api/orders", new { });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task CreateOrder_ThenGetOrder_RoundTripsCorrectly()
+    {
+        var createResponse = await _client.PostAsJsonAsync("/api/orders",
+            new CreateOrderRequest(UserId: 1, ProductId: 42, Quantity: 2));
+        createResponse.EnsureSuccessStatusCode();
+
+        var created = await createResponse.Content.ReadFromJsonAsync<OrderDto>();
+        var getResponse = await _client.GetAsync($"/api/orders/{created!.Id}");
+
+        getResponse.EnsureSuccessStatusCode();
+        var fetched = await getResponse.Content.ReadFromJsonAsync<OrderDto>();
+        Assert.Equal(created.Id, fetched!.Id);
+    }
+}
+```
+
+**Key design points a senior candidate should raise unprompted:**
+- **`Program` must be visible to the test project.** With the minimal hosting model's top-level statements, `Program` is an internal class by default in newer SDK versions — either add `<InternalsVisibleTo Include="YourApp.Tests" />` to the app's `.csproj`, or add a single line `public partial class Program { }` at the bottom of `Program.cs` so the test project can reference it as the generic type argument.
+- **EF Core InMemory provider vs SQLite in-memory vs Testcontainers** — three common choices for the "test database," each with different fidelity trade-offs:
+
+| Approach | Fidelity | Speed | Notes |
+|---|---|---|---|
+| EF Core `UseInMemoryDatabase` | Lowest — it's not a relational engine at all, doesn't enforce FK constraints or translate real SQL | Fastest | Fine for basic controller/wiring tests; **cannot** catch bugs from provider-specific SQL, constraints, or transactions |
+| SQLite in-memory (`DataSource=:memory:`) | Medium — real relational engine, enforces some constraints, but SQL dialect differs from SQL Server/Postgres | Fast | Better middle ground; still not a perfect stand-in for your real production provider |
+| **Testcontainers** (real SQL Server/Postgres in a Docker container, spun up per test run) | Highest — the actual database engine you run in production | Slower (container startup cost), but most trustworthy | The senior-preferred answer for "how do you get true confidence from integration tests" — catches provider-specific SQL issues the fakes above can't |
+
+- **Isolation between tests matters.** Sharing one `WebApplicationFactory`/in-memory DB across an entire test class (via `IClassFixture`) is fast but risks test interference if tests mutate shared data — reset/reseed state between tests (or give each test method a uniquely named in-memory database) when tests aren't safely independent.
+- **This is still "integration," not "end-to-end."** `WebApplicationFactory` exercises your real middleware pipeline, DI graph, routing, model binding, and (with the DB substitution above) a real-enough data layer — but it never leaves the process: no real network hop, no real external dependencies (payment gateways, third-party APIs) unless you also fake/stub those via the same `ConfigureServices` override mechanism. It sits between unit tests (isolated class-level) and full end-to-end tests (deployed environment, real infra) in the testing pyramid.
+- **Overriding configuration, not just services**, is also supported — `builder.UseConfiguration(...)` or `ConfigureAppConfiguration` on the `IWebHostBuilder` lets you inject test-specific `appsettings` values (e.g., disabling a feature flag, pointing at a mock external endpoint) the same way you override DI registrations.
+
+This is the standard, expected answer to "how do you test a Web API at the integration level" — interviewers are specifically listening for `WebApplicationFactory`, `TestServer`, DI override via `ConfigureServices`/`ConfigureTestServices`, and awareness of the fidelity trade-offs between fake/in-memory and real (Testcontainers) databases.
+
+---
+
+## Best Practices
+
+- Treat middleware **order as architecture**, not incidental configuration — document why the pipeline is ordered the way it is.
+- Keep middleware lightweight; milliseconds matter at scale — delegate heavy logic to services.
+- Never put business/domain logic in middleware — it belongs in Application/Domain layers, invoked from endpoints/controllers.
+- Prefer the Options pattern over raw `IConfiguration` injection in application code.
+- Prefer constructor injection; avoid the service locator anti-pattern (`IServiceProvider.GetService` sprinkled through business code) except at deliberate composition boundaries (factories, middleware needing per-request scoped resolution).
+- Design DTOs deliberately — never expose EF entities on the wire.
+- Version APIs from day one, even if you only ship v1 initially — retrofitting is far more expensive.
+- Use `IHttpClientFactory`, never a bare `new HttpClient()` per request or as a naive `static readonly` singleton without understanding the DNS-caching trade-off.
+- Enable output/response caching and compression deliberately, with monitoring for CPU trade-offs, not by default everywhere.
+- Instrument with OpenTelemetry from the start rather than retrofitting observability after a production incident.
+- Separate liveness from readiness in health checks; never let a liveness probe depend on an external dependency.
+
+---
+
+## Common Pitfalls
+
+- Registering middleware in the wrong order (e.g., `UseAuthorization()` before `UseRouting()`, or exception handling not being first) — causes silent authorization bypass or unprotected exceptions.
+- Captive dependencies — injecting Scoped/Transient services into Singletons (especially `DbContext`) — causing intermittent, hard-to-reproduce concurrency bugs that often only surface under production load, not in dev/test with `ValidateScopes` off.
+- Forgetting that scope validation (`ValidateScopes`) defaults to enabled only in Development — a captive dependency bug can pass CI/local testing and only blow up in Production.
+- Sync-over-async (`.Result`, `.Wait()`) causing thread pool starvation under load, masquerading as "the app is slow" rather than being diagnosed as a blocking-call problem.
+- Treating `IOptionsSnapshot` as safe to inject into a Singleton (it isn't — same captive dependency class of bug).
+- Putting a database/dependency check on a liveness probe, causing unnecessary container restart storms during a transient downstream blip.
+- Assuming `UseDefaultFiles()` alone serves files (it only rewrites the URL — `UseStaticFiles()` is still required).
+- Over-applying CQRS/MediatR to simple CRUD services, adding indirection with no corresponding benefit.
+- Skipping API versioning until the first breaking change is unavoidable, then having no safe path to introduce it without breaking existing consumers.
+- Assuming Minimal APIs get automatic model validation like `[ApiController]` — they don't, without explicit wiring.
+- Rate limiting only at the application/instance level in a multi-instance deployment, believing it enforces a global limit when it's actually per-instance.
+
+---
+
+## Sample Interview Q&A
+
+**Q1: Why does `UseAuthorization()` not work correctly without `UseRouting()` before it?**
+A: Authorization needs endpoint metadata (roles/policies declared via `[Authorize]`) to evaluate against. Routing is what resolves the request to a specific endpoint and attaches that metadata to `HttpContext`. Without routing having run first, authorization has no endpoint metadata to evaluate — it either has nothing to check or throws, depending on configuration.
+
+**Q2: Why must exception-handling middleware be registered first?**
+A: Because middleware can only catch exceptions thrown by middleware registered *after* it in the pipeline (due to the nested-delegate execution model). If it's not outermost, exceptions thrown by earlier middleware are unhandled and crash the pipeline/return an unformatted 500.
+
+**Q3: How does response modification work in middleware, precisely?**
+A: The response flows backward through the same chain the request flowed forward through. Code placed after `await next()` executes on the way back out, after the endpoint has already produced (or started producing) the response — that's why response-header mutation or logging of the final status code must be placed after the `next()` call, not before.
+
+**Q4: What happens if a middleware never calls `next()`?**
+A: The pipeline short-circuits immediately at that point — no downstream middleware runs, and the endpoint/controller never executes. This is used deliberately for auth failures, rate limiting, and maintenance-mode responses; it's a designed capability, not a bug, but an *unintentional* missing `next()` call is a classic "why isn't my code running" bug.
+
+**Q5: What's the practical difference between middleware and MVC filters, and when would you choose one over the other?**
+A: Middleware runs globally for every request in the pipeline and has no visibility into MVC-specific constructs (bound model, action metadata); filters run specifically around MVC/endpoint execution and have access to action arguments, results, and exceptions in MVC terms. Choose middleware for framework-agnostic cross-cutting concerns (correlation IDs, compression, CORS); choose filters when you need MVC context (e.g., short-circuiting based on a bound and validated model, or wrapping a specific controller's actions in a transaction).
+
+**Q6: You have a singleton service that intermittently throws `ObjectDisposedException` on a `DbContext` under load. What's happening and how do you fix it?**
+A: This is almost certainly a captive dependency — a Scoped `DbContext` was injected into a Singleton via constructor injection, so it was captured once at first resolution and outlives the request scope that created it; concurrent requests reusing that singleton then race on a single, eventually-disposed `DbContext` (which also isn't thread-safe to share concurrently regardless of disposal). Fix by injecting `IServiceScopeFactory` or `IDbContextFactory<T>` and creating a fresh scope/context per operation inside the singleton instead of capturing it at construction.
+
+**Q7: How would you choose between Minimal APIs and controller-based MVC for a new service?**
+A: If it's a small, high-throughput service, possibly targeting Native AOT or scale-to-zero hosting, with simple request/response shapes and no need for server-rendered views, Minimal APIs are the leaner choice with better cold-start characteristics. If the service needs the full MVC filter pipeline, Razor views, complex conventional routing, or you're extending an existing large controller-based codebase, MVC is the pragmatic choice. They're not mutually exclusive within one app — teams commonly mix both, using Minimal APIs for a handful of lightweight endpoints alongside a controller-based core.
+
+**Q8: Explain the difference between `IOptions<T>`, `IOptionsSnapshot<T>`, and `IOptionsMonitor<T>`, and why you can't just inject `IOptionsSnapshot<T>` everywhere.**
+A: `IOptions<T>` is a singleton-lifetime snapshot computed once at first use and never refreshed. `IOptionsSnapshot<T>` is scoped and recomputed once per request/scope, so it picks up config reloads between requests — but because it's Scoped, injecting it into a Singleton is a captive-dependency violation. `IOptionsMonitor<T>` is a Singleton that actively tracks changes and exposes `.CurrentValue` plus an `OnChange` callback, making it the correct choice for long-lived services that need live-reloading configuration.
+
+**Q9: What's the real difference between liveness and readiness health checks, and why does it matter operationally?**
+A: Liveness answers whether the process itself is alive/functioning; a failing liveness check causes the orchestrator to restart the container. Readiness answers whether the instance is currently able to serve traffic; a failing readiness check just pulls it from the load balancer without restarting it. Putting dependency checks (DB, cache) on liveness instead of readiness means a transient downstream outage causes unnecessary, potentially cascading, restarts across your fleet instead of the correct behavior of quietly draining traffic until the dependency recovers.
+
+**Q10: Your API's p99 latency degrades sharply under load even though CPU usage looks fine and individual requests are fast in isolation. What do you check first?**
+A: Thread pool starvation from a blocking (sync-over-async) call somewhere in the request path — check `ThreadPool` queue length via `dotnet-counters`, and audit for `.Result`/`.Wait()`/`GetAwaiter().GetResult()` calls or genuinely synchronous I/O on hot paths. The thread pool grows slowly under a sudden spike (hill-climbing heuristic), so a burst of blocked threads causes exactly this "fine at low load, cliff under load" signature even with headroom on raw CPU.
+
+---
+
+## Summary of Additions
+
+The following `[new content]` sections were added because they are commonly tested at senior/lead level in current (2025/2026) ASP.NET Core interviews and were missing or only superficially covered in the original notes:
+
+- **Endpoint Routing Internals** — explains the routing/execution split introduced in ASP.NET Core 3+ and why it unifies MVC, Minimal APIs, gRPC, and SignalR under one metadata-driven pipeline; frequently asked as a "how does it actually work" follow-up to basic routing questions.
+- **Captive Dependencies & Lifetime Mismatch Bugs** — the most common real-world DI bug (Singleton capturing Scoped/`DbContext`), including the `ValidateScopes` Dev-vs-Prod gotcha; the original notes listed lifetimes but never their most dangerous failure mode.
+- **IOptions vs IOptionsSnapshot vs IOptionsMonitor** — the idiomatic configuration-consumption pattern was entirely absent from the source notes despite being expected knowledge for any senior dev discussing configuration.
+- **Minimal APIs vs Controller-based MVC — Full Comparison** — expanded a thin one-line "best for" table into a full trade-off comparison (AOT, filters, validation, discoverability), reflecting how central this decision has become since minimal APIs matured.
+- **Native AOT Compilation** — entirely absent from the source; increasingly asked about given .NET 7/8/9's push toward AOT for cold-start-sensitive and container-dense deployments.
+- **Rate Limiting Middleware (.NET 7+)** — the source only mentioned rate limiting conceptually; the built-in middleware and its four algorithms are now the first-line answer, with the important per-instance-vs-global caveat.
+- **Thread Pool Starvation & Async Gotchas** — the source said "use async everywhere" without explaining the mechanism, the classic sync-over-async failure mode, or how to diagnose it — a very common deep-dive follow-up question.
+- **Health Checks** — expanded a single line into the liveness/readiness distinction that Kubernetes/orchestrators actually depend on, plus the common misconfiguration that causes restart storms.
+- **OpenTelemetry & Distributed Tracing in .NET 8/9** — the source referenced tracing tools (Jaeger/Zipkin) but not .NET's now-native, vendor-neutral OpenTelemetry integration, which is the current standard instrumentation answer.
+
+**Contradictions/inconsistencies flagged during consolidation:**
+- The source's "Advantages of ASP.NET Core" bullet list and the middleware pipeline ordering example each appeared twice nearly verbatim (duplicated across the "ChatGPT said" re-answer block) — merged into single canonical versions with no content loss.
+- The source's guidance that Kestrel "must be behind a reverse proxy in production" is presented as an absolute rule in the early notes but is more accurately a historical best-practice-turned-defense-in-depth recommendation today — flagged and softened in the Hosting section rather than silently repeated as a hard requirement.
+- A duplicated numbering artifact in the source ("Section F" jumps from question 97 to 99, skipping 98) was preserved faithfully in content coverage (no content was actually missing at that gap in the source — verify if a question 98 existed elsewhere in your original material, as it wasn't recoverable from this file).
+
+## Summary of [gaps] Additions (This Pass)
+
+This pass added targeted content identified by a formal gap-analysis review, tagged `[gaps]` to distinguish it from the earlier `[new content]` pass:
+
+1. **Integration Testing with WebApplicationFactory** — the guide previously had no dedicated testing section at all; this is the standard, expected answer to "how do you test a Web API at the integration level," a near-guaranteed senior follow-up after any discussion of unit testing. Covers `TestServer`, DI override via `ConfigureServices`, the `Program` visibility gotcha with the minimal hosting model, and the fidelity trade-offs between EF Core InMemory, SQLite in-memory, and Testcontainers for the test database.
+2. **IStartupFilter — Composing the Middleware Pipeline from a Library** — fills a real gap in the DI/middleware coverage: how a library or platform module injects middleware into the pipeline at a specific position without the consuming app needing to modify `Program.cs`. Frequently comes up in platform-engineering-flavored senior interviews.
+3. **CORS Preflight Mechanics — What Actually Triggers an OPTIONS Request** — the existing CORS content covered policy configuration but not the underlying browser mechanism (simple vs non-simple requests, the `Content-Type: application/json` gotcha, why `OPTIONS` traffic in production logs is normal) — a precise, frequently-asked follow-up that policy-only coverage doesn't answer.

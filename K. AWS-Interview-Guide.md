@@ -25,6 +25,8 @@
    - [VPC, Subnets, NAT — Complete Model](#vpc-deep-dive)
    - [Route 53](#route53)
    - [ALB vs API Gateway vs ELB (NLB/GWLB/CLB)](#alb-vs-apigw-vs-elb)
+   - [API Gateway Auth & Integration Patterns](#api-gateway-auth-integration)
+   - [ELB Deep-Dive: Cross-Zone Load Balancing, 504 Timeouts & Shield DDoS Protection](#elb-additions)
    - [[new content] VPC Design Reference Architecture](#vpc-reference-architecture)
    - [[gaps] VPC/Subnet/NAT/SG Rapid-Fire Drill Sheet](#vpc-rapid-fire-gaps)
 4. [Databases](#databases)
@@ -45,6 +47,7 @@
    - [[new content] Secrets Manager vs Parameter Store](#secrets-vs-parameter-store)
    - [[new content] Least Privilege & Permission Boundaries in Practice](#least-privilege-practice)
 7. [CI/CD](#cicd)
+   - [AWS CodeCommit](#codecommit)
    - [AWS CodeBuild](#codebuild)
    - [AWS CodePipeline](#codepipeline)
    - [CodePipeline/CodeBuild Trap Scenarios](#cicd-trap-scenarios)
@@ -63,6 +66,7 @@
 13. [Sample Interview Q&A](#sample-qa)
 14. [Summary of Additions](#summary-of-additions)
     - [Summary of [gaps] Additions (This Pass)](#summary-of-gaps-additions)
+    - [Contradictions Flagged During Consolidation](#contradictions-flagged-during-consolidation)
 
 ---
 
@@ -684,6 +688,7 @@ The prose above already covers the VPC networking model in depth — this is a c
 | Failover | Primary/secondary HA via health checks |
 | Latency-based | Route to the AWS region with lowest measured latency |
 | Geolocation | Legal/regional content restrictions |
+| Geoproximity | Route based on the geographic location of users **and** resources, with a configurable "bias" to shift more/less traffic toward a given region — requires **Route 53 Traffic Flow**, unlike the other policies |
 | Multi-value answer | Simple client-side load distribution (not a real load balancer) |
 
 **Health checks:** monitor HTTP/HTTPS/TCP endpoints, can integrate with CloudWatch alarms; health checks alone do **not** reroute traffic — you still need a Failover (or similar) routing policy attached.
@@ -698,6 +703,12 @@ The prose above already covers the VPC networking model in depth — this is a c
 - Route 53 should never be your *only* HA mechanism for sub-second failover requirements — combine with ALB/NLB-level health-based removal for fast reaction, and Route 53 for macro/region-level failover.
 
 **Private Hosted Zones:** internal DNS resolvable only inside associated VPC(s) — e.g., `db.internal → RDS endpoint`. A private hosted zone must be explicitly associated with each VPC that needs to resolve it (a common trap: "works in one VPC, not another" = missing association).
+
+**Route 53 Resolver:** the DNS query-forwarding service that sits behind every VPC's default DNS resolution. For hybrid setups (VPC ↔ on-premises), you attach **inbound endpoints** (let on-prem resolvers query your VPC's private hosted zones) and **outbound endpoints** (let VPC resources forward queries to on-prem DNS servers via **Resolver rules**) — this is the standard mechanism for resolving `*.internal` on-prem names from Lambda/EC2/ECS inside a VPC, and vice versa, without standing up your own DNS forwarders.
+
+**AWS Global Accelerator, and how it differs from plain Route 53 latency routing:** Global Accelerator gives you two static anycast IPs that front your application and routes client traffic over AWS's private global network backbone (instead of the public internet) to the closest healthy regional endpoint (ALB, NLB, or EC2). Route 53 can point a domain at those Global Accelerator static IPs, combining Route 53's DNS-layer control with Global Accelerator's network-layer performance and fast (sub-minute) health-check-based failover — a stronger option than Route 53 latency-based routing alone when TTL-caching delays on failover are unacceptable, since the entry-point IPs never change even as Global Accelerator reroutes underneath them.
+
+**DNSSEC:** a Route 53 security best practice that cryptographically signs DNS responses (via a Key-Signing Key/Zone-Signing Key chain of trust) so resolvers can verify a response hasn't been spoofed or tampered with in transit — mitigates DNS cache-poisoning and spoofing attacks. Route 53 supports DNSSEC signing for public hosted zones; enabling it is a one-time hardening step worth naming alongside IAM policy restrictions and AWS Organizations-level change control when asked "how would you secure Route 53?"
 
 ### ALB vs API Gateway vs ELB (NLB/GWLB/CLB) {#alb-vs-apigw-vs-elb}
 
@@ -730,6 +741,37 @@ The prose above already covers the VPC networking model in depth — this is a c
 - Public REST API for a mobile app needing auth/throttling/API keys, Lambda+DynamoDB backend → **API Gateway**.
 - Internal microservices on ECS needing only path/host routing + TLS termination → **ALB**.
 - Real-time chat: fully serverless → **API Gateway WebSocket API**; already on containers → **ALB WebSocket**.
+
+### API Gateway Auth & Integration Patterns {#api-gateway-auth-integration}
+
+**Authentication/authorization options** (API Gateway supports several, and knowing when to reach for each is the senior-level part of the answer):
+| Mechanism | How it works | Best for |
+|---|---|---|
+| **Cognito User Pools (JWT authorizer)** | API Gateway validates a JWT issued by a Cognito User Pool (or any OIDC-compliant IdP) directly at the gateway, before the request ever reaches your Lambda/backend | Standard username/password or social-login user auth for public APIs — no custom auth code to write/maintain |
+| IAM authorization | Caller signs the request with SigV4; API Gateway checks IAM policy | Service-to-service calls within your own AWS account/org |
+| Lambda custom authorizer | Your own Lambda inspects the token/headers and returns an IAM policy | Legacy tokens, non-standard auth schemes, or logic too custom for a built-in authorizer |
+| API keys + usage plans | Simple key checked against a usage plan (throttle/quota) | Partner/B2B API monetization, not real authentication |
+
+**Cognito specifically:** a **User Pool** is the user directory + token issuer (handles sign-up/sign-in, hosted UI, MFA, and issues ID/access JWTs); an **Identity Pool** is the separate mechanism for exchanging those tokens (or third-party IdP tokens) for temporary AWS credentials when a client needs to call AWS services directly. For API Gateway, you almost always want a **User Pool** JWT authorizer — Identity Pools matter when a mobile/SPA client needs direct, scoped AWS SDK access (e.g., uploading straight to S3) rather than going through your API. The same Cognito User Pool can also be wired up as the OIDC identity provider on an **ALB listener rule**, letting the load balancer authenticate users before forwarding to targets — useful when you're on ALB rather than API Gateway but still want managed login without writing auth code into every backend service.
+
+**VPC Link:** lets API Gateway (REST or HTTP API) securely reach resources inside a private VPC — an internal ALB/NLB, or (for HTTP APIs specifically) a Cloud Map service registry entry — without exposing those resources to the public internet. REST APIs require a VPC Link backed by an NLB; HTTP APIs support the newer VPC Link v2, which can target an ALB or Cloud Map directly, one less hop than the REST-API NLB requirement. This is the standard pattern for exposing an internal-only ECS/EC2 service through a public API Gateway front door without opening it up directly.
+
+**CORS (Cross-Origin Resource Sharing):** required whenever a browser-based client on one origin calls an API Gateway endpoint on another. API Gateway can auto-generate the required `OPTIONS` preflight method and `Access-Control-Allow-*` response headers per resource, or you can hand-roll them in your Lambda proxy integration response — the common trap is enabling CORS on the API but forgetting to also return the headers from the Lambda's actual (non-OPTIONS) response, which still fails the browser's CORS check even though the preflight succeeds.
+
+**Request validation via JSON Schema models:** API Gateway can validate incoming requests *before* invoking the backend, using a **request model** (a JSON Schema definition of the expected body shape) and a **request validator** configured per method/API to check the body, the query-string/header parameters, or both. This rejects malformed requests at the gateway with a 400, saving a Lambda invocation (and its cost/cold-start) on input that was never going to succeed anyway — a good example of "fail fast at the edge" that's worth naming when asked about API Gateway best practices.
+
+**Direct service integrations (bypassing Lambda):** API Gateway can integrate directly with certain AWS services — most commonly **DynamoDB** (GetItem/PutItem/Query mapped straight from the HTTP request via a VTL mapping template), but the same "AWS service integration" mechanism extends to **Step Functions** (start an execution directly from an API call) and **Kinesis** (PutRecord straight from the API, useful for high-volume ingestion endpoints). The senior-level point to make: this isn't just a cost optimization — it removes an entire compute layer (and its cold start, patching, and failure surface) for simple CRUD-shaped or fire-and-forget endpoints where a Lambda would add no real logic beyond marshalling the request. The trade-off is VTL mapping templates are clunkier to write/debug than Lambda code, so this pattern is best reserved for genuinely thin passthrough endpoints, not anything needing real business logic.
+
+### ELB Deep-Dive: Cross-Zone Load Balancing, 504 Timeouts & Shield DDoS Protection {#elb-additions}
+
+**Cross-Zone Load Balancing:** when enabled, every load balancer node distributes traffic evenly across *all* registered targets in *all* enabled AZs, not just the targets in its own AZ — this evens out load when targets are unevenly distributed across AZs (e.g., 8 targets in AZ-A, 2 in AZ-B). ALB has cross-zone load balancing **on by default, always** (cannot be disabled); NLB has it **off by default** and it's a per-target-group toggle — enabling it on NLB can introduce cross-AZ data transfer charges, which is the usual reason teams leave it off for latency/cost-sensitive NLB use cases. Knowing that ALB and NLB default differently here is a good "gotcha" fact to have ready.
+
+**HTTP 504 Gateway Timeout (ELB):** means the load balancer forwarded the request to a target but never got a timely response back. Two common root causes: an **unhealthy/slow target** (app hung, DB call blocking, thread pool exhausted) or a **traffic spike** overwhelming backend capacity before auto-scaling catches up. A third cause worth naming from standard ELB behavior: a mismatch between the **ALB idle timeout** (default 60s) and the backend's own keep-alive/response time — if your app can legitimately take longer than the ALB's configured idle timeout, you'll see 504s that have nothing to do with target health, and the fix is raising the ALB idle timeout (and your app's keep-alive) rather than chasing a phantom backend bug.
+
+**AWS Shield — tying DDoS protection to Route 53/ELB alongside WAF:** Shield defends at the network/transport layer (L3/L4 volumetric and protocol attacks), while WAF defends at the application layer (L7 — malicious request patterns, rate limiting, bad bots) — they're complementary, not competing, and a senior answer names both together rather than picking one.
+- **Shield Standard:** free, automatically enabled for **every** AWS account on Route 53, CloudFront, and ELB (ALB/NLB/CLB) — no opt-in needed, covers common, automated L3/L4 DDoS attack patterns.
+- **Shield Advanced:** paid, opt-in tier adding larger-attack mitigation capacity, real-time attack visibility/metrics, integration with WAF for automatic rule creation during an attack, cost protection (credits for scaling charges incurred during an attack), and 24/7 access to the AWS DDoS Response Team (DRT).
+- **Practical pairing:** Route 53 (DNS-layer resilience + Shield Standard baseline) + ELB (Shield Standard baseline, upgrade to Advanced for critical public endpoints) + WAF (L7 rate limiting/malicious pattern blocking) is the standard "defend the public edge" stack — worth stating as a layered answer rather than naming just one service.
 
 ---
 
@@ -880,7 +922,7 @@ flowchart TB
 
 ---
 
-## Messaging & Event-Driven Architecture
+## Messaging & Event-Driven Architecture {#messaging}
 
 ### SQS & SNS Fundamentals {#sqs-sns-fundamentals}
 
@@ -1133,7 +1175,7 @@ This single diagram ties together the order-processing pattern from the original
 
 ---
 
-## IAM & Security
+## IAM & Security {#iam-security}
 
 ### IAM Roles, Policies, AssumeRole {#iam-roles-policies}
 
@@ -1312,6 +1354,12 @@ The notes mention "least privilege" as a principle repeatedly but never show a c
 
 ## CI/CD
 
+### AWS CodeCommit {#codecommit}
+
+**What it is:** AWS's own managed Git repository service — same Git semantics/CLI you already use (clone, push, pull, branches, PRs via "pull requests"), just hosted and access-controlled through IAM instead of a third-party SaaS account. It's one of several valid **Source** stage providers for CodePipeline, alongside GitHub, Bitbucket, and S3 (via CodeStar Connections for the third-party ones — see the trap-scenario table below).
+
+**Why it comes up in interviews even though GitHub dominates in practice:** knowing CodeCommit exists — and that it's IAM-native (repo access controlled by the same policies/roles as everything else in the account, no separate SaaS permission model to reconcile) — is the actual point being tested, not a claim that you'd choose it over GitHub for a real team. For a shop already standardized on GitHub, there's rarely a reason to migrate; CodeCommit's main edge is avoiding a third-party auth/connection dependency entirely for teams that want everything inside one AWS account boundary.
+
 ### AWS CodeBuild {#codebuild}
 
 **What it is:** fully managed CI service — compiles code, runs tests, produces build artifacts (JAR/DLL/Docker image/zip) in on-demand, isolated build containers. No Jenkins servers to patch/scale.
@@ -1354,7 +1402,17 @@ artifacts:
 
 **Deploy targets:** ECS/Fargate, EC2 via CodeDeploy, Lambda, Elastic Beanstalk, CloudFormation — with rolling, blue-green, or canary (Lambda) strategies.
 
+**CodeDeploy's Deployment Group:** the logical group of compute targets (a set of EC2 instances/ASG, an ECS service, or a Lambda function+alias) that a given CodeDeploy application actually deploys to — configured as the target of the pipeline's Deploy stage. It's also where the deployment strategy (in-place vs blue/green, rolling percentages, CloudWatch-alarm-triggered automatic rollback) is bound to a concrete set of targets, rather than being an abstract setting on the pipeline itself.
+
 **Manual approval stage:** pauses the pipeline pending human sign-off — standard practice before production deploys/compliance gates.
+
+**Pipeline execution states** — the lifecycle of a single pipeline run, worth having memorized verbatim:
+| State | Meaning |
+|---|---|
+| **Started** | Pipeline execution has started |
+| **Succeeded** | All stages completed successfully |
+| **Failed** | A stage or action failed |
+| **Stopped** | Execution was manually stopped |
 
 **IAM roles involved:** the **pipeline service role** (lets CodePipeline invoke CodeBuild/CodeDeploy/access S3 artifacts) is distinct from **action roles** used by individual integrated services — least privilege on both.
 
@@ -1375,4 +1433,355 @@ artifacts:
 
 | Symptom | Root cause |
 |---|---|
-| Pipeline triggers but CodeBuild doesn't start |
+| Pipeline execution fails immediately after start (before any stage really runs) | Source-stage authentication is broken/expired — a GitHub OAuth token or, more commonly today, an expired/revoked **CodeStar Connections** connection to GitHub/Bitbucket. CodeStar Connections requires a one-time manual "Update pending connection" handshake in the console when first created (and again if the connection is deleted/recreated); pipelines silently fail at the very first stage until someone re-authorizes it |
+| Pipeline triggers but CodeBuild doesn't start | Pipeline service role missing permission to start the CodeBuild project |
+| CodeBuild works manually but fails inside CodePipeline | Different IAM roles — CodePipeline's invoking role may lack permissions CodeBuild's own role has |
+| Deployment uses old code despite pipeline success | Stale cached artifact or deploy stage pointing at wrong S3 path/version |
+| "buildspec.yml not found" | File missing, misnamed, or in the wrong directory relative to configured source root |
+| Docker build fails in CodeBuild but works locally | Privileged mode not enabled, or missing ECR login step |
+| Pipeline stuck "In Progress" | Waiting manual approval, or a long-running build still executing |
+| Can't push image to ECR | Service role missing `ecr:PutImage`/`ecr:GetAuthorizationToken` |
+| Build fails only inside VPC | No NAT Gateway/VPC endpoint for required AWS service access |
+| Build times out despite correct commands | Compute type too small, or build timeout configured too low |
+| Multiple triggers per single git push | Both webhook trigger and CodePipeline polling enabled simultaneously |
+| Artifacts missing despite build success | Incorrect `artifacts` section paths in buildspec.yml |
+| CodeBuild can't read Secrets Manager | Service role missing `secretsmanager:GetSecretValue` |
+| ECS runs old image after successful build | ECS service not updated, or image tag is static (`:latest`) instead of a unique tag/digest |
+| Works in dev, fails in prod | Cross-account IAM/resource permission misconfiguration |
+| Cost spikes suddenly | Frequent triggers, oversized compute type, no dependency caching |
+
+**Senior-level summary (memorize):** "Most CodePipeline/CodeBuild failures are IAM misconfigurations, incorrect artifact handling, missing Docker privileges, VPC networking gaps, or role-boundary confusion — not build command errors. Debugging CI/CD in AWS is primarily a permissions exercise."
+
+### [gaps] CloudFormation vs Terraform/CDKTF {#cfn-vs-terraform-gaps}
+
+The original notes (and the CI/CD sections above) only mention CloudFormation in passing as one of several possible CodePipeline deploy targets — they never actually compare it to Terraform/CDKTF, which is my actual IaC tool for provisioning Lambda, DynamoDB, EC2, and S3. This is exactly the kind of "contrast your real tools against the AWS-native option" question a senior AWS interview is likely to ask, so it's worth being able to speak to directly and in the first person here.
+
+**Core comparison**
+
+| | CloudFormation | Terraform | CDKTF |
+|---|---|---|---|
+| Scope | AWS-only | Multi-cloud (AWS, Azure, GCP, and hundreds of other providers) | Multi-cloud — it's Terraform under the hood |
+| Language | JSON/YAML templates | HCL (HashiCorp Configuration Language) | General-purpose languages (TypeScript, Python, C#, Java, Go) that synthesize to Terraform's underlying JSON config |
+| State management | Managed by AWS — no separate state file to store/lock yourself | You own the state file — local (fine for solo/demo use) or, in any real team setting, a remote backend (S3 bucket + DynamoDB table for state locking is the classic pattern) | Same as Terraform — CDKTF still produces and relies on Terraform state; the backend configuration is unchanged, only the authoring language differs |
+| Cost | Free — you pay only for the AWS resources it provisions | Free (open-source core); Terraform Cloud/Enterprise adds paid collaboration features | Free — same licensing as Terraform |
+| Drift detection | Native (`Detect Drift` in the console/API) | Via `terraform plan` (diffs real infra against state) | Same as Terraform — `cdktf plan` wraps the same mechanism |
+| Rollback on failure | Automatic rollback of the stack on failed deployment (built-in) | No automatic rollback — a failed `apply` can leave a partially-applied state; you manage remediation (re-run apply, or fix and re-plan) | Same as Terraform |
+| Vendor lock-in | Total (AWS-only, by definition) | None — same tool works across clouds, portable skill/tooling investment | None — same portability as Terraform, plus the added benefit of using a language your team already knows instead of learning HCL |
+| Ecosystem/community modules | AWS-provided sample templates + SAM for serverless | Very large module registry (`registry.terraform.io`), broad community | Growing, but smaller than raw Terraform's HCL module ecosystem since CDKTF is newer |
+
+**The state-file point is worth dwelling on, because it directly touches DynamoDB, which I do have hands-on experience with:** CloudFormation's biggest operational advantage is that AWS manages state for you — there's no file to lose, corrupt, or fight over between team members. Terraform (and therefore CDKTF) pushes that responsibility onto you: the classic production-grade setup is an S3 bucket holding the state file plus a DynamoDB table used purely for **state locking** (preventing two people/pipelines from running `apply` concurrently and corrupting state). That's a real operational cost CloudFormation doesn't have — but it's also exactly the kind of infrastructure I'm already comfortable operating, since it's the same DynamoDB primitives (a simple table, conditional writes for the lock item) I'd use in an application context.
+
+```hcl
+# Terraform backend config — S3 for state, DynamoDB for locking
+terraform {
+  backend "s3" {
+    bucket         = "my-org-terraform-state"
+    key            = "prod/app/terraform.tfstate"
+    region         = "us-east-1"
+    dynamodb_table = "terraform-state-lock"
+    encrypt        = true
+  }
+}
+```
+
+**Why I'd still reach for Terraform/CDKTF over CloudFormation even on an AWS-only project:** multi-cloud portability isn't always the deciding factor — the module ecosystem, the more expressive planning workflow (`terraform plan` as a genuine dry-run diff, not just a changeset preview), and consistent tooling across any future non-AWS work are the practical reasons. CloudFormation is a perfectly reasonable choice for a team that is AWS-only forever and wants to avoid owning a state backend — that's a legitimate trade-off, not a wrong answer, and I'd say so if asked to defend Terraform as "the only right choice."
+
+**CDKTF specifically — what it changes and what it doesn't:** CDKTF doesn't replace Terraform's engine or state model — it replaces the *authoring* language. Instead of writing HCL, you write TypeScript/Python/C#/Java/Go that calls CDKTF's provider bindings, and `cdktf synth` compiles that into the same JSON Terraform normally consumes, then hands off to the standard Terraform CLI underneath. The appeal for a .NET-background engineer is being able to use a strongly-typed, familiar language (loops, functions, classes, package management) instead of learning HCL's declarative syntax and its more limited expression language.
+
+**Concrete side-by-side — an S3 bucket in HCL vs CDKTF (TypeScript):**
+
+```hcl
+# Terraform (HCL)
+resource "aws_s3_bucket" "app_data" {
+  bucket = "my-app-data-prod"
+}
+
+resource "aws_s3_bucket_versioning" "app_data_versioning" {
+  bucket = aws_s3_bucket.app_data.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+```
+
+```typescript
+// CDKTF (TypeScript) — equivalent resource
+import { S3Bucket } from "@cdktf/provider-aws/lib/s3-bucket";
+import { S3BucketVersioningA } from "@cdktf/provider-aws/lib/s3-bucket-versioning";
+
+const appData = new S3Bucket(this, "app_data", {
+  bucket: "my-app-data-prod",
+});
+
+new S3BucketVersioningA(this, "app_data_versioning", {
+  bucket: appData.id,
+  versioningConfiguration: {
+    status: "Enabled",
+  },
+});
+```
+
+Same declared end-state, same underlying Terraform provider and state file — the only real difference is authoring ergonomics (types, IDE autocomplete, ability to write a loop/function to generate repeated resources instead of HCL's `for_each`/`count`).
+
+**Interview-ready summary:** "CloudFormation is AWS-native and state-free — AWS manages it for you, which is genuinely simpler operationally, but it locks you into AWS only. Terraform trades that simplicity for multi-cloud portability and a much larger module ecosystem, at the cost of owning your own state file — typically an S3 backend with DynamoDB locking, which is infrastructure I'm already comfortable operating. CDKTF is Terraform underneath; it just lets me write that infrastructure in a real programming language instead of HCL, which fits better with my .NET/C# background."
+
+---
+
+## Observability
+
+### CloudWatch Deep Dive {#cloudwatch-deep-dive}
+
+**What it is:** AWS's core observability platform — Metrics, Logs, Alarms, Dashboards, Events (EventBridge), and integration with Traces (X-Ray, technically a separate service).
+
+**Logs**
+- Hierarchy: `Log Group → Log Streams → Log Events` (e.g., `/aws/lambda/ProcessOrder` with one stream per container instance).
+- **CloudWatch Logs Insights**: SQL-like query language over logs.
+```
+fields @timestamp, @message
+| filter @message like /ERROR/
+| sort @timestamp desc
+```
+```
+fields @timestamp, @duration
+| filter @duration > 500
+```
+- Structured JSON logging makes fields directly queryable — a strong, low-effort win worth mentioning proactively in interviews.
+
+**Metrics (know the key ones per service)**
+| Service | Key metrics |
+|---|---|
+| Lambda | Invocations, Errors, Duration, Throttles, ConcurrentExecutions, IteratorAge (stream sources) |
+| API Gateway | 2xx/4xx/5xx, Latency (p50/p90/p99), IntegrationLatency |
+| SQS | ApproximateNumberOfMessagesVisible, ApproximateAgeOfOldestMessage |
+| DynamoDB | ReadThrottleEvents, WriteThrottleEvents, ConsumedCapacity |
+| EC2 | CPUUtilization, DiskReadOps/DiskWriteOps |
+
+You can also publish custom business metrics (`PutMetricData`) — orders/minute, payment failure rate, pipeline throughput.
+
+**Metric Math:** lets you combine multiple existing metrics into a derived formula *inside* CloudWatch itself, without publishing a separate custom metric or computing it client-side. The canonical example is an error-rate percentage: `(m1 / m2) * 100` where `m1` = `5xxRate` (or `Errors`) and `m2` = `TotalRequests` (or `Invocations`) — this gives you a single alarm-able, graphable series ("5xx error rate %") instead of eyeballing two separate raw-count graphs and doing the division in your head. Worth naming as the answer to "how would you alarm on an error *rate* rather than a raw error *count*" — raw counts are misleading at varying traffic volumes, and Metric Math is the built-in way to normalize for that without extra instrumentation code.
+
+**Alarms → Action patterns**
+| Alarm | Metric | Action |
+|---|---|---|
+| Queue backlog | `ApproximateNumberOfMessagesVisible > 1000` | SNS alert / scale consumer |
+| DynamoDB throttling | `WriteThrottleEvents > 0` | Auto-scale provisioned capacity |
+| Lambda failures | `Errors > 5%` | PagerDuty/email |
+| API 5xx spike | `5xxErrorRate > 2%` | Alert dev team |
+
+**EventBridge (formerly CloudWatch Events):** routes events from AWS services, your apps, and SaaS sources to Lambda/SQS/SNS/Step Functions/ECS — includes scheduled rules (`cron(0 1 * * ? *)`).
+
+**CloudWatch vs CloudTrail (a classic trick question):** CloudWatch = observability (logs/metrics/alarms about *behavior/performance*); CloudTrail = governance/audit (a record of *who called which API, when*). They answer different questions and are not interchangeable.
+
+**Embedded Metric Format (EMF):** structured JSON log format that CloudWatch automatically extracts into metrics — useful for high-cardinality custom metrics from Lambda without extra `PutMetricData` calls (and their associated API cost/throttling).
+
+**Interview-ready closing summary:** "CloudWatch is AWS's core observability service — Logs, Metrics, Alarms, EventBridge, and Dashboards let me detect issues early, debug failures via Logs Insights, and automate remediation across Lambda, SQS, API Gateway, and DynamoDB in production."
+
+### [new content] CloudWatch vs X-Ray: Complementary, Not Competing {#cloudwatch-vs-xray}
+
+The original notes mention X-Ray only briefly ("CloudWatch = Logs + Metrics; X-Ray = Tracing + Service maps") without depth — this expands it, since "CloudWatch vs X-Ray, when do you use each" is a standard senior observability question.
+
+| | CloudWatch | X-Ray |
+|---|---|---|
+| Answers | "Is something wrong, and what does the aggregate look like?" | "Where exactly in this specific request's path did it go wrong/slow?" |
+| Data shape | Logs (text), Metrics (time-series numbers) | Traces (request-scoped spans/segments across services) |
+| Granularity | Service/function level | Individual request level, cross-service |
+| .NET integration | `ILogger` → CloudWatch Logs via provider; custom metrics via SDK | `AWSXRayRecorder` middleware / `Amazon.XRay.Recorder.Handlers.AspNetCore` for ASP.NET Core; AWS SDK calls auto-instrumented via `AWSSDKHandler` |
+| Typical use | Alarms, dashboards, aggregate error rate | Root-causing a specific slow/failing request across Lambda→DynamoDB→external API |
+
+**How they combine in practice:** CloudWatch alarm fires on elevated p99 latency or error rate → you pull the trace ID from the structured log line (log the X-Ray trace ID as a correlation field) → open that trace in X-Ray to see exactly which downstream call (DynamoDB, SQS, external HTTP) added the latency or threw. Neither tool alone gives you both "something's wrong" and "here's exactly why" — production-grade .NET-on-AWS observability needs both, wired together via a shared trace/correlation ID in your structured logs.
+
+---
+
+## Cost & Performance {#cost-performance}
+
+### [new content] Cost Optimization: Savings Plans, Reserved, Spot {#cost-optimization}
+
+The original notes cover EC2 pricing models in a list but never contrast them for a purchasing-decision interview question ("How would you reduce our AWS compute bill by 30%?") — this section fills that gap directly.
+
+| Option | Commitment | Discount vs On-Demand | Flexibility | Best for |
+|---|---|---|---|---|
+| On-Demand | None | 0% (baseline) | Full | Unpredictable/dev/test workloads |
+| Compute Savings Plans | 1 or 3 yr, $/hr commitment | Up to ~66% | Applies across EC2/Fargate/Lambda, any instance family/region | Steady baseline usage, flexible architecture |
+| EC2 Instance Savings Plans | 1 or 3 yr | Higher discount than Compute SP | Locked to instance family in a region | Very stable, known instance family needs |
+| Reserved Instances (RI) | 1 or 3 yr | Similar to Instance SP | Least flexible (specific instance attributes) | Legacy — mostly superseded by Savings Plans for new commitments |
+| Spot Instances | None | Up to ~90% | Can be reclaimed with ~2-min warning | Fault-tolerant, stateless, batch/CI workloads |
+
+**Senior-level cost strategy talking points:**
+- Layer commitments: Savings Plan for your **predictable baseline**, On-Demand for the **variable middle**, Spot for **fault-tolerant burst/batch** capacity — a common "three-tier" cost architecture.
+- For Fargate/Lambda-heavy .NET shops, Compute Savings Plans apply even to serverless compute — a frequently-missed lever teams assume is EC2-only.
+- Spot is well-suited to CI/CD build agents (CodeBuild self-hosted runners on EC2 Spot), batch ETL, and stateless worker fleets behind SQS — the queue absorbs the reclaim disruption.
+- Right-sizing (Compute Optimizer recommendations) and eliminating idle resources (unattached EBS volumes, idle NAT Gateways, over-provisioned RDS instances) is usually higher-ROI than switching pricing models, and is the correct *first* answer before jumping to "buy Savings Plans."
+- Cost Explorer + Budgets + anomaly detection should be treated as a required part of any production AWS account, not an afterthought — tie this back to the "cost monitoring & budget alerts" item already flagged in the production-readiness checklist earlier in this guide.
+
+---
+
+## Well-Architected & Resilience {#well-architected}
+
+### [new content] AWS Well-Architected Framework — 6 Pillars {#well-architected-pillars}
+
+The original notes never reference the Well-Architected Framework, despite it being one of the most commonly asked "tell me about AWS best practices generally" senior/architect-level framing questions.
+
+| Pillar | Core question | .NET-relevant example |
+|---|---|---|
+| Operational Excellence | Can you run and monitor systems to deliver business value, and continually improve? | IaC (CloudFormation/CDK/Terraform), structured logging, runbooks, CI/CD with automated rollback |
+| Security | How do you protect data, systems, and assets? | IAM least privilege, Secrets Manager, encryption at rest/in transit, WAF, Security Hub |
+| Reliability | Can the workload perform its function correctly and consistently? | Multi-AZ, auto-scaling, retries with backoff/jitter (Polly in .NET), DLQs, chaos/failure testing |
+| Performance Efficiency | Are you using resources efficiently as demand changes? | Right-sized compute, caching (ElastiCache/CloudFront), async/event-driven patterns, .NET AOT for Lambda |
+| Cost Optimization | Are you avoiding unnecessary costs? | Savings Plans/Spot mix, S3 lifecycle policies, right-sizing, tagging for cost allocation |
+| Sustainability | Are you minimizing environmental impact? | Region selection, efficient instance types (Graviton/ARM64), scale-to-zero serverless patterns |
+
+**How to use this in an interview:** when asked an open-ended "how would you evaluate this architecture," structuring your answer explicitly around these 6 pillars (even briefly) signals architect-level thinking rather than a grab-bag of tips. It's also the basis for the **AWS Well-Architected Tool** and formal **Well-Architected Reviews**, which senior/lead engineers are frequently expected to have participated in or led.
+
+### [gaps] Well-Architected 6 Pillars — Rapid Recall Version {#well-architected-rapid-gaps}
+
+A compact, one-line-per-pillar version of the table above, purely for fast memorization/recall under interview pressure — the detailed table is what you study from; this is what you recite from:
+
+- **Operational Excellence:** run and monitor systems, and continually iterate/improve.
+- **Security:** protect data, systems, and assets through risk-based controls.
+- **Reliability:** recover from failure and scale to meet demand consistently.
+- **Performance Efficiency:** use computing resources efficiently, even as demand and technology change.
+- **Cost Optimization:** avoid unnecessary spend and eliminate waste.
+- **Sustainability:** minimize the environmental impact of running your workloads.
+
+**Memory hook:** "Run it well, keep it safe, keep it up, keep it fast, keep it cheap, keep it green" — six pillars, six verbs, in the same order AWS presents them.
+
+### [new content] Disaster Recovery Strategies {#dr-strategies}
+
+The original notes touch on Multi-AZ, Global Tables, and multi-region Lambda concurrency individually but never assemble them into the standard DR-strategy framework AWS interviews expect (Backup & Restore / Pilot Light / Warm Standby / Multi-Site Active-Active) — a clear, material gap for a senior interview.
+
+```mermaid
+flowchart LR
+    A[Backup & Restore<br/>RPO: hours, RTO: hours] --> B[Pilot Light<br/>RPO: minutes, RTO: 10s of min]
+    B --> C[Warm Standby<br/>RPO: seconds-minutes, RTO: minutes]
+    C --> D[Multi-Site Active-Active<br/>RPO: ~0, RTO: ~0]
+    A -.Cost.-> D
+```
+*(Cost and operational complexity increase left→right; RPO/RTO improve left→right.)*
+
+| Strategy | Description | RTO/RPO | .NET/AWS implementation notes |
+|---|---|---|---|
+| **Backup & Restore** | Regular backups (RDS snapshots, DynamoDB PITR/backups, S3 cross-region replication) to a DR region; restore on disaster | Hours (RTO/RPO) | Cheapest; automate via AWS Backup; test restores regularly — an untested backup is not a DR plan |
+| **Pilot Light** | Core infra (DB replica, minimal config) always running in DR region at minimal scale; rest is provisioned on failover | RTO: tens of minutes; RPO: minutes | RDS cross-region read replica kept warm; app tier (ECS/EC2) defined in IaC but scaled to zero/minimal until needed |
+| **Warm Standby** | Scaled-down but fully functional full stack running in DR region continuously | RTO/RPO: minutes or less | DynamoDB Global Tables or Aurora Global Database for data; smaller ECS/Fargate service count in DR region, scaled up on failover |
+| **Multi-Site Active-Active** | Full production capacity live in 2+ regions simultaneously, serving real traffic | RTO/RPO: near zero | Route 53 latency/weighted routing across regions; DynamoDB Global Tables or Aurora Global Database; requires conflict-tolerant/idempotent write design |
+
+**Interviewer follow-up to expect:** "How does Lambda concurrency planning change for DR?" — tie back to the concurrency section: a passive DR region still has the default 1,000 concurrency limit unless pre-raised; a warm/active-active strategy requires provisioning that headroom *before* the disaster, not during it.
+
+**Interviewer follow-up to expect:** "Route 53 failover — is that enough for DR by itself?" — no; per the Route 53 section above, DNS failover is TTL-bound and not instant. It's one component of Pilot Light/Warm Standby/Active-Active, not a complete DR strategy on its own.
+
+---
+
+## Best Practices
+
+**Lambda / Serverless**
+- One function = one responsibility; avoid "fat Lambda" business logic.
+- Use async programming; keep functions and packages lightweight.
+- Manage infra via CloudFormation/SAM/CDK/Terraform, not console clicks.
+- Provisioned Concurrency for latency-sensitive production APIs; .NET AOT to shrink cold starts further.
+- Externalize long-running work to Step Functions.
+- Minimize VPC usage for Lambda unless private resource access is required; prefer VPC Endpoints once inside a VPC.
+- Create DB connections/clients outside the handler to survive warm reuse.
+
+**Messaging**
+- Always design for at-least-once delivery — idempotency is not optional.
+- One SQS queue per consumer under an SNS fan-out topic.
+- Delete SQS messages only after successful processing.
+- Align SQS visibility timeout with (and slightly exceed) consumer max processing time.
+- Use FIFO + `MessageGroupId`/`MessageDeduplicationId` when strict ordering/exactly-once matters.
+
+**IAM**
+- Roles over users for anything automated; OIDC over static keys for CI/CD.
+- Least privilege by default; add permissions incrementally, not "just in case."
+- One role per service, clearly named; short session durations; CloudTrail on all AssumeRole activity.
+
+**Data**
+- DynamoDB: design access patterns first, then keys/indexes — not the other way around.
+- RDS: separate HA (Multi-AZ) concerns from read-scaling (read replica) concerns; don't conflate them.
+- S3: pick storage class and lifecycle rules based on actual access pattern, not guesswork — use Intelligent-Tiering when unsure.
+
+**Networking**
+- NAT Gateway per AZ for HA; VPC Endpoints over NAT for AWS-service-only traffic.
+- Databases always in private (ideally isolated, no-NAT) subnets.
+- Security Groups as primary defense; NACLs sparingly for coarse subnet blocking.
+
+**Observability**
+- Structured JSON logging everywhere; correlate logs and X-Ray trace IDs.
+- Alarms on the metrics that actually predict user pain (queue depth, p99 latency, throttle counts) — not just CPU%.
+- Set log retention policies explicitly; don't leave "Never Expire" as a silent cost leak.
+
+---
+
+## Common Pitfalls (Cross-Cutting) {#common-pitfalls}
+
+- **Assuming exactly-once anywhere in AWS async messaging** — Lambda, SQS, and SNS are all at-least-once by default; idempotency is the application's responsibility, not the platform's guarantee.
+- **Assuming DNS failover (Route 53) is instant** — it's TTL-bound; combine with load-balancer-level health-based routing for fast reaction.
+- **Conflating Multi-AZ (HA) with Read Replicas (scale)** in RDS — different mechanisms, different purposes, different failover semantics.
+- **Treating Fargate as "always cheaper" than EC2** — it's cheaper only for bursty/low-utilization workloads.
+- **Forgetting NAT Gateway must live in a public subnet**, or forgetting it entirely for VPC-bound Lambda/CodeBuild/ECS tasks that need outbound internet.
+- **Publishing domain events before the DB transaction commits** — breaks the "read model eventually reflects a committed write" invariant that CQRS depends on.
+- **Hardcoding credentials instead of using roles/OIDC.**
+- **Ignoring the separation between trust policy and permission policy** in IAM — both are needed, evaluated independently.
+- **Using DynamoDB Scan in a hot path**, or choosing a low-cardinality/time-based partition key that creates a hot partition.
+- **Believing CloudWatch alarms alone constitute "observability"** without traces (X-Ray) to explain *why* a metric moved.
+
+---
+
+## Sample Interview Q&A {#sample-qa}
+
+**Q: Walk me through how you'd design a resilient order-processing pipeline on AWS for a .NET system.**
+A: API Gateway/ALB → Lambda or ECS ingest service writes to DynamoDB with status `PENDING` (idempotency key checked via conditional write) → publishes `order_created` to an SNS topic → SNS fans out to per-consumer SQS queues (billing, notification, inventory) → each Lambda/ECS worker processes its queue, using DynamoDB conditional updates for state transitions, with a DLQ configured (`maxReceiveCount`) and CloudWatch alarms on DLQ depth and queue age. Everything downstream is idempotent because SQS is at-least-once. I'd instrument with structured logs + X-Ray tracing tied by a correlation ID, and load-test to validate DynamoDB capacity mode and Lambda concurrency sizing before go-live.
+
+**Q: Your Lambda-backed API has unacceptable p99 latency due to cold starts. What do you do, in order?**
+A: First confirm it's actually cold starts (CloudWatch Logs `Init Duration` in the `REPORT` line, not just slow code) → migrate to .NET 8 Native AOT if not already → trim package size and remove VPC attachment if not strictly needed (or add VPC Endpoints if it is needed) → add Provisioned Concurrency sized to p95 traffic → re-measure. I would not jump straight to Provisioned Concurrency before ruling out cheaper architectural fixes (AOT, VPC removal), since Provisioned Concurrency has an ongoing hourly cost.
+
+**Q: When would you choose DynamoDB over RDS for a new .NET service, and when would you not?**
+A: DynamoDB when access patterns are known upfront, need is single-digit-ms latency at high/spiky scale, and the data model tolerates denormalization (no complex ad hoc joins/reporting). RDS (or Aurora) when the domain genuinely needs relational integrity, ad hoc queries, complex joins/reporting, or the team's existing tooling/ORM (EF Core) and skill set make relational the faster, lower-risk path. I wouldn't force DynamoDB onto a reporting-heavy back office system just because it's "cloud-native" — that's cargo-culting, not architecture.
+
+**Q: Explain the difference between a Trust Policy and a Permission Policy, and why AWS keeps them separate.**
+A: Trust policy defines *who* can assume a role (the principal); permission policy defines *what* that role can do once assumed. They're kept separate because the two questions have different threat models and different owners in practice (a security team might own trust boundaries/cross-account access, while a service team owns what their own service's role can touch) — merging them into one document would conflate "can enter" with "can do," which AWS explicitly disallows at the API level.
+
+**Q: Your DynamoDB table is throttling even though total consumed capacity looks well under the provisioned limit. Why, and what do you do?**
+A: Classic hot partition — traffic is concentrated on one partition key value even though aggregate table-level capacity looks fine, because DynamoDB enforces limits per-partition, not just per-table. Adaptive Capacity helps smooth this automatically but isn't a fix for a bad key design. The real fix is redesigning the partition key for higher cardinality (e.g., adding a random/bucketed suffix) or introducing a GSI with a better-distributed key for that access pattern.
+
+**Q: How would you explain the trade-off between ECS/Fargate and Lambda for a new .NET microservice to a non-technical stakeholder?**
+A: Lambda is like renting a car only when you need to drive — you pay per trip, no maintenance, but there's a moment of "starting the engine" each time you haven't driven recently (cold start), and you can't take a trip longer than 15 minutes. ECS/Fargate is like leasing a car that's always running and ready — no start-up delay and no trip-length limit, but you're paying for it even during the minutes you're not driving. For spiky, short-lived work, Lambda is cheaper and simpler; for steady, always-on services, ECS/Fargate is more predictable and cost-effective.
+
+---
+
+## Summary of Additions
+
+The following **[new content]** sections were added to close gaps versus a 2026 senior/lead .NET-on-AWS interview bar. The original notes were strong on Lambda internals, DynamoDB, IAM/AssumeRole, SNS/SQS/CQRS, CloudWatch, EC2/Fargate, CI/CD (CodeBuild/CodePipeline), and VPC/Route53/ALB — but had no coverage at all of several near-universal senior interview topics.
+
+1. **ECS vs EKS vs Fargate vs Lambda for .NET Workloads** — the original notes compare Lambda-vs-ECS and EC2-vs-Fargate separately but never give a direct, decision-table answer to the standard "how do you choose compute for a .NET microservices migration" question, including the .NET Framework/Windows-container angle.
+2. **Deploying .NET to AWS: Elastic Beanstalk vs ECS vs Lambda Custom Runtime** — Elastic Beanstalk was entirely absent from the notes despite being a legitimate, commonly-asked-about .NET deployment path.
+3. **S3 Storage Classes & Lifecycle Policies** — S3 was not covered at all in the source notes; storage class trade-offs and lifecycle JSON are near-guaranteed interview material.
+4. **EBS vs EFS vs S3** — basic storage-type comparison, also absent from the source.
+5. **VPC Reference Architecture (diagram)** — the notes explained VPC/subnet/NAT concepts textually but never assembled them into the canonical multi-AZ 3-tier diagram interviewers expect you to be able to draw.
+6. **RDS Multi-AZ vs Read Replicas vs Aurora** — RDS was not covered at all, despite being more common than DynamoDB for primary OLTP in most .NET shops; this fills a major gap and the very common Multi-AZ/read-replica confusion.
+7. **EventBridge Deep Dive** — EventBridge was mentioned only in passing as a Lambda trigger/CloudWatch Events rename; given its centrality to modern event-driven .NET architectures, it needed its own treatment (event buses, schema registry, archive/replay, EventBridge vs SNS decision table).
+8. **Event-Driven Architecture Reference Flow (diagram)** — ties the order-processing (Lambda+SQS+DynamoDB) and SNS fan-out patterns together into one sequence diagram, since the source documented them as separate write-ups despite them typically being combined in practice.
+9. **Secrets Manager vs Parameter Store** — referenced repeatedly in the source but never actually compared; added a direct comparison table and .NET code snippet.
+10. **Least Privilege & Permission Boundaries in Practice** — "least privilege" was stated as a principle throughout the notes without a concrete before/after example or an explanation of permission boundaries vs SCPs.
+11. **CloudWatch vs X-Ray: Complementary, Not Competing** — X-Ray was mentioned only in one line; expanded into a proper comparison and .NET integration notes, since "when do you use CloudWatch vs X-Ray" is a standard observability interview question.
+12. **Cost Optimization: Savings Plans, Reserved, Spot** — EC2 pricing models were listed but never contrasted for a purchasing-decision question; added a comparison table and a "three-tier" cost strategy talking point.
+13. **AWS Well-Architected Framework — 6 Pillars** — completely absent from the source, despite being the standard framework senior/architect interviews use to structure "how would you evaluate this architecture" questions.
+14. **Disaster Recovery Strategies (Backup & Restore / Pilot Light / Warm Standby / Multi-Site Active-Active)** — the source touched on Multi-AZ, Global Tables, and multi-region Lambda concurrency individually but never assembled the standard DR-strategy framework AWS interviews expect.
+
+## Summary of [gaps] Additions (This Pass) {#summary-of-gaps-additions}
+
+This is a second gap-fill pass over the guide, tagged **[gaps]** (distinct from the **[new content]** tag used in the first pass) so both passes remain individually identifiable. All seven additions below are inserted next to their most relevant existing section rather than as standalone material.
+
+1. **EC2 Sizing, Pricing Decisions & CPU Credit Gotchas** — the existing EC2 Fundamentals section named the pricing models but didn't cover how to actually size an instance (vCPU/memory ratio reasoning) or the T-family CPU credit exhaustion gotcha, which is a very commonly asked "diagnose this production slowdown" question; also added a decision framework for On-Demand/Reserved/Spot/Savings Plans and an honest "how I'd justify EC2 vs serverless" angle given my Terraform/CDKTF-provisioned EC2 experience.
+2. **S3 Lifecycle Rules in Practice — Real Patterns & Terraform** — the existing S3 storage-class table needed concrete "which rule for which data" real-world patterns (logs, backups, compliance data, scratch data) plus an actual `aws_s3_bucket_lifecycle_configuration` Terraform example, since Terraform is my real provisioning tool.
+3. **Fargate/ECS/EKS Trade-offs — Reasoning Without Hands-On Time** — added an expanded comparison table (operational overhead, cost model, cold start, use-case fit) across EC2/ECS-Fargate/EKS/Lambda, explicitly framed as trade-off reasoning rather than hands-on claims, since Fargate/ECS/EKS are not part of my confirmed AWS experience.
+4. **Multi-AZ vs Read Replica — The #1 Confused Pair** — turned the most commonly confused RDS concept into its own dedicated drill-style callout with a decision-flow diagram, and introduced Aurora more fully (storage-layer replication, sub-10-second-typical lag, storage auto-scaling) — framed as conceptual/comparative knowledge since RDS isn't part of my hands-on experience.
+5. **VPC/Subnet/NAT/SG Rapid-Fire Drill Sheet** — the existing VPC section is thorough prose; this adds a condensed table-format cheat-sheet version of the same fundamentals for fast last-minute recall, distinct from (and pointing back to) the detailed explanation.
+6. **Well-Architected 6 Pillars — Rapid Recall Version** — a one-line-per-pillar memorization aid placed right after the existing detailed pillars table, for fast recall under interview pressure without re-deriving the full table each time.
+7. **CloudFormation vs Terraform/CDKTF** — this was genuinely new ground; the original notes only mentioned CloudFormation in passing as a CodePipeline deploy target. Added a full comparison (state management, cost, drift detection, rollback, ecosystem) plus a concrete HCL-vs-CDKTF-TypeScript S3 bucket example, written in the first person since Terraform/CDKTF is my actual confirmed tool.
+
+### Contradictions Flagged During Consolidation {#contradictions-flagged-during-consolidation}
+
+- The source file contained a **large exact duplicate** of the entire AWS Lambda deep-dive section (lines ~1–3247 repeat verbatim, including the Lambda vs ECS Q&A) — this was a copy-paste artifact in the original notes, not a genuine contradiction; content was merged once, no conflicting facts existed between the two copies.
+- The **DynamoDB "Trick Interview Questions" block also appears twice verbatim** in the source (immediately back-to-back) — same treatment: merged into a single section, no factual conflict.
+- No genuine factual contradictions (i.e., two *different* claims about the same fact) were found between sections — the original notes were internally consistent aside from the copy-paste duplication noted above.
+- One figure was flagged as **unverified** rather than guessed: the per-partition DynamoDB throughput figures (~3,000 RCU/1,000 WCU per partition) are directional/historical numbers from AWS documentation at the time of note-taking, not a contractually guaranteed limit — marked as directional in the DynamoDB section rather than stated as a hard fact.

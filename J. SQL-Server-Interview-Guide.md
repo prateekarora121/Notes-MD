@@ -12,7 +12,7 @@
   - [CHAR vs VARCHAR vs NCHAR/NVARCHAR](#char-vs-varchar-vs-ncharnvarchar)
   - [Views (Normal, Indexed/Materialized)](#views-normal-indexedmaterialized)
   - [Stored Procedures vs Functions](#stored-procedures-vs-functions)
-  - [Triggers & Magic Tables (inserted/deleted)](#triggers--magic-tables-insereddeleted)
+  - [Triggers & Magic Tables (inserted/deleted)](#triggers--magic-tables-inserteddeleted)
   - [Normalization & Denormalization (1NF–BCNF)](#normalization--denormalization-1nfbcnf)
   - [[new content] OLTP vs OLAP](#new-content-oltp-vs-olap)
 - [Intermediate](#intermediate)
@@ -28,6 +28,7 @@
 - [Advanced](#advanced)
   - [Execution Plans & Join Operators](#execution-plans--join-operators)
   - [[new content] Index Seek vs Scan, Key Lookup, Covering Indexes](#new-content-index-seek-vs-scan-key-lookup-covering-indexes)
+  - [Heap Tables](#heap-tables)
   - [[new content] Statistics & Cardinality Estimation](#new-content-statistics--cardinality-estimation)
   - [[new content] Parameter Sniffing](#new-content-parameter-sniffing)
   - [Transactions & ACID](#transactions--acid)
@@ -40,8 +41,18 @@
   - [[new content] Table Partitioning](#new-content-table-partitioning)
   - [High Availability & Disaster Recovery](#high-availability--disaster-recovery)
   - [Backup & Restore](#backup--restore)
+  - [Database Snapshots](#database-snapshots)
+  - [Bulk Insert vs Batch Insert](#bulk-insert-vs-batch-insert)
   - [Full-Text Search](#full-text-search)
   - [Security: Encryption, RBAC](#security-encryption-rbac)
+  - [Linked Servers](#linked-servers)
+  - [Service Broker](#service-broker)
+  - [Log Sequence Number (LSN)](#log-sequence-number-lsn)
+  - [FILESTREAM](#filestream)
+  - [SQL Server Agent Jobs](#sql-server-agent-jobs)
+  - [Edition Differences: Express vs Enterprise](#edition-differences-express-vs-enterprise)
+  - [Azure Migration Paths](#azure-migration-paths)
+  - [DBCC CHECKDB vs DBCC CHECKTABLE](#dbcc-checkdb-vs-dbcc-checktable)
 - [Performance Tuning](#performance-tuning)
   - [[new content] Index Fragmentation & Maintenance](#new-content-index-fragmentation--maintenance)
   - [Query Optimization Checklist](#query-optimization-checklist)
@@ -531,6 +542,32 @@ CREATE NONCLUSTERED INDEX IX_Orders_OrderDate_Covering
 
 **Why `INCLUDE` instead of adding columns to the key**: included columns are stored only at the leaf level, not in the b-tree's intermediate levels, so they don't bloat seek navigation or force wider intermediate pages, and they can include data types not allowed as key columns (e.g., large `VARCHAR(MAX)` in some contexts). Composite key column order matters for seeks (leftmost-prefix rule, like a phone book — you can search by last name, then first name, but not by first name alone), while `INCLUDE` column order does not.
 
+### Heap Tables
+
+A **heap** is simply a table with no clustered index — rows are stored in no particular physical order, identified internally by a RID (`FileID:PageID:SlotID`) instead of a clustering key. This is the object a plain **Table Scan** operator reads (referenced earlier in the join-operator table).
+
+```sql
+-- A heap: no PRIMARY KEY / clustered index defined
+CREATE TABLE dbo.StagingOrders (
+    OrderNumber NVARCHAR(30) NOT NULL,
+    CustomerID INT NOT NULL,
+    OrderDate DATE NOT NULL
+);
+
+-- Confirm it's a heap (index_id = 0 means heap)
+SELECT i.name, i.type_desc FROM sys.indexes i
+WHERE i.object_id = OBJECT_ID('dbo.StagingOrders');
+```
+
+Trade-offs to state explicitly in an interview:
+
+- **Fast bulk inserts**: no B-tree to keep sorted, so append-heavy loads (staging/ETL tables you truncate-and-reload each run) can be quicker than inserting into a clustered table.
+- **Slow selective reads**: any `WHERE` predicate without a supporting nonclustered index forces a full Table Scan, since there's no ordering to seek against.
+- **Forwarded records**: if an update grows a row so it no longer fits on its original page, SQL Server leaves a forwarding pointer on the original page and moves the row — every future access via that RID (including through nonclustered indexes, which store the RID as their row locator) now costs an extra hop. High `forwarded_record_count` in `sys.dm_db_index_physical_stats` on a heap is a classic sign a table needs a clustered index.
+- **Nonclustered indexes still work fine on a heap** — they just point back to a RID instead of a clustering key, which is one row-locator byte-width smaller but loses the "seek then get everything for free" benefit a clustering key gives you.
+
+Rule of thumb: heaps are a deliberate, narrow choice (bulk-load staging tables, log-style insert-only tables you never filter directly) — not the default. Almost every OLTP table benefits from an explicit clustered index (usually on the surrogate key or the most common range-scan column).
+
 ### [new content] Statistics & Cardinality Estimation
 
 The optimizer chooses plans based on **estimated row counts**, derived from column/index **statistics** (histograms + density info), not from scanning the actual table at compile time. Stale or missing statistics are one of the top real-world causes of bad plans.
@@ -819,11 +856,12 @@ Common misconception to correct: **partitioning is primarily a manageability fea
 |---|---|---|---|---|
 | Log Shipping | Backup/restore of tx log backups | Delayed (scheduled) | Manual | Cheap, simple DR/warm standby |
 | Database Mirroring (deprecated) | Log stream to mirror | Sync or async | Automatic (sync mode w/ witness) | Legacy — superseded by Always On |
+| Snapshot Replication | Publisher pushes a full copy of the published data at scheduled intervals (no continuous change tracking) | Periodic (full refresh, not incremental) | N/A | Small/rarely-changing reference/lookup data, or as the initial seeding step before transactional/merge replication takes over |
 | Transactional Replication | Publisher pushes committed changes | Near real-time | N/A (not HA, it's distribution) | Reporting copies, data distribution |
 | Merge Replication | Bi-directional sync w/ conflict resolution | Periodic | N/A | Disconnected/mobile clients |
 | Always On Availability Groups | Log stream to replicas, group of DBs | Sync (no data loss) or async | Automatic (sync) | Modern HA/DR standard, readable secondaries |
 
-**Conclusion the notes already had right:** Log Shipping = simple backup-based DR with acceptable delay; Replication = real-time distribution for reporting/scale-out, not primarily HA; **Always On Availability Groups is the modern default answer** for HA+DR combined, and should be your first mention in an interview unless the question specifically asks about legacy/cost-constrained environments.
+**Conclusion the notes already had right:** Log Shipping = simple backup-based DR with acceptable delay; Replication = real-time distribution for reporting/scale-out, not primarily HA; **Always On Availability Groups is the modern default answer** for HA+DR combined, and should be your first mention in an interview unless the question specifically asks about legacy/cost-constrained environments. Of the three replication types, Snapshot Replication is the simplest but also the heaviest per sync (it re-copies the whole published dataset rather than just the deltas), so it's rarely the answer for anything beyond small/static data or bootstrapping the other two types.
 
 ### Backup & Restore
 
@@ -844,6 +882,77 @@ RESTORE LOG MyDB FROM DISK = 'C:\Backup\MyDB.trn'
 | Transaction Log | Log records since last log backup | Enables point-in-time recovery; **required** for `FULL`/`BULK_LOGGED` recovery models to truncate the log |
 
 Recovery model matters here (not explicit in original notes): `SIMPLE` (no log backups, no point-in-time recovery, log auto-truncates), `FULL` (full point-in-time recovery, requires regular log backups or the log grows unbounded), `BULK_LOGGED` (minimally logs certain bulk operations for performance, still supports log backups but not to an arbitrary point inside a minimally-logged operation).
+
+### Database Snapshots
+
+A **database snapshot** is a read-only, point-in-time view of a database, created with `CREATE DATABASE ... AS SNAPSHOT OF`. Under the hood it uses a **copy-on-write sparse file**: at creation the snapshot file is empty, and the first time a page in the source database changes, SQL Server copies the *original* (pre-change) page into the snapshot file before letting the write proceed — so the snapshot always shows the database exactly as it was at the moment of creation, at a storage cost proportional to how much data has changed since.
+
+```sql
+CREATE DATABASE MyDB_Snapshot ON
+(NAME = MyDB, FILENAME = 'C:\Snapshots\MyDB_Snapshot.ss')
+AS SNAPSHOT OF MyDB;
+
+-- Query the frozen point-in-time copy directly
+SELECT * FROM MyDB_Snapshot.dbo.Orders;
+
+-- Revert the source database back to the snapshot's point in time
+-- (this discards every change made to MyDB since the snapshot was taken)
+RESTORE DATABASE MyDB FROM DATABASE_SNAPSHOT = 'MyDB_Snapshot';
+```
+
+Common uses: giving reporting queries a stable, non-blocking view without touching production isolation settings; a quick "undo" safety net immediately before a risky deployment or mass update (revert via `RESTORE ... FROM DATABASE_SNAPSHOT` instead of a full backup/restore cycle); and pre-upgrade rollback points.
+
+**Don't conflate this with Snapshot Isolation** (covered earlier under RCSI vs Snapshot Isolation) — they share the word "snapshot" but are different mechanisms solving different problems:
+
+| | Database Snapshot | Snapshot Isolation |
+|---|---|---|
+| What it is | A separate, named database *object* (`sys.databases` entry) | A transaction *isolation level* (`SET TRANSACTION ISOLATION LEVEL SNAPSHOT`) |
+| Mechanism | Copy-on-write sparse file at the page level | Row versioning in the tempdb version store |
+| Lifetime | Persists until explicitly dropped | Scoped to a single transaction |
+| Use case | Reporting off a frozen copy, rollback safety net | Non-blocking reads for OLTP concurrency |
+| Is it a backup? | **No** — same underlying disk/storage as the source; if the source database or its disk is lost, the snapshot is lost too | N/A |
+
+### Bulk Insert vs Batch Insert
+
+These solve different problems and are frequently confused in interviews:
+
+- **Bulk insert** (`BULK INSERT` T-SQL statement, or the `bcp` command-line utility) loads a large external data file (CSV, fixed-width, etc.) into a table as efficiently as possible — under the right conditions (`SIMPLE`/`BULK_LOGGED` recovery model, `TABLOCK`, no incompatible triggers/constraints in the way) SQL Server can **minimally log** the operation instead of logging every row individually, which is the main source of its speed advantage.
+- **Batch insert** means taking a large insert/update workload and deliberately splitting it into multiple smaller transactions (a few thousand rows each) instead of one giant statement/transaction — the goal isn't minimal logging, it's bounding transaction log growth, avoiding lock escalation, and allowing incremental progress/retry on failure (the same pattern used for the large-scale delete example in the Performance Tuning checklist).
+
+```sql
+-- Bulk insert from a flat file
+BULK INSERT dbo.Orders
+FROM 'C:\ImportData\orders.csv'
+WITH (
+    FIELDTERMINATOR = ',',
+    ROWTERMINATOR = '\n',
+    FIRSTROW = 2,
+    BATCHSIZE = 10000,
+    TABLOCK
+);
+
+-- bcp equivalent from the command line
+-- bcp dbo.Orders in "C:\ImportData\orders.csv" -S MyServer -d MyDB -c -t, -F 2
+
+-- Batch insert: an application/ETL step breaks a large in-database load into
+-- bounded transactions rather than one giant INSERT
+DECLARE @BatchSize INT = 5000, @RowsInserted INT = 1;
+WHILE @RowsInserted > 0
+BEGIN
+    INSERT INTO dbo.Orders (OrderNumber, CustomerID, OrderDate)
+    SELECT TOP (@BatchSize) OrderNumber, CustomerID, OrderDate
+    FROM staging.OrdersStaging s
+    WHERE NOT EXISTS (SELECT 1 FROM dbo.Orders o WHERE o.OrderNumber = s.OrderNumber);
+    SET @RowsInserted = @@ROWCOUNT;
+END;
+```
+
+| | Bulk Insert (`BULK INSERT` / `bcp`) | Batch Insert |
+|---|---|---|
+| Purpose | Load external flat files as fast as possible | Break a large load into smaller, safer transactions |
+| Logging | Can be minimally logged under the right recovery model + options | Fully logged per batch, same as any normal DML |
+| Typical source | External files, migrations, initial seeding | In-database or app-driven inserts/updates at volume |
+| Failure/rollback granularity | Usually all-or-nothing per load (unless chunked with `BATCHSIZE`) | Partial progress can commit incrementally, easy to resume |
 
 ### Full-Text Search
 
@@ -874,6 +983,177 @@ Use when data volume/text size makes `LIKE` too slow, or when linguistic/ranked 
 - **Column-level encryption** (`ENCRYPTBYKEY`/certificates): symmetric (same key both ways, fast) vs asymmetric (public/private key pair, slower, used to protect the symmetric keys themselves in practice).
 - **RBAC**: grant permissions to roles, add users to roles, rather than granting directly to individual logins — auditability and maintainability.
 - Principle of least privilege: application logins should not be `db_owner`; use `EXECUTE` on stored procedures instead of direct table `SELECT/INSERT/UPDATE` grants where feasible (also mitigates injection blast radius).
+
+### Linked Servers
+
+A **linked server** lets a SQL Server instance query another SQL Server (or any OLE DB/ODBC data source — Oracle, Excel, another vendor's RDBMS) as if it were local, using four-part naming (`ServerName.DatabaseName.SchemaName.ObjectName`) or `OPENQUERY`.
+
+```sql
+EXEC sp_addlinkedserver
+    @server = 'RemoteServer',
+    @srvproduct = '',
+    @provider = 'SQLNCLI',
+    @datasrc = 'RemoteSqlHost\InstanceName';
+
+EXEC sp_addlinkedsrvlogin
+    @rmtsrvname = 'RemoteServer',
+    @useself = 'false',
+    @locallogin = NULL,
+    @rmtuser = 'remote_login',
+    @rmtpassword = '********';
+
+-- Four-part name query
+SELECT * FROM RemoteServer.RemoteDB.dbo.Orders WHERE OrderDate > '2025-01-01';
+
+-- OPENQUERY pushes the entire query text to run on the remote server —
+-- often more predictable than letting the optimizer decide how much to push down
+SELECT * FROM OPENQUERY(RemoteServer, 'SELECT * FROM dbo.Orders WHERE OrderDate > ''2025-01-01''');
+```
+
+Senior-level caveats: distributed queries against a four-part name don't always push predicates to the remote side (the optimizer may pull far more data across the network than expected before filtering) — check the plan and prefer `OPENQUERY` when you need to guarantee remote-side filtering; distributed transactions spanning a linked server require MSDTC; and linked servers are a reasonable tool for occasional cross-instance admin/reporting queries, but a risky permanent app-tier data-access pattern at scale — prefer ETL/replication/an API boundary for high-volume cross-database joins.
+
+### Service Broker
+
+**Service Broker** is SQL Server's built-in asynchronous, transactional messaging framework for passing messages between queues — within one database or across databases/instances — using message types, contracts, queues, and services, with guaranteed in-order, exactly-once delivery per conversation.
+
+```sql
+CREATE MESSAGE TYPE OrderMessageType VALIDATION = WELL_FORMED_XML;
+CREATE CONTRACT OrderContract (OrderMessageType SENT BY INITIATOR);
+CREATE QUEUE OrderQueue;
+CREATE SERVICE OrderService ON QUEUE OrderQueue (OrderContract);
+
+-- Send a message
+DECLARE @ConversationHandle UNIQUEIDENTIFIER;
+BEGIN DIALOG CONVERSATION @ConversationHandle
+    FROM SERVICE OrderService TO SERVICE 'OrderService'
+    ON CONTRACT OrderContract;
+SEND ON CONVERSATION @ConversationHandle
+    MESSAGE TYPE OrderMessageType ('<Order><Id>123</Id></Order>');
+
+-- Receive (typically inside an activation stored procedure)
+RECEIVE TOP(1) * FROM OrderQueue;
+```
+
+Typical use case: decoupling slow/long-running work from the triggering transaction (e.g., commit the order, then let a queued message drive downstream processing asynchronously) or building an in-database pub/sub or work-queue pattern without an external broker. Senior framing worth stating out loud: it's largely a legacy/niche choice today — most new systems reach for an external, language-agnostic broker (Azure Service Bus, Kafka, RabbitMQ) instead, but Service Broker still turns up in older enterprise SQL Server systems, so recognizing a queue/conversation object is worth knowing even if you wouldn't choose it for a new design.
+
+### Log Sequence Number (LSN)
+
+Every record written to the transaction log gets a monotonically increasing **Log Sequence Number** (format like `00000025:000001d0:0003`), used internally for crash recovery ordering and, critically, to chain backups together. Every backup records a First/Last/Checkpoint LSN, and a differential or transaction log restore is only valid if its LSNs chain continuously from the preceding full backup — this is exactly why "the log or differential backup cannot be restored because it was not created in the correct sequence" errors happen when a link in the chain is missing.
+
+```sql
+-- Last log backup LSN per database (part of the backup chain)
+SELECT DB_NAME(database_id), last_log_backup_lsn FROM sys.database_recovery_status;
+
+-- Backup history showing the LSN chain across full/diff/log backups
+SELECT database_name, backup_start_date, first_lsn, last_lsn, checkpoint_lsn, type
+FROM msdb.dbo.backupset
+ORDER BY backup_start_date DESC;
+```
+
+### FILESTREAM
+
+**FILESTREAM** stores unstructured BLOB data (documents, images, video) as ordinary files in the filesystem while keeping them transactionally consistent with, and backed up alongside, the database — the column is declared `VARBINARY(MAX) FILESTREAM`, but the bytes themselves live outside the mdf/ndf, in a dedicated FILESTREAM filegroup on disk.
+
+```sql
+-- Enable FILESTREAM access at the instance level (also requires a one-time
+-- OS-level enable via SQL Server Configuration Manager)
+EXEC sp_configure filestream_access_level, 2;
+RECONFIGURE;
+
+ALTER DATABASE MyDB ADD FILEGROUP FileStreamGroup CONTAINS FILESTREAM;
+ALTER DATABASE MyDB ADD FILE (NAME = FSData, FILENAME = 'C:\FSData') TO FILEGROUP FileStreamGroup;
+
+CREATE TABLE dbo.Documents (
+    DocumentID UNIQUEIDENTIFIER ROWGUIDCOL NOT NULL UNIQUE DEFAULT NEWID(),
+    FileName NVARCHAR(260) NOT NULL,
+    FileData VARBINARY(MAX) FILESTREAM NULL
+);
+```
+
+Why not just a plain `VARBINARY(MAX)` column: FILESTREAM data bypasses the buffer pool and can be streamed via Win32 file APIs (`GET_FILESTREAM_TRANSACTION_CONTEXT` + `PathName()`), giving better throughput for very large files without bloating cache memory — while still living inside the database's transactional and backup boundary, unlike storing files purely on a file share. Worth raising proactively in a senior discussion: many teams today would choose Azure Blob Storage/S3 for the bytes and keep only a URL + metadata row in SQL Server instead, trading transactional file consistency for simpler ops and cheaper storage — "would you still reach for FILESTREAM on a new project" is a fair follow-up question to expect.
+
+### SQL Server Agent Jobs
+
+**SQL Server Agent** is the built-in scheduler; a **Job** is a unit of work made up of one or more **Steps** (T-SQL, SSIS package execution, PowerShell, CmdExec, replication tasks, etc.), driven by one or more **Schedules** (recurring, one-time, or startup/idle-triggered), with per-step failure handling (retry counts, success/failure branching to other steps), operator notifications on completion/failure, and a queryable run history (`msdb.dbo.sysjobhistory`).
+
+```sql
+EXEC msdb.dbo.sp_add_job @job_name = N'Nightly_Index_Maintenance';
+
+EXEC msdb.dbo.sp_add_jobstep
+    @job_name = N'Nightly_Index_Maintenance',
+    @step_name = N'Rebuild fragmented indexes',
+    @subsystem = N'TSQL',
+    @command = N'EXEC dbo.uspRebuildFragmentedIndexes;';
+
+EXEC msdb.dbo.sp_add_schedule
+    @schedule_name = N'Nightly_2AM',
+    @freq_type = 4,            -- daily
+    @active_start_time = 020000;
+
+EXEC msdb.dbo.sp_attach_schedule
+    @job_name = N'Nightly_Index_Maintenance',
+    @schedule_name = N'Nightly_2AM';
+
+EXEC msdb.dbo.sp_add_jobserver
+    @job_name = N'Nightly_Index_Maintenance';
+```
+
+Senior-relevant patterns: use Agent Jobs for maintenance windows (backups, index rebuild/reorg, statistics updates) and ETL/SSIS orchestration; always configure explicit failure notifications and a retry policy rather than "fire and forget"; and review job step T-SQL with the same rigor as application code — a silently failing nightly job is often the first, and only, early warning sign of a larger production issue.
+
+### Edition Differences: Express vs Enterprise
+
+| | Express | Standard | Enterprise |
+|---|---|---|---|
+| Cost | Free | Licensed (per-core) | Licensed (per-core, highest tier) |
+| Max database size | 10 GB | Very large (multi-TB+) | Very large (multi-TB+) |
+| Max buffer pool memory | Small, capped (single-digit GB, version-dependent) | Higher, still capped (double/triple-digit GB, version-dependent) | Bound only by OS |
+| SQL Server Agent | Not included | Included | Included |
+| Always On / HA | None (log shipping only) | Basic Availability Groups (limited secondaries) | Full Availability Groups (multiple readable secondaries, automatic failover) |
+| Advanced security | Basic | TDE (2019+), basic auditing | TDE, Always Encrypted with secure enclaves, advanced auditing |
+| Typical use | Dev/test, small embedded/desktop apps | Mid-size production OLTP | Large-scale, mission-critical, HA/DR-heavy workloads |
+
+*(Exact size/memory caps shift release to release — always verify the specific numbers against the SQL Server version you're deploying rather than quoting a memorized figure in an interview.)* The bigger senior-level point: since SQL Server 2016 SP1, many previously Enterprise-only **programmability** features (columnstore, table partitioning, Always Encrypted, Change Data Capture, and others) became available in Standard/Express with resource governance caps — but true **scale and HA** features (multiple AG secondaries, advanced auditing, online index operations in older versions) remain Enterprise-gated. Knowing this distinction is what separates a memorized feature list from a real "which edition would you deploy for X" architectural answer.
+
+### Azure Migration Paths
+
+Common routes for moving a SQL Server database to Azure, each suited to a different combination of downtime tolerance, size, and target platform:
+
+- **Azure Database Migration Service (DMS)**: supports both offline and near-zero-downtime *online* migrations (continuous sync until cutover) to Azure SQL Database, Azure SQL Managed Instance, or SQL Server on an Azure VM — the go-to choice when downtime must be minimized.
+- **BACPAC export/import**: packages schema + data into a single portable file; simple and scriptable, but an **offline** snapshot operation, so it's best suited to smaller databases or migrations where a maintenance window is acceptable.
+- **SQL Server Data Tools (SSDT) / DACPAC**: packages **schema only** as a versioned artifact for deployment and drift detection between environments — the right tool for schema/CI-CD, not bulk data movement.
+- **Data Migration Assistant (DMA)**: run *before* any of the above to assess compatibility issues and feature parity gaps against the target platform.
+
+```sql
+-- Export schema+data as a BACPAC (via SSMS "Export Data-tier Application" or sqlpackage.exe)
+-- sqlpackage /Action:Export /SourceServerName:MyServer /SourceDatabaseName:MyDB /TargetFile:MyDB.bacpac
+
+-- Import into Azure SQL Database
+-- sqlpackage /Action:Import /TargetServerName:myserver.database.windows.net /TargetDatabaseName:MyDB /SourceFile:MyDB.bacpac
+```
+
+Choosing the target matters as much as the tool: **Azure SQL Managed Instance** offers near-complete surface-area compatibility (SQL Agent, linked servers, CLR, cross-database queries) for a lift-and-shift with minimal rework, while **Azure SQL Database** (PaaS) is more restricted but fully managed with less operational overhead — a common senior interview framing is "what would break if I lifted this specific database to PaaS Azure SQL DB versus Managed Instance."
+
+### DBCC CHECKDB vs DBCC CHECKTABLE
+
+Both validate structural, logical, and physical integrity (page checksums, allocation consistency, index/data consistency) — the difference is scope:
+
+- **`DBCC CHECKDB`**: checks every object in the entire database. This is the standard, recommended regular integrity-check job (commonly scheduled nightly/weekly depending on database size and RPO tolerance).
+- **`DBCC CHECKTABLE`**: scopes the same set of checks to one table — useful for a fast, targeted re-check after a suspected issue or a repair, without paying the cost of scanning the whole database.
+
+```sql
+-- Whole-database check (read-only, no repair) -- safe to run regularly
+DBCC CHECKDB ('MyDB') WITH NO_INFOMSGS, ALL_ERRORMSGS;
+
+-- Single-table check -- faster, targeted
+DBCC CHECKTABLE ('dbo.Orders') WITH NO_INFOMSGS;
+
+-- Repair (last resort; requires single-user mode; can itself lose data)
+ALTER DATABASE MyDB SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+DBCC CHECKDB ('MyDB', REPAIR_ALLOW_DATA_LOSS);
+ALTER DATABASE MyDB SET MULTI_USER;
+```
+
+Senior framing: repair options (`REPAIR_ALLOW_DATA_LOSS`, `REPAIR_REBUILD`) are a last resort, not a first response — running a repair against corruption is itself a data-loss operation. The correct default reaction to a corruption alert is almost always "restore the affected object from the last known-good backup," with `CHECKDB`/`CHECKTABLE` used to confirm the scope of damage and verify the restore, not to "fix it in place" as a first move.
 
 ---
 
@@ -973,367 +1253,3 @@ SELECT * FROM sys.dm_db_index_usage_stats;                      -- index usage: 
 - Batch large DML; avoid single giant transactions on millions of rows.
 
 ## Common Pitfalls
-
-- Wrapping an indexed column in a function/expression in `WHERE` (breaks SARGability, forces a scan).
-- Assuming `TRUNCATE` can never be rolled back (it can, inside an explicit transaction — the real difference from DELETE is logging granularity).
-- Using `NOT IN` against a subquery that can contain `NULL` (silently returns zero rows).
-- Trusting a table variable's row estimate on pre-2019 compatibility levels (always estimated as 1 row without deferred compilation).
-- Assuming scalar UDFs are always slow — true pre-2019, often fixed by Scalar UDF Inlining on compat level 150+ for eligible functions.
-- Forgetting `LAST_VALUE()`'s default frame only looks back to the current row, not the whole partition.
-- Believing triggers fire per row — they fire per statement; `inserted`/`deleted` can hold many rows.
-- Over-indexing: every additional nonclustered index adds write cost (insert/update/delete must maintain it) — index for actual, observed query patterns.
-- Treating parameter sniffing as a bug to "fix once" rather than an ongoing trade-off to actively manage per query.
-- Ignoring `Key Lookup` operators in a plan — at volume they're often worse than a scan; add `INCLUDE` columns to make the index covering.
-- Running Profiler traces on production for extended periods — use Extended Events instead.
-- Forgetting that foreign keys don't auto-index the child column, leading to scans on every parent delete/update cascade check.
-
----
-
-## Sample Interview Q&A (Answered)
-
-**Q: What's the difference between Read Committed and RCSI, and why would you enable RCSI in an existing production system?**
-A: Default Read Committed uses short-lived shared locks — readers can block behind writers and vice versa. RCSI keeps the same isolation *semantics* (still allows non-repeatable reads, still calls itself "Read Committed") but implements it via row versioning instead of locking, so readers see the last-committed version per statement without blocking, and writers aren't blocked by readers. You'd enable it to eliminate reader/writer blocking in a busy OLTP system without having to touch application code (it's a database-level, transparent switch), at the cost of tempdb version-store overhead.
-
-**Q: Why might `ROW_NUMBER()`, `RANK()`, and `DENSE_RANK()` all return different results on the same data, and when would you choose each?**
-A: They differ on how ties in the `ORDER BY` are handled: `ROW_NUMBER()` gives every row a unique number regardless of ties (arbitrary order among ties) — use when you need a strictly unique sequence (e.g., de-duplication, paging). `RANK()` gives tied rows the same rank but skips subsequent numbers (1,2,2,4) — use when gaps should reflect the number of tied competitors. `DENSE_RANK()` gives tied rows the same rank with no gaps (1,2,2,3) — use for "distinct rank tiers" reporting (e.g., top 3 distinct price tiers, even if multiple products share a price).
-
-**Q: Explain what happens end-to-end when you run a query for the first time versus the second time (plan caching).**
-A: First execution: parse → bind/algebrize → optimizer generates and cost-compares candidate plans using statistics-based cardinality estimates → the chosen plan is stored in the plan cache keyed by a hash of the query text (and, for parameterized queries, the same cached plan can be reused across different parameter values — this is exactly where parameter sniffing originates) → plan executes, results returned. Second execution with the same query text/parameterization: SQL Server does a plan cache lookup and, if a valid cached plan is found (no recompile triggers like schema change, stats change beyond threshold, or `SET` option differences), reuses it directly, skipping the optimization step entirely — the main reason ad-hoc, non-parameterized SQL scattered across an app is expensive: each slightly different literal produces a different cache key and a fresh compile.
-
-**Q: A stored procedure runs fast in dev/QA but slow in production on the same query — what do you check first?**
-A: In order: (1) data volume/distribution differences — production has more rows or more skew than dev; (2) parameter sniffing — check if the cached plan was compiled against an atypical parameter value using Query Store or `sys.dm_exec_query_stats`; (3) statistics freshness — production may have stale stats after large loads if `AUTO_UPDATE_STATISTICS` hasn't caught up; (4) missing indexes present in one environment but not the other (schema drift); (5) compare actual execution plans side-by-side, focusing on estimated-vs-actual row count mismatches, which point straight at (2) or (3).
-
-**Q: What's the real difference between a CTE and a temp table, beyond "one is in-memory and one is on disk"?**
-A: A CTE is not a materialized object — it's macro-like query text substituted inline (mostly; recursive CTEs execute iteratively but non-recursive CTEs are typically just inlined by the optimizer, unless referenced multiple times where some versions may spool it). It has **no statistics of its own** and can't be indexed. A temp table (`#t`) is a real, physical table in tempdb with its own **statistics and indexes**, so the optimizer can make properly cardinality-aware decisions about it, and it persists across multiple statements/batches in the same session, letting you break a complex pipeline into indexed intermediate steps. Rule of thumb: CTE for one-shot readability/recursion; temp table when you need to reuse an intermediate result multiple times or need it indexed/statistics-backed for a large row count.
-
-### Practical Query Challenges (Fully Solved)
-
-The following bare prompts appeared unanswered in the original notes ("Level 1–10" practice list). Full solutions below.
-
-```sql
--- Q1: Employees earning more than average salary
-SELECT * FROM Employees
-WHERE Salary > (SELECT AVG(Salary) FROM Employees);
-
--- Q2: Second highest salary (three idiomatic approaches)
--- a) OFFSET/FETCH (simplest, SQL Server 2012+)
-SELECT DISTINCT Salary FROM Employees
-ORDER BY Salary DESC
-OFFSET 1 ROWS FETCH NEXT 1 ROWS ONLY;
--- b) DENSE_RANK (handles ties as "the second distinct salary value")
-SELECT Salary FROM (
-  SELECT Salary, DENSE_RANK() OVER (ORDER BY Salary DESC) AS rnk FROM Employees
-) t WHERE rnk = 2;
--- c) Correlated subquery (classic, slowest at scale, but common interview ask)
-SELECT DISTINCT Salary FROM Employees e1
-WHERE 1 = (SELECT COUNT(DISTINCT Salary) FROM Employees e2 WHERE e2.Salary > e1.Salary);
-
--- Q3: Top 5 highest paid employees
-SELECT TOP (5) * FROM Employees ORDER BY Salary DESC;
-
--- Q4: Employees joined in the last 6 months
-SELECT * FROM Employees WHERE HireDate >= DATEADD(MONTH, -6, CAST(GETDATE() AS DATE));
-
--- Q5: Count employees per department
-SELECT d.DeptName, COUNT(e.EmployeeID) AS EmpCount
-FROM Departments d
-LEFT JOIN Employees e ON e.DeptID = d.DeptID
-GROUP BY d.DeptName;
-
--- Q6: Departments with more than 5 employees
-SELECT d.DeptName, COUNT(e.EmployeeID) AS EmpCount
-FROM Departments d
-JOIN Employees e ON e.DeptID = d.DeptID
-GROUP BY d.DeptName
-HAVING COUNT(e.EmployeeID) > 5;
-
--- Q7: Duplicate employee names
-SELECT Name FROM Employees GROUP BY Name HAVING COUNT(*) > 1;
-
--- Q8: Employee name with department name
-SELECT e.Name, d.DeptName FROM Employees e JOIN Departments d ON e.DeptID = d.DeptID;
-
--- Q9: Departments with no employees
-SELECT d.* FROM Departments d
-LEFT JOIN Employees e ON e.DeptID = d.DeptID
-WHERE e.EmployeeID IS NULL;
-
--- Q10: Employees whose department does not exist (orphaned FK data / referential drift)
-SELECT e.* FROM Employees e
-LEFT JOIN Departments d ON e.DeptID = d.DeptID
-WHERE e.DeptID IS NOT NULL AND d.DeptID IS NULL;
-
--- Q11: Customers who never placed an order
-SELECT c.* FROM Customers c
-WHERE NOT EXISTS (SELECT 1 FROM Orders o WHERE o.CustomerID = c.CustomerID);
-
--- Q12: Orders with customer details
-SELECT o.*, c.CustomerName FROM Orders o INNER JOIN Customers c ON o.CustomerID = c.CustomerID;
-
--- Q13: Highest salary per department
-SELECT d.DeptName, MAX(e.Salary) AS MaxSalary
-FROM Departments d JOIN Employees e ON e.DeptID = d.DeptID
-GROUP BY d.DeptName;
-
--- Q14: Employee(s) having the highest salary in each department (ties included -- NOT just MAX)
-WITH Ranked AS (
-  SELECT *, RANK() OVER (PARTITION BY DeptID ORDER BY Salary DESC) AS rnk
-  FROM Employees
-)
-SELECT * FROM Ranked WHERE rnk = 1;   -- RANK (not ROW_NUMBER) so genuine ties both surface
-
--- Q15: Average salary per department
-SELECT DeptID, AVG(Salary) AS AvgSalary FROM Employees GROUP BY DeptID;
-
--- Q16: Departments where average salary exceeds 100000
-SELECT DeptID, AVG(Salary) AS AvgSalary FROM Employees
-GROUP BY DeptID HAVING AVG(Salary) > 100000;
-
--- Q17: Customer spending
-SELECT c.CustomerName, SUM(oi.Quantity * oi.UnitPrice) AS TotalSpent
-FROM Customers c
-JOIN Orders o ON o.CustomerID = c.CustomerID
-JOIN OrderItems oi ON oi.OrderID = o.OrderID
-GROUP BY c.CustomerName;
-
--- Q18: Top spending customer
-SELECT TOP (1) c.CustomerName, SUM(oi.Quantity * oi.UnitPrice) AS TotalSpent
-FROM Customers c
-JOIN Orders o ON o.CustomerID = c.CustomerID
-JOIN OrderItems oi ON oi.OrderID = o.OrderID
-GROUP BY c.CustomerName
-ORDER BY TotalSpent DESC;
-
--- Q19: Top spending customer per city (senior favorite -- PARTITION BY + RANK)
-WITH Spend AS (
-  SELECT c.City, c.CustomerName, SUM(oi.Quantity * oi.UnitPrice) AS TotalSpent
-  FROM Customers c
-  JOIN Orders o ON o.CustomerID = c.CustomerID
-  JOIN OrderItems oi ON oi.OrderID = o.OrderID
-  GROUP BY c.City, c.CustomerName
-),
-Ranked AS (
-  SELECT *, ROW_NUMBER() OVER (PARTITION BY City ORDER BY TotalSpent DESC) AS rn
-  FROM Spend
-)
-SELECT City, CustomerName, TotalSpent FROM Ranked WHERE rn = 1;
-
--- Q20: Row numbers by salary descending
-SELECT Name, Salary, ROW_NUMBER() OVER (ORDER BY Salary DESC) AS rn FROM Employees;
-
--- Q21/Q22: Rank / Dense rank employees by salary (see Window Functions section for RANK vs DENSE_RANK distinction)
-SELECT Name, Salary,
-  RANK() OVER (ORDER BY Salary DESC) AS rnk,
-  DENSE_RANK() OVER (ORDER BY Salary DESC) AS dense_rnk
-FROM Employees;
-
--- Q23: Second highest salary using window functions (see Q2b above)
-
--- Q24: Top 3 salaries in each department
-WITH Ranked AS (
-  SELECT *, DENSE_RANK() OVER (PARTITION BY DeptID ORDER BY Salary DESC) AS rnk
-  FROM Employees
-)
-SELECT * FROM Ranked WHERE rnk <= 3;
-
--- Q25: Highest paid employee in each department (single row per dept even on ties)
-WITH Ranked AS (
-  SELECT *, ROW_NUMBER() OVER (PARTITION BY DeptID ORDER BY Salary DESC) AS rn
-  FROM Employees
-)
-SELECT * FROM Ranked WHERE rn = 1;
-
--- Q26: Running salary total
-SELECT Name, Salary,
-  SUM(Salary) OVER (ORDER BY EmployeeID ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS RunningTotal
-FROM Employees;
-
--- Q27: Cumulative monthly revenue
-SELECT OrderMonth, SUM(Amount) OVER (ORDER BY OrderMonth ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS CumulativeRevenue
-FROM (
-  SELECT DATEFROMPARTS(YEAR(OrderDate), MONTH(OrderDate), 1) AS OrderMonth, SUM(Amount) AS Amount
-  FROM Orders GROUP BY DATEFROMPARTS(YEAR(OrderDate), MONTH(OrderDate), 1)
-) m;
-
--- Q28/Q29: Previous / next employee salary
-SELECT Name, Salary,
-  LAG(Salary)  OVER (ORDER BY EmployeeID) AS PrevSalary,
-  LEAD(Salary) OVER (ORDER BY EmployeeID) AS NextSalary
-FROM Employees;
-
--- Q30: Salary difference from previous employee
-SELECT Name, Salary,
-  Salary - LAG(Salary) OVER (ORDER BY EmployeeID) AS Difference
-FROM Employees;
-
--- Q31: Employees earning above department average
-SELECT e.* FROM Employees e
-WHERE e.Salary > (SELECT AVG(e2.Salary) FROM Employees e2 WHERE e2.DeptID = e.DeptID);
-
--- Q32: Duplicate employees using CTE
-WITH Dupes AS (
-  SELECT *, ROW_NUMBER() OVER (PARTITION BY Name, DeptID ORDER BY EmployeeID) AS rn
-  FROM Employees
-)
-SELECT * FROM Dupes WHERE rn > 1;
-
--- Q33: Top customer by revenue using CTE (see Q18/Q19 patterns)
-
--- Q34: Multi-CTE composition example
-WITH RevenueCTE AS (
-  SELECT CustomerID, SUM(Quantity * UnitPrice) AS Revenue
-  FROM Orders o JOIN OrderItems oi ON oi.OrderID = o.OrderID
-  GROUP BY CustomerID
-),
-RankingCTE AS (
-  SELECT *, RANK() OVER (ORDER BY Revenue DESC) AS rnk FROM RevenueCTE
-),
-FinalCTE AS (
-  SELECT * FROM RankingCTE WHERE rnk <= 10
-)
-SELECT c.CustomerName, f.Revenue, f.rnk
-FROM FinalCTE f JOIN Customers c ON c.CustomerID = f.CustomerID
-ORDER BY f.rnk;
-
--- Q35: Employee hierarchy (recursive CTE) -- returns all reports under a given manager
-WITH RecursiveCTE AS (
-  SELECT EmployeeID, Name, ManagerID, 0 AS Lvl
-  FROM Employees WHERE ManagerID IS NULL
-  UNION ALL
-  SELECT e.EmployeeID, e.Name, e.ManagerID, r.Lvl + 1
-  FROM Employees e JOIN RecursiveCTE r ON e.ManagerID = r.EmployeeID
-)
-SELECT * FROM RecursiveCTE ORDER BY Lvl;
-
--- Q36: Hierarchy level -- same recursive CTE already returns Lvl as 0,1,2,...
-
--- Q37: Reporting path as a string (recursive CTE building a path)
-WITH PathCTE AS (
-  SELECT EmployeeID, Name, ManagerID, CAST(Name AS NVARCHAR(4000)) AS Path
-  FROM Employees WHERE ManagerID IS NULL
-  UNION ALL
-  SELECT e.EmployeeID, e.Name, e.ManagerID, CAST(p.Path + ' > ' + e.Name AS NVARCHAR(4000))
-  FROM Employees e JOIN PathCTE p ON e.ManagerID = p.EmployeeID
-)
-SELECT Path FROM PathCTE;
-
--- Q38: Customers who ordered on consecutive days
-WITH Ordered AS (
-  SELECT CustomerID, OrderDate,
-    LAG(OrderDate) OVER (PARTITION BY CustomerID ORDER BY OrderDate) AS PrevDate
-  FROM Orders
-)
-SELECT * FROM Ordered WHERE DATEDIFF(DAY, PrevDate, OrderDate) = 1;
-
--- Q39: Longest gap between a customer's orders
-WITH Ordered AS (
-  SELECT CustomerID, OrderDate,
-    LAG(OrderDate) OVER (PARTITION BY CustomerID ORDER BY OrderDate) AS PrevDate
-  FROM Orders
-),
-Gaps AS (
-  SELECT CustomerID, DATEDIFF(DAY, PrevDate, OrderDate) AS GapDays
-  FROM Ordered WHERE PrevDate IS NOT NULL
-)
-SELECT CustomerID, MAX(GapDays) AS LongestGap FROM Gaps GROUP BY CustomerID;
-
--- Q40: Generate a calendar table for a month (recursive CTE)
-WITH Calendar AS (
-  SELECT CAST('2025-01-01' AS DATE) AS d
-  UNION ALL
-  SELECT DATEADD(DAY, 1, d) FROM Calendar WHERE d < '2025-01-31'
-)
-SELECT d FROM Calendar OPTION (MAXRECURSION 31);
--- Note: MAXRECURSION defaults to 100; must raise/override for longer ranges, 0 = unlimited (use cautiously)
-
--- Q41: Top 3 customers by revenue per year
-WITH Yearly AS (
-  SELECT YEAR(o.OrderDate) AS Yr, c.CustomerName, SUM(oi.Quantity * oi.UnitPrice) AS Revenue
-  FROM Orders o
-  JOIN Customers c ON c.CustomerID = o.CustomerID
-  JOIN OrderItems oi ON oi.OrderID = o.OrderID
-  GROUP BY YEAR(o.OrderDate), c.CustomerName
-),
-Ranked AS (
-  SELECT *, RANK() OVER (PARTITION BY Yr ORDER BY Revenue DESC) AS rnk FROM Yearly
-)
-SELECT * FROM Ranked WHERE rnk <= 3 ORDER BY Yr, rnk;
-
--- Q42: Employees whose salary increased vs the previous employee (by hire order, e.g.)
-SELECT * FROM (
-  SELECT *, Salary - LAG(Salary) OVER (ORDER BY HireDate) AS Delta FROM Employees
-) t WHERE Delta > 0;
-
--- Q43: Pivot order counts by month
-SELECT CustomerID, [1] AS Jan, [2] AS Feb, [3] AS Mar
-FROM (
-  SELECT CustomerID, MONTH(OrderDate) AS Mo FROM Orders
-) src
-PIVOT (COUNT(Mo) FOR Mo IN ([1],[2],[3])) AS pvt;
-
--- Q44: Unpivot monthly sales data
-SELECT CustomerID, Month, SalesAmount
-FROM MonthlySales
-UNPIVOT (SalesAmount FOR Month IN (Jan, Feb, Mar)) AS unpvt;
-
--- Q45: Find gaps in a numeric sequence (classic senior favorite)
-WITH Nums AS (SELECT n FROM (VALUES (1),(2),(3),(5),(7),(8),(10)) AS x(n)),
-Bounds AS (SELECT MIN(n) AS lo, MAX(n) AS hi FROM Nums),
-AllNums AS (
-  SELECT lo AS n FROM Bounds
-  UNION ALL
-  SELECT n + 1 FROM AllNums, Bounds WHERE n + 1 <= hi
-)
-SELECT a.n AS MissingNumber
-FROM AllNums a
-LEFT JOIN Nums nu ON a.n = nu.n
-WHERE nu.n IS NULL
-OPTION (MAXRECURSION 0);
-
--- Q46: Why "WHERE YEAR(OrderDate) = 2025" is slow -- see [new content] SARGability section:
--- wrapping the column in YEAR() defeats index seeks; SQL Server must evaluate YEAR() per row (scan).
-
--- Q47: SARGable rewrite
-SELECT * FROM Orders WHERE OrderDate >= '2025-01-01' AND OrderDate < '2026-01-01';
-
--- Q48: DELETE vs TRUNCATE vs DROP -- see dedicated table earlier in this guide.
-
--- Q49: Clustered vs Nonclustered -- when to use each
--- Clustered: one per table, defines physical row order; ideal on the column(s) most often used
---   for range scans/ORDER BY (e.g., a surrogate identity key or a date for time-series access).
--- Nonclustered: many per table, separate structure with a pointer (RID or clustering key) back
---   to the base row; ideal for selective lookups on non-key columns; add INCLUDE columns to
---   make it covering and avoid Key Lookups.
-
--- Q50: Execution plan challenge
--- SELECT * FROM Orders O JOIN Customers C ON O.CustomerId = C.Id WHERE O.Amount > 50000
--- Indexes to create:
---   1) Nonclustered index on Orders(Amount) [or Orders(Amount) INCLUDE (CustomerId) if Amount
---      is selective] to seek the filtered rows instead of scanning all Orders.
---   2) Index/PK on Customers(Id) (likely already the clustered PK) to support the join as a seek.
--- Expected operators: Index Seek on Orders.Amount predicate -> Nested Loops join (small filtered
--- outer set, indexed inner Customers.Id) -> Key Lookup on Orders if SELECT * needs columns
--- beyond the Amount index (which it will, since SELECT * pulls everything) -- a strong argument
--- for either accepting the Key Lookup (fine if the filtered row count is small) or adding a
--- covering index if this query runs very frequently at scale.
-```
-
----
-
-## Summary of Additions
-
-The following sections were added beyond the original notes, tagged **[new content]** in-place, because they are commonly probed at the senior/lead .NET interview level and were missing or only thinly covered in the source material:
-
-- **OLTP vs OLAP** — foundational framing for why workload separation and indexing strategy differ; interviewers expect this vocabulary.
-- **SARGability** — the single most common "why is this simple query slow" root cause and code-review finding; was implicit in scattered notes but never named or systematized.
-- **Index Seek vs Scan, Key Lookup, Covering Indexes** — the mechanics behind "add an index" advice; Key Lookup cost is a frequent senior-level trap question.
-- **Statistics & Cardinality Estimation** — explains *why* plans go bad, not just that they do; covers the CE version change and the ascending-key problem.
-- **Parameter Sniffing** — dedicated deep-dive with fixes ranked by trade-off; only mentioned in passing ("common in OLTP systems") in the source.
-- **RCSI vs Snapshot Isolation** — the source only listed "Snapshot" as one bullet in an isolation-levels list; this is one of the most-asked senior concurrency topics and needed full treatment (enable mechanics, conflict detection differences, tempdb cost).
-- **TempDB Contention & Configuration** — appeared only as a one-line "Scenario 5" symptom/fix; expanded with diagnostic queries and file configuration guidance.
-- **Query Store in Depth** — the source had a short definition; added force-plan syntax, capture-mode tuning, and regression-detection workflow.
-- **Columnstore Indexes for Analytics** — entirely absent from source notes; essential for any conversation about reporting/analytics workloads on modern SQL Server.
-- **Table Partitioning** — source had only 4 bullet points; expanded with partition switching, elimination, and the "manageability vs performance" misconception correction.
-- **Index Fragmentation & Maintenance** — fill factor and REBUILD/REORGANIZE thresholds were absent; added as a Performance Tuning section.
-
-**Contradiction flagged:** the source notes state in multiple places that TRUNCATE "cannot be rolled back" as an absolute rule, while also correctly noting elsewhere that DDL/DML inside an explicit transaction can be rolled back. This guide resolves it explicitly: TRUNCATE **is** rollback-capable inside an explicit transaction; the real, durable distinction from DELETE is *logging granularity* (page deallocation vs per-row logging), not transactional capability. No other substantive factual contradictions were found between the multiple duplicate/overlapping note sections (e.g., the three near-identical copies of `practice_views_updates.sql` content were de-duplicated into one).
