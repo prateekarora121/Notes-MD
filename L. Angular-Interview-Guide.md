@@ -973,8 +973,13 @@ Class-based `HttpInterceptor`:
 ```typescript
 @Injectable()
 export class AuthInterceptor implements HttpInterceptor {
+  // Inject a token source rather than reading storage directly — this keeps the
+  // interceptor testable and leaves the storage posture a separate decision.
+  constructor(private auth: TokenService) {}
+
   intercept(req: HttpRequest<any>, next: HttpHandler): Observable<HttpEvent<any>> {
-    const token = localStorage.getItem('token');
+    const token = this.auth.getAccessToken();
+    if (!token) { return next.handle(req); }   // don't send "Bearer null"
     const requestWithToken = req.clone({
       setHeaders: { Authorization: `Bearer ${token}` }
     });
@@ -982,6 +987,13 @@ export class AuthInterceptor implements HttpInterceptor {
   }
 }
 ```
+
+**Where does `TokenService` get the token?** That is the actual security decision, and the two postures are not equivalent:
+
+- **`localStorage`/`sessionStorage`** — simplest, extremely common in real code, but readable by any injected script, so any XSS becomes token theft. Defensible only for low-stakes apps.
+- **BFF + HttpOnly cookie** — the token never reaches browser JavaScript at all; the interceptor sends `withCredentials: true` instead of an `Authorization` header. More backend investment, far smaller blast radius. This is the defensible answer for anything enterprise-scale (see the BFF architecture section).
+
+Interview framing: don't present the `localStorage` version as best practice. State the trade-off explicitly and say which posture you'd pick for the app in question, and why.
 
 Registering it:
 
@@ -1934,7 +1946,7 @@ export class AuthGuard implements CanActivate {
 }
 ```
 
-**[new content] Note on localStorage-based tokens (contradiction flag):** earlier in the source notes, the `AuthInterceptor` example reads the token via `localStorage.getItem('token')` — this is extremely common in real-world code and not "wrong" per se, but it directly **contradicts** the more advanced security guidance elsewhere in the same notes (and in the enterprise BFF architecture section later) which explicitly states tokens should never be stored in `localStorage`/`sessionStorage` and should remain server-side. **Flag for the reader:** these are two different security postures — `localStorage` tokens are simpler but XSS-exposed; the BFF/HttpOnly-cookie pattern is more secure but requires backend investment. A senior candidate should recognize this trade-off explicitly rather than presenting the `localStorage` interceptor as best practice, and be able to articulate why the BFF pattern (see architecture section) is the more defensible answer for anything beyond a low-stakes app.
+**Note on token storage:** the `AuthInterceptor` example in the HttpClient section injects a `TokenService` rather than reading `localStorage` directly, precisely so that *where the token lives* stays a separate, explicit decision. The two postures are not equivalent: `localStorage`/`sessionStorage` is simplest and extremely common, but readable by any injected script, so any XSS becomes token theft — defensible only for low-stakes apps. The BFF + HttpOnly-cookie pattern keeps the token out of browser JavaScript entirely (the interceptor sends `withCredentials: true` instead of a bearer header), costing backend investment in exchange for a much smaller blast radius; this is the defensible answer at enterprise scale. A senior candidate should name the trade-off and commit to a posture for the app in question, rather than presenting the `localStorage` version as best practice.
 
 Brute-force mitigations: rate limiting on the API, CAPTCHA on login, account lockout — again primarily backend-enforced, but Angular is expected to surface the resulting UX (lockout messages, CAPTCHA widgets) correctly.
 
@@ -2293,7 +2305,7 @@ The following **[new content]** sections were added to close the gap between the
 13. **Hydration (Angular 16+) and Event Replay (Angular 17+)** — fixes the old "destructive rehydration" flicker/wasted-work problem in Angular Universal SSR; strong evidence of production SSR experience if discussed well.
 
 **Contradictions flagged inline (for your review):**
-- **Token storage:** the `AuthInterceptor` example (`localStorage.getItem('token')`) contradicts the explicit "tokens never stored in localStorage/sessionStorage" security guidance elsewhere in your notes and in the BFF architecture section. Both are real-world patterns, but they represent different security postures — flagged and explained under [Angular Security](#angular-security) rather than silently picking one.
+- **Token storage — RESOLVED.** The `AuthInterceptor` example previously read `localStorage.getItem('token')` directly, contradicting the "tokens never stored in localStorage/sessionStorage" guidance elsewhere and in the BFF architecture section. The example now injects a `TokenService`, so storage posture is an explicit decision rather than an implied default, and the `localStorage`-vs-BFF trade-off is stated at both sites (see [Angular Security](#angular-security)).
 - **`ng build --prod` vs `--configuration production`:** the source notes use both `ng build --prod` (older CLI syntax) and `ng build --configuration production` (current syntax) in different places. `--prod` is deprecated/removed in current CLI versions — use `--configuration production` (or the shorthand `-c production`) going forward; kept both in context since your notes used both, but flagging `--prod` as outdated.
 - No other substantive factual contradictions were found — most apparent duplication in the source (e.g., two `HttpInterceptor` examples, two `ViewChild` explanations, repeated lifecycle-hook lists) was straightforward repetition, which was de-duplicated rather than flagged as conflicting.
 

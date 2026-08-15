@@ -122,7 +122,7 @@ Senior interviews frequently want you to *size* a system, not just draw boxes. H
 4. Estimate bandwidth: `avg payload size × RPS`.
 5. Decide if a single DB/server can handle it, or if you need caching, replicas, sharding, or a CDN.
 
-Example: "500K DAU, each hitting the API 20x/day" → 10M requests/day → ~116 RPS average → ~350-500 RPS peak. A well-tuned Kestrel instance easily handles that; the bottleneck will be the database, which is exactly why caching/read-replicas (see below) become necessary, not optional.
+Example: "500K DAU, each hitting the API 20x/day" → 10M requests/day → 10M / 86,400s ≈ 116 RPS average → ~350 RPS at a 3x peak factor (~580 RPS if you size for 5x). A well-tuned Kestrel instance easily handles that; the bottleneck will be the database, which is exactly why caching/read-replicas (see below) become necessary, not optional.
 
 ---
 
