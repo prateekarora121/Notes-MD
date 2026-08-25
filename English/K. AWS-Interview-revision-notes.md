@@ -195,38 +195,41 @@ A: Faster 2nd time = warm start (environment reuse, not "cached logic"). No — 
 
 A: **ENI** is the network interface Lambda attaches inside a VPC to reach private resources (RDS, internal ALB) — adds cold-start overhead. **VPC Endpoint** (Gateway for S3/DynamoDB, Interface/PrivateLink for most others) lets a VPC-bound Lambda reach AWS services without NAT/internet — lower latency/cost, no public exposure. Rule: ENI only when you must reach private VPC resources; use Endpoints to avoid NAT once already in a VPC.
 
-### Lambda vs ECS vs EC2 vs Fargate
+### Lambda vs ECS vs Fargate
 
-**Q: How do you choose between Lambda, ECS/Fargate, and EC2?**
+**Q: How do you choose between Lambda, ECS on the EC2 launch type, and Fargate?**
 
-A: Decision is workload-shape-driven: event-driven/spiky/short-lived → **Lambda**; long-running/steady/container-based without needing OS access → **ECS/EKS on Fargate**; full OS control/legacy/GPU/stateful → **EC2**.
+A: Workload-shape-driven, and the real axis is **who owns the capacity**: event-driven/spiky/short-lived → **Lambda**; container-based *and* I need the host (GPU, custom AMI/kernel, daemons, Spot/RI tuning) → **ECS on the EC2 launch type**; container-based with no host requirement → **ECS/EKS on Fargate**. Note that ECS is the orchestrator and Fargate is a capacity provider for it — not a rival product.
 
 ```
-                      What is the workload shape?
-                                  |
-      +---------------------------+---------------------------+
-      |                           |                           |
- event-driven,            long-running, steady,        full OS control,
- spiky, short-lived       container-based              legacy, GPU, stateful
-      |                           |                           |
-      v                           v                           |
-   LAMBDA              Need OS / kernel access?                |
-                                  |                           |
-                      +-----------+-----------+                |
-                     yes                      no               |
-                      |                       |                |
-                      v                       v                v
-             EC2 + self-managed        ECS / EKS               EC2
-             containers or ASG         on FARGATE
+                  What is the workload shape?
+                              |
+        +---------------------+---------------------+
+        |                                           |
+ event-driven, spiky,                    long-running, steady,
+ short-lived (< 15 min)                  container-based
+        |                                           |
+        v                                           v
+     LAMBDA                        Do I need control of the host?
+                                   (GPU, custom kernel/AMI,
+                                    daemons, Spot/RI tuning)
+                                                |
+                                    +-----------+-----------+
+                                   yes                      no
+                                    |                       |
+                                    v                       v
+                          ECS on EC2 launch type    ECS / EKS on FARGATE
+                          (capacity is mine)        (capacity is AWS's)
 ```
 
 **Q: Compare cost, scaling speed, and IAM model across the three.**
 
 A:
 
-- **Cost inversion**: Lambda cheaper at low/spiky traffic; ECS/EC2 cheaper at steady high traffic (flat capacity billing vs per-request/duration).
-- **Scaling speed**: Lambda scales in seconds; ECS/Fargate task scaling is slower (image pull, boot); EC2 ASG is slowest (OS boot, storage attach, service start).
+- **Cost inversion**: Lambda cheapest at low/spiky traffic; Fargate in the middle (per task vCPU/GB-second while running); EC2 launch type cheapest at steady high density — you pay per instance-hour regardless of task count, and Spot/RI/Savings Plans apply.
+- **Scaling speed**: Lambda in seconds; Fargate per task (~30–60s for image pull + ENI attach); EC2 launch type slowest whenever the cluster itself must grow (instance boot, storage attach, register with the cluster).
 - **IAM**: Lambda uses one execution role; ECS tasks use a **task role** (app permissions) plus a separate **task execution role** (pulling images, writing logs) — conflating the two is a classic trap.
+- **Fargate's limits are the reason to stay on the EC2 launch type**: no privileged containers, no daemonsets, no GPU.
 
 ### Serverless & the S3 → Lambda Trigger Pattern
 

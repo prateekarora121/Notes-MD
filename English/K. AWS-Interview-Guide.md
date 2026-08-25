@@ -7,7 +7,6 @@
 ---
 
 ## Table of Contents
-
 1. [How to Use This Guide: Resume-Aligned Priority Map](#how-to-use-this-guide-resume-aligned-priority-map)
    - [Tier 1 — Must be bulletproof (explicitly claimed on my resume)](#tier-1--must-be-bulletproof-explicitly-claimed-on-my-resume)
    - [Tier 2 — Must reason about confidently, while being honest about hands-on gaps](#tier-2--must-reason-about-confidently-while-being-honest-about-hands-on-gaps)
@@ -20,16 +19,19 @@
 2. [Serverless & Lambda](#serverless--lambda)
    - [AWS Lambda Deep Dive](#aws-lambda-deep-dive)
    - [Lambda Concurrency Model](#lambda-concurrency-model)
-   - [Lambda vs ECS vs EC2 vs Fargate](#lambda-vs-ecs-vs-ec2-vs-fargate)
+   - [Lambda vs ECS vs Fargate](#lambda-vs-ecs-vs-fargate)
    - [Serverless & the S3 → Lambda Trigger Pattern](#serverless--the-s3--lambda-trigger-pattern)
+   - [Resume Follow-Ups — The "Scheduled Lambda Jobs, 99.9% Uptime" Bullet](#resume-follow-ups--the-scheduled-lambda-jobs-999-uptime-bullet)
 3. [DynamoDB](#dynamodb)
    - [DynamoDB Deep Dive](#dynamodb-deep-dive)
    - [DynamoDB Trick Questions](#dynamodb-trick-questions)
+   - [Resume Follow-Ups — The "DynamoDB-Backed Microservices" Bullet](#resume-follow-ups--the-dynamodb-backed-microservices-bullet)
 4. [IAM & Security](#iam--security)
    - [IAM Overview, Root Account & Shared Responsibility](#iam-overview-root-account--shared-responsibility)
    - [Users, Groups & Permissions](#users-groups--permissions)
    - [Hands-On: Users & Groups](#hands-on-users--groups)
-   - [Policy Types, Structure & Password Policy](#policy-types-structure--password-policy)
+   - [Policy Types & Structure](#policy-types--structure)
+   - [Password Policy](#password-policy)
    - [MFA (Multi-Factor Authentication)](#mfa-multi-factor-authentication)
    - [Access to AWS: Console, CLI, SDK & Access Keys](#access-to-aws-console-cli-sdk--access-keys)
    - [Hands-On: MFA & Access Keys](#hands-on-mfa--access-keys)
@@ -37,8 +39,8 @@
    - [Hands-On: IAM Roles](#hands-on-iam-roles)
    - [IAM Security Tools](#iam-security-tools)
    - [IAM Pitfalls](#iam-pitfalls)
-   - [[new content] Secrets Manager vs Parameter Store](#new-content-secrets-manager-vs-parameter-store)
-   - [[new content] Least Privilege & Permission Boundaries in Practice](#new-content-least-privilege--permission-boundaries-in-practice)
+   - [Secrets Manager vs Parameter Store](#secrets-manager-vs-parameter-store)
+   - [Least Privilege & Permission Boundaries in Practice](#least-privilege--permission-boundaries-in-practice)
    - [IAM Rapid-Fire Q&A](#iam-rapid-fire-qa)
 5. [Infrastructure as Code & CI/CD](#infrastructure-as-code--cicd)
    - [AWS CodeCommit](#aws-codecommit)
@@ -47,6 +49,7 @@
    - [CodePipeline/CodeBuild Trap Scenarios](#codepipelinecodebuild-trap-scenarios)
    - [[gaps] CloudFormation vs Terraform/CDKTF](#gaps-cloudformation-vs-terraformcdktf)
    - [Terraform/CDKTF in Practice — Depth Questions to Expect](#terraformcdktf-in-practice--depth-questions-to-expect)
+   - [Resume Follow-Ups — The Deployment Dashboard Bullet](#resume-follow-ups--the-deployment-dashboard-bullet)
 6. [S3](#s3)
    - [S3 Buckets & Objects](#s3-buckets--objects)
    - [S3 Bucket Policies & Access Control](#s3-bucket-policies--access-control)
@@ -57,7 +60,7 @@
    - [S3 Requester Pays](#s3-requester-pays)
    - [S3 Best Practices](#s3-best-practices)
    - [S3 Shared Responsibility Model](#s3-shared-responsibility-model)
-   - [[new content] S3 Storage Classes & Lifecycle Policies](#new-content-s3-storage-classes--lifecycle-policies)
+   - [S3 Storage Classes & Lifecycle Policies](#s3-storage-classes--lifecycle-policies)
    - [[gaps] S3 Lifecycle Rules in Practice — Real Patterns & Terraform](#gaps-s3-lifecycle-rules-in-practice--real-patterns--terraform)
    - [S3 Security: Encryption & Its Four Types](#s3-security-encryption--its-four-types)
    - [S3 CORS](#s3-cors)
@@ -78,7 +81,7 @@
    - [EC2 Purchasing Options — The Complete Set](#ec2-purchasing-options--the-complete-set)
    - [EC2 Shared Responsibility Model](#ec2-shared-responsibility-model)
    - [[gaps] EC2 Sizing, Pricing Decisions & CPU Credit Gotchas](#gaps-ec2-sizing-pricing-decisions--cpu-credit-gotchas)
-   - [[new content] EBS vs EFS vs S3](#new-content-ebs-vs-efs-vs-s3)
+   - [EBS vs EFS vs S3](#ebs-vs-efs-vs-s3)
    - [EBS Volumes](#ebs-volumes)
    - [EBS Volume Types](#ebs-volume-types)
    - [EBS Snapshots](#ebs-snapshots)
@@ -91,45 +94,15 @@
    - [EC2 Storage Shared Responsibility Model](#ec2-storage-shared-responsibility-model)
 8. [Observability & Monitoring](#observability--monitoring)
    - [CloudWatch Deep Dive](#cloudwatch-deep-dive)
-   - [[new content] CloudWatch vs X-Ray: Complementary, Not Competing](#new-content-cloudwatch-vs-x-ray-complementary-not-competing)
+   - [CloudWatch vs X-Ray: Complementary, Not Competing](#cloudwatch-vs-x-ray-complementary-not-competing)
    - [CloudTrail](#cloudtrail)
    - [AWS Health Dashboard](#aws-health-dashboard)
    - [Container Insights, the CloudWatch Agent & Proactive Monitoring](#container-insights-the-cloudwatch-agent--proactive-monitoring)
+   - [Resume Follow-Ups — Measuring the 99.9% Claim](#resume-follow-ups--measuring-the-999-claim)
 
 **PART II — Tier 2: Design-Level Confidence**
 
-9. [Containers: Docker, ECS, ECR & Fargate](#containers-docker-ecs-ecr--fargate)
-   - [AWS Fargate](#aws-fargate)
-   - [EC2 vs Fargate Cost & Trap Scenarios](#ec2-vs-fargate-cost--trap-scenarios)
-   - [Docker & Container Fundamentals](#docker--container-fundamentals)
-   - [ECS (Elastic Container Service)](#ecs-elastic-container-service)
-   - [ECR (Elastic Container Registry)](#ecr-elastic-container-registry)
-   - [Hands-On: ECS with Fargate](#hands-on-ecs-with-fargate)
-   - [[new content] ECS vs EKS vs Fargate vs Lambda for .NET Workloads](#new-content-ecs-vs-eks-vs-fargate-vs-lambda-for-net-workloads)
-   - [[gaps] Fargate/ECS/EKS Trade-offs — Reasoning Without Hands-On Time](#gaps-fargateecseks-trade-offs--reasoning-without-hands-on-time)
-   - [[new content] Deploying .NET to AWS: Elastic Beanstalk vs ECS vs Lambda Custom Runtime](#new-content-deploying-net-to-aws-elastic-beanstalk-vs-ecs-vs-lambda-custom-runtime)
-10. [Relational Databases, Caching & Analytics](#relational-databases-caching--analytics)
-   - [[new content] RDS Multi-AZ vs Read Replicas vs Aurora](#new-content-rds-multi-az-vs-read-replicas-vs-aurora)
-   - [[gaps] Multi-AZ vs Read Replica — The #1 Confused Pair](#gaps-multi-az-vs-read-replica--the-1-confused-pair)
-   - [Databases & Analytics Overview: Choosing the Right Store](#databases--analytics-overview-choosing-the-right-store)
-   - [Relational Databases & RDS — The Operational Surface](#relational-databases--rds--the-operational-surface)
-   - [Athena](#athena)
-   - [RDS Proxy](#rds-proxy)
-   - [Aurora Advanced Features](#aurora-advanced-features)
-   - [ElastiCache & Caching Patterns](#elasticache--caching-patterns)
-11. [Networking](#networking)
-   - [VPC, Subnets, NAT — Complete Model](#vpc-subnets-nat--complete-model)
-   - [[new content] VPC Reference Architecture](#new-content-vpc-reference-architecture)
-   - [[gaps] VPC/Subnet/NAT/SG Rapid-Fire Drill Sheet](#gaps-vpcsubnetnatsg-rapid-fire-drill-sheet)
-   - [VPC Flow Logs](#vpc-flow-logs)
-   - [VPC Peering](#vpc-peering)
-   - [Transit Gateway](#transit-gateway)
-   - [VPC Endpoints & PrivateLink](#vpc-endpoints--privatelink)
-   - [Hybrid Connectivity: Site-to-Site VPN & Direct Connect](#hybrid-connectivity-site-to-site-vpn--direct-connect)
-   - [Hands-On: VPC](#hands-on-vpc)
-   - [Route 53](#route-53)
-   - [API Gateway Auth & Integration Patterns](#api-gateway-auth--integration-patterns)
-12. [Load Balancing, Scalability & Auto Scaling](#load-balancing-scalability--auto-scaling)
+9. [Load Balancing, Scalability & Auto Scaling](#load-balancing-scalability--auto-scaling)
    - [Scalability, High Availability, Elasticity & Agility](#scalability-high-availability-elasticity--agility)
    - [ALB vs API Gateway vs ELB (NLB/GWLB/CLB)](#alb-vs-api-gateway-vs-elb-nlbgwlbclb)
    - [ELB Deep-Dive: Cross-Zone Load Balancing, 504 Timeouts & Shield DDoS Protection](#elb-deep-dive-cross-zone-load-balancing-504-timeouts--shield-ddos-protection)
@@ -139,22 +112,38 @@
    - [Auto Scaling Groups (ASG)](#auto-scaling-groups-asg)
    - [Scalability Best Practices](#scalability-best-practices)
    - [Scalability & Load Balancing Shared Responsibility Model](#scalability--load-balancing-shared-responsibility-model)
-13. [Messaging, Streaming & Decoupling](#messaging-streaming--decoupling)
-   - [SQS & SNS Fundamentals](#sqs--sns-fundamentals)
-   - [CQRS with SNS/SQS in .NET](#cqrs-with-snssqs-in-net)
-   - [CQRS + SNS/SQS Interview Pitfalls](#cqrs--snssqs-interview-pitfalls)
-   - [[new content] EventBridge Deep Dive](#new-content-eventbridge-deep-dive)
-   - [[new content] Event-Driven Architecture Reference Flow](#new-content-event-driven-architecture-reference-flow)
-   - [Amazon Kinesis](#amazon-kinesis)
-   - [Step Functions: Orchestration vs Choreography](#step-functions-orchestration-vs-choreography)
-   - [Amazon MQ](#amazon-mq)
-14. [Global Edge Services](#global-edge-services)
-   - [CloudFront (CDN)](#cloudfront-cdn)
-   - [AWS Global Accelerator](#aws-global-accelerator)
-   - [CloudFront vs Global Accelerator](#cloudfront-vs-global-accelerator)
-   - [Local Zones, Outposts & Wavelength](#local-zones-outposts--wavelength)
-   - [Hands-On: CloudFront & Global Accelerator](#hands-on-cloudfront--global-accelerator)
-15. [Security Services](#security-services)
+10. [Containers: Docker, ECS, ECR & Fargate](#containers-docker-ecs-ecr--fargate)
+   - [AWS Fargate](#aws-fargate)
+   - [EC2 vs Fargate Cost & Trap Scenarios](#ec2-vs-fargate-cost--trap-scenarios)
+   - [Docker & Container Fundamentals](#docker--container-fundamentals)
+   - [ECS (Elastic Container Service)](#ecs-elastic-container-service)
+   - [ECR (Elastic Container Registry)](#ecr-elastic-container-registry)
+   - [Hands-On: ECS with Fargate](#hands-on-ecs-with-fargate)
+   - [ECS vs EKS vs Fargate vs Lambda for .NET Workloads](#ecs-vs-eks-vs-fargate-vs-lambda-for-net-workloads)
+   - [[gaps] Fargate/ECS/EKS Trade-offs — Reasoning Without Hands-On Time](#gaps-fargateecseks-trade-offs--reasoning-without-hands-on-time)
+   - [Deploying .NET to AWS: Elastic Beanstalk vs ECS vs Lambda Custom Runtime](#deploying-net-to-aws-elastic-beanstalk-vs-ecs-vs-lambda-custom-runtime)
+11. [Relational Databases, Caching & Analytics](#relational-databases-caching--analytics)
+   - [RDS Multi-AZ vs Read Replicas vs Aurora](#rds-multi-az-vs-read-replicas-vs-aurora)
+   - [[gaps] Multi-AZ vs Read Replica — The #1 Confused Pair](#gaps-multi-az-vs-read-replica--the-1-confused-pair)
+   - [Databases & Analytics Overview: Choosing the Right Store](#databases--analytics-overview-choosing-the-right-store)
+   - [Relational Databases & RDS — The Operational Surface](#relational-databases--rds--the-operational-surface)
+   - [Athena](#athena)
+   - [RDS Proxy](#rds-proxy)
+   - [Aurora Advanced Features](#aurora-advanced-features)
+   - [ElastiCache & Caching Patterns](#elasticache--caching-patterns)
+12. [Networking](#networking)
+   - [VPC, Subnets, NAT — Complete Model](#vpc-subnets-nat--complete-model)
+   - [VPC Reference Architecture](#vpc-reference-architecture)
+   - [[gaps] VPC/Subnet/NAT/SG Rapid-Fire Drill Sheet](#gaps-vpcsubnetnatsg-rapid-fire-drill-sheet)
+   - [VPC Flow Logs](#vpc-flow-logs)
+   - [VPC Peering](#vpc-peering)
+   - [Transit Gateway](#transit-gateway)
+   - [VPC Endpoints & PrivateLink](#vpc-endpoints--privatelink)
+   - [Hybrid Connectivity: Site-to-Site VPN & Direct Connect](#hybrid-connectivity-site-to-site-vpn--direct-connect)
+   - [Hands-On: VPC](#hands-on-vpc)
+   - [Route 53](#route-53)
+   - [API Gateway Auth & Integration Patterns](#api-gateway-auth--integration-patterns)
+13. [Security Services](#security-services)
    - [Overview: Which Service Answers Which Question](#overview-which-service-answers-which-question)
    - [DDoS Protection: Shield & WAF](#ddos-protection-shield--waf)
    - [AWS Network Firewall](#aws-network-firewall)
@@ -168,6 +157,21 @@
    - [AWS Config](#aws-config)
    - [Security Hub & Detective](#security-hub--detective)
    - [Defence in Depth — The Summary Answer](#defence-in-depth--the-summary-answer)
+14. [Messaging, Streaming & Decoupling](#messaging-streaming--decoupling)
+   - [SQS & SNS Fundamentals](#sqs--sns-fundamentals)
+   - [CQRS with SNS/SQS in .NET](#cqrs-with-snssqs-in-net)
+   - [CQRS + SNS/SQS Interview Pitfalls](#cqrs--snssqs-interview-pitfalls)
+   - [EventBridge Deep Dive](#eventbridge-deep-dive)
+   - [Event-Driven Architecture Reference Flow](#event-driven-architecture-reference-flow)
+   - [Amazon Kinesis](#amazon-kinesis)
+   - [Step Functions: Orchestration vs Choreography](#step-functions-orchestration-vs-choreography)
+   - [Amazon MQ](#amazon-mq)
+15. [Global Edge Services](#global-edge-services)
+   - [CloudFront (CDN)](#cloudfront-cdn)
+   - [AWS Global Accelerator](#aws-global-accelerator)
+   - [CloudFront vs Global Accelerator](#cloudfront-vs-global-accelerator)
+   - [Local Zones, Outposts & Wavelength](#local-zones-outposts--wavelength)
+   - [Hands-On: CloudFront & Global Accelerator](#hands-on-cloudfront--global-accelerator)
 
 **PART III — Tier 3: Breadth — Recognise and Place**
 
@@ -184,16 +188,16 @@
    - [AWS Support Plans](#aws-support-plans)
    - [Free Tier, Pricing & Estimating Cost](#free-tier-pricing--estimating-cost)
 17. [Cost & Performance](#cost--performance)
-   - [[new content] Cost Optimization: Savings Plans, Reserved, Spot](#new-content-cost-optimization-savings-plans-reserved-spot)
+   - [Cost Optimization: Savings Plans, Reserved, Spot](#cost-optimization-savings-plans-reserved-spot)
 18. [Migration & Data Transfer](#migration--data-transfer)
    - [The 7 Rs — Migration Strategies](#the-7-rs--migration-strategies)
    - [Database Migration Service (DMS)](#database-migration-service-dms)
    - [Snow Family](#snow-family)
    - [Storage Gateway, DataSync & Transfer Family](#storage-gateway-datasync--transfer-family)
 19. [Well-Architected & Resilience](#well-architected--resilience)
-   - [[new content] AWS Well-Architected Framework — 6 Pillars](#new-content-aws-well-architected-framework--6-pillars)
+   - [AWS Well-Architected Framework — 6 Pillars](#aws-well-architected-framework--6-pillars)
    - [[gaps] Well-Architected 6 Pillars — Rapid Recall Version](#gaps-well-architected-6-pillars--rapid-recall-version)
-   - [[new content] Disaster Recovery Strategies](#new-content-disaster-recovery-strategies)
+   - [Disaster Recovery Strategies](#disaster-recovery-strategies)
    - [Testing Resilience: Fault Injection Simulator & Resilience Hub](#testing-resilience-fault-injection-simulator--resilience-hub)
 
 **PART IV — Cross-Cutting Reference**
@@ -210,6 +214,8 @@
    - [Resume-alignment content added](#resume-alignment-content-added)
    - [Remaining service gaps closed](#remaining-service-gaps-closed)
    - [Contradictions Flagged During Consolidation](#contradictions-flagged-during-consolidation)
+
+---
 
 ## How to Use This Guide: Resume-Aligned Priority Map
 
@@ -263,6 +269,8 @@ My resume shows real Azure delivery (Cosmos DB, Azure Blob Storage at EY) plus A
 
 Each resume bullet invites a specific technical drill-down. These are the ones where a vague answer would undercut the claim.
 
+Each bullet below is also repeated at the end of its own topic section, so a revision pass through Lambda, DynamoDB, IaC, or Observability ends on the resume question that section has to answer: [Lambda](#resume-follow-ups--the-scheduled-lambda-jobs-999-uptime-bullet) · [DynamoDB](#resume-follow-ups--the-dynamodb-backed-microservices-bullet) · [Deployment Dashboard](#resume-follow-ups--the-deployment-dashboard-bullet) · [Measuring 99.9%](#resume-follow-ups--measuring-the-999-claim)
+
 **Bullet: "Build scheduled AWS Lambda jobs for automated log maintenance and health checks, sustaining 99.9% uptime across 12 platform services."**
 
 Expect: *how are they scheduled? what does "log maintenance" mean? what does a health check actually check? how does that produce 99.9%?*
@@ -271,6 +279,16 @@ Expect: *how are they scheduled? what does "log maintenance" mean? what does a h
 - **Log maintenance** — the concrete levers are **CloudWatch Logs retention policies** (log groups default to **Never Expire**, which is a silent, unbounded cost leak — setting retention is often the single biggest CloudWatch saving), **metric filters** to turn log patterns into alarmable metrics, **subscription filters** to stream logs onward, and **export to S3** with lifecycle rules to Glacier for anything needing long retention cheaply.
 - **Health checks** — be precise about the layer: a Lambda probing service endpoints and publishing a **custom CloudWatch metric** (`PutMetricData`, or cheaper via **EMF**) is one design; **CloudWatch Synthetics canaries** are the managed version of the same idea; **Route 53 health checks** and **ALB target-group health checks** operate at DNS and load-balancer level respectively. Naming which one and why shows the distinction is understood.
 - **Justifying 99.9%** — that's an error budget of roughly **43 minutes of downtime per month**. The credible answer ties the number to measurement: alarms on availability/error-rate metrics (via **Metric Math**, not raw counts), composite alarms to cut noise, SNS to on-call, and a dashboard per service. If asked "how did you *know* it was 99.9%?", the honest answer is which metric was measured over what window — not a marketing figure.
+
+  **Scripted answer — *"how did you know it was 99.9%?"*** Deliver it as a measurement, not a feeling — denominator, definition of success, then the actual arithmetic:
+
+  > "It's a measured number, not a guess. **Denominator:** our flow took roughly 420,000 deal-export requests a month. **Definition of success:** the payload reached the downstream DMS via DataPower and came back `200 OK` with a valid ack inside 30 seconds — everything else counted as a failure, including 5xx, timeouts, and malformed-payload rejects. **The arithmetic:** that month `total = 421,538` and `failed = 388`, so `(421538 − 388) / 421538 = 99.908%` — that's why I say 99.9%; it's the number those 388 failures produce.
+  >
+  > And we **managed** against it: 99.9% means only ~43 minutes of downtime allowed per month (30 × 24 × 60 × 0.001 = 43.2 min). We tracked the error budget, and in any month that burned more than 50% of it, we held feature releases and did reliability work first.
+  >
+  > One clarification: that's **observed** availability, not a contractual SLA. Our committed SLA was 99.5% and we delivered better than it. It's also our service only — end-to-end, including the dealer's own DMS, it sat closer to 99.5%, because a number of dealer systems go down overnight for maintenance."
+
+  Those last two distinctions — *observed vs committed*, and *our service vs end-to-end* — are the real signal: they show the number was owned rather than over-claimed.
 - Likely trap: *"what happens if the health-check Lambda itself fails?"* → the monitor needs monitoring: alarm on the function's `Errors`/`Throttles` **and** on **missing data** (`treat-missing-data: breaching`), because a monitor that stops running silently looks identical to "everything is fine."
 
 **Bullet: "Deployment Dashboard UI integrating GitHub Actions with CDKTF/Terraform for AWS infrastructure provisioning… cutting manual deployment intervention by 40% and release cycle from 5 days to 3."**
@@ -298,6 +316,8 @@ That structure — concrete services, a measurable outcome, then an unprompted h
 # PART I — Tier 1: Resume-Claimed Core
 
 > **Bulletproof required.** Every topic in this part is explicitly named on my resume (Lambda, DynamoDB, EC2, S3, Terraform/CDKTF, GitHub Actions) or unavoidable in using them (IAM, CloudWatch). Interviewers drill hardest on claimed skills, so these sections get revised first and most often.
+
+---
 
 ## Serverless & Lambda
 
@@ -354,6 +374,18 @@ That structure — concrete services, a measurable outcome, then an unprompted h
 2. **INVOKE:** handler runs with event + context; must finish inside configured timeout (max 15 min).
 3. **FREEZE (warm reuse):** environment frozen after response; globals, connections, `/tmp` persist — this is why warm invocations are 1–10ms.
 4. **SHUTDOWN:** AWS reclaims idle/outdated environments. No shutdown hook — state is lost, not rolled back.
+
+**INIT decomposed: "runtime bootstrap" vs "static initializers"** — the two halves of step 1: one is the platform's, one is mine.
+
+| Step | What happens | Owner |
+|---|---|---|
+| Micro-VM | Firecracker VM created, deployment package downloaded and mounted | AWS |
+| Runtime load | For .NET: **CoreCLR** starts — GC heap reserved, thread pool spun up, JIT initialised, `AssemblyLoadContext.Default` created | .NET |
+| Runtime client | `Amazon.Lambda.RuntimeSupport` begins polling the **Runtime API** (`/runtime/invocation/next`) — this loop is what makes a process a Lambda | AWS runtime |
+| Assembly load | My DLL loaded, handler type and method resolved by reflection (unless Native AOT) | .NET |
+| **Static initializers** | My `static` fields and static constructors — the CLR runs them **once per type per load context**, thread-safely, before first access. Everything outside the handler is paid here; everything inside is paid per invocation | Mine |
+
+**One-line answer:** "Runtime bootstrap is the platform's half of INIT — micro-VM, CoreCLR, JIT, the runtime client's poll loop — and it's why .NET cold starts cost 300–1500ms where Node costs 50–200. Static initializers are my half: the CLR runs them once per type per load context, thread-safely, before first access, so anything outside the handler is paid once per environment and reused on warm invokes. The trap is that a static initializer that throws poisons the type for the entire life of that environment."
 
 **Cold start vs warm start**
 - Cold: Java/.NET (JIT) → 300–1500ms; Node/Python → 50–200ms; **.NET Native AOT** → 50–100ms (huge win over JIT-based .NET).
@@ -450,43 +482,48 @@ Example: 500 msgs/sec × 1.2s duration ≈ 600 concurrency (before safety factor
 
 ---
 
-### Lambda vs ECS vs EC2 vs Fargate
+### Lambda vs ECS vs Fargate
 
 ```
-                      What is the workload shape?
-                                  |
-      +---------------------------+---------------------------+
-      |                           |                           |
- event-driven,            long-running, steady,        full OS control,
- spiky, short-lived       container-based              legacy, GPU, stateful
-      |                           |                           |
-      v                           v                           |
-   LAMBDA              Need OS / kernel access?                |
-                                  |                           |
-                      +-----------+-----------+                |
-                     yes                      no               |
-                      |                       |                |
-                      v                       v                v
-             EC2 + self-managed        ECS / EKS               EC2
-             containers or ASG         on FARGATE
+                  What is the workload shape?
+                              |
+        +---------------------+---------------------+
+        |                                           |
+ event-driven, spiky,                    long-running, steady,
+ short-lived (< 15 min)                  container-based
+        |                                           |
+        v                                           v
+     LAMBDA                        Do I need control of the host?
+                                   (GPU, custom kernel/AMI,
+                                    daemons, Spot/RI tuning)
+                                                |
+                                    +-----------+-----------+
+                                   yes                      no
+                                    |                       |
+                                    v                       v
+                          ECS on EC2 launch type    ECS / EKS on FARGATE
+                          (capacity is mine)        (capacity is AWS's)
 ```
 
-| Dimension | Lambda | ECS/EKS (Fargate) | EC2 |
+| Dimension | Lambda | ECS on EC2 launch type | ECS/EKS on Fargate |
 |---|---|---|---|
-| Server mgmt | None | None (Fargate) | You |
+| Unit of deployment | Function (zip or image) | Container task on my instances | Container task, no instances |
+| Capacity management | None | Mine — ASG, AMIs, patching, bin-packing | None (AWS) |
 | Max run time | 15 min | Unbounded | Unbounded |
-| Cold start | Yes (ms–s) | Minimal (containers stay up) | N/A once running |
-| Scaling | Automatic, per-request | Service auto-scaling policies | ASG, manual or policy-based |
-| Pricing | Per invocation + duration | Per vCPU/GB-hour while running | Per instance-hour regardless of load |
-| Best for | Spiky/event-driven, glue code | Predictable microservices, long tasks | Legacy, stateful, custom kernel/GPU |
-| Control over runtime | Minimal | Container-level | Full |
+| Start-up cost | Cold start (ms–s) | None once instances are warm; slow when the cluster must grow | Task start ~30–60s (image pull + ENI attach) |
+| Scaling speed | Seconds, per request | Slowest — a new instance must boot and join the cluster | Middle — per task, no instance boot |
+| Pricing | Per invocation + GB-second | Per instance-hour regardless of task density; Spot/RI/Savings Plans apply | Per task vCPU/GB-second while running |
+| Host access | None | Full — SSH, daemons, GPU, custom kernel | None — no host, no privileged mode, no daemonsets, no GPU |
+| Best for | Spiky/event-driven, glue code | GPU, custom AMI, high steady density, tight cost tuning | Predictable microservices without capacity ops |
 
 **Key senior talking points**
-- Lambda "optimizes for speed, scale, minimal ops"; ECS/EC2 "optimize for control, predictability, long-running work." The right choice is workload-shape-driven, not preference-driven.
-- Both Lambda and ECS/Fargate can be triggered by/consume from SQS.
-- Lambda scales in seconds; ECS/Fargate task scaling takes longer (container pull, boot); EC2 ASG scaling is the slowest (OS boot, storage attach, service start).
-- Cost inversion: Lambda cheaper at low/spiky traffic; ECS/EC2 cheaper at steady high traffic due to per-request/duration billing vs flat capacity billing.
-- IAM model differs: Lambda uses an *execution role*; ECS tasks use a *task role* (and a separate *task execution role* for pulling images/writing logs) — a common interview trap is conflating the two ECS roles.
+- **ECS is the orchestrator; Fargate is a capacity provider for it** (and for EKS) — they are not competing products. The real comparison is ECS *on the EC2 launch type* vs ECS *on Fargate*, and treating "ECS vs Fargate" as two rival products is a common slip.
+- **The deciding axis is who owns the capacity** — "capacity" meaning the actual EC2 instances the containers run on. On Lambda there is no host I can see at all; on Fargate a host exists but it is AWS's; on the EC2 launch type the instances sit in my own VPC and ASG, where I can SSH to them. Owning them is what makes GPU instance types, a custom or hardened AMI, per-host agents (ECS `DAEMON` strategy, EKS DaemonSets) and bin-packing with Spot/RI pricing possible **at all** — none of those are choices Fargate exposes. The price of owning them is AMI patching, slower scaling, and paying for idle instances.
+- Lambda "optimizes for speed, scale, minimal ops"; containers "optimize for control, predictability, long-running work." The right choice is workload-shape-driven, not preference-driven.
+- Both Lambda and ECS/Fargate can be triggered by / consume from SQS.
+- **Cost inversion:** Lambda is cheapest at low/spiky traffic, Fargate sits in the middle, and the EC2 launch type wins at steady high density — you pay for instances rather than tasks, and can layer Spot and Savings Plans on top.
+- **Scaling speed ranks the same way capacity does:** Lambda in seconds, Fargate per task, EC2 launch type slowest because a new instance must boot, attach storage, and register with the cluster.
+- **IAM differs:** Lambda uses an *execution role*; ECS tasks use a *task role* (app permissions) plus a separate *task execution role* (pulling images, writing logs) — conflating the two ECS roles is a classic trap.
 
 ---
 
@@ -517,7 +554,41 @@ Example: 500 msgs/sec × 1.2s duration ≈ 600 concurrency (before safety factor
 - **❗ Infinite recursion.** If the function writes its output **back into the same bucket** under a path the trigger still matches, each write fires the function again — an unbounded invocation loop with a matching bill. Fix by writing to a **different bucket**, or by using a prefix filter that cannot match the output (`uploads/` in, `processed/` out). AWS now has recursive-invocation *detection* that halts the loop, but the architecture fix is yours.
 - **At-least-once delivery.** S3 event notifications can be delivered **more than once** and occasionally out of order, so the handler must be **idempotent** — key the work on the object key + ETag/version ID, and make re-processing harmless.
 
-**When to route through EventBridge instead:** enabling **EventBridge notifications** on the bucket gives you content-based filtering, **multiple targets** for one event, retries with a DLQ, and archive/replay — versus S3's one-destination-per-event-type native notifications. For anything beyond a single simple trigger, EventBridge is the better answer (see [EventBridge Deep Dive](#new-content-eventbridge-deep-dive)).
+**When to route through EventBridge instead:** enabling **EventBridge notifications** on the bucket gives you content-based filtering, **multiple targets** for one event, retries with a DLQ, and archive/replay — versus S3's one-destination-per-event-type native notifications. For anything beyond a single simple trigger, EventBridge is the better answer (see [EventBridge Deep Dive](#eventbridge-deep-dive)).
+
+### Resume Follow-Ups — The "Scheduled Lambda Jobs, 99.9% Uptime" Bullet
+
+> *"Build scheduled AWS Lambda jobs for automated log maintenance and health checks, sustaining 99.9% uptime across 12 platform services."*
+
+Expect: *how are they scheduled? what does a health check actually check? how does that produce 99.9%?* The consolidated list of every resume follow-up is in [Resume Deep-Dives](#resume-deep-dives--the-follow-ups-i-should-expect); these are the Lambda-specific parts.
+
+- **Scheduling** — **EventBridge scheduled rules** (`cron(0 2 * * ? *)` / `rate(5 minutes)`), or **EventBridge Scheduler** for one-time schedules, time zones, and built-in retry/DLQ. Say EventBridge, not "CloudWatch Events" — same service, current name.
+- **The health-check function itself** — a Lambda probing service endpoints and publishing a **custom CloudWatch metric** (`PutMetricData`, or cheaper via **EMF**). Be able to place it against the managed alternatives: **Synthetics canaries** (same idea, managed), **Route 53 health checks** (DNS layer), **ALB target-group checks** (load-balancer layer).
+- **12 functions vs one function with 12 schedules** — either is defensible, but have a reason: blast radius and per-service IAM scoping on one side, fewer cold starts and a single deploy artifact on the other.
+- **Trap: *"what if the health-check Lambda itself fails?"*** → the monitor needs monitoring. Alarm on the function's `Errors`/`Throttles` **and** on **missing data** (`treat-missing-data: breaching`), because a monitor that silently stops running looks identical to "everything is fine."
+- **Justifying the 99.9%** — that's an error budget of roughly **43 minutes of downtime per month** (`30 × 24 × 60 × 0.001`, where `0.001` is the `1 − SLA` failure fraction). The number has to come from a measurement, not a feeling:
+
+  > "It's a measured number, not a guess. **Denominator:** our flow took roughly 420,000 deal-export requests a month. **Definition of success:** the payload reached the downstream DMS and came back `200 OK` with a valid ack inside 30 seconds — everything else counted as a failure, including 5xx, timeouts, and malformed-payload rejects. **The arithmetic:** that month `total = 421,538` and `failed = 388`, so `(421538 − 388) / 421538 = 99.908%` — that's why I say 99.9%.
+  >
+  > And we managed against it: in any month that burned more than 50% of the error budget, we held feature releases and did reliability work first. One clarification — that's **observed** availability, not a contractual SLA; our committed SLA was 99.5% and we delivered better than it. And it's our service only. End-to-end, including the dealer's own DMS, it sat closer to 99.5%, because a number of dealer systems go down overnight for maintenance."
+
+  *Observed vs committed* and *our service vs end-to-end* are the real signal — they show the number was owned rather than over-claimed. The instrumentation that produces it lives in [Measuring the 99.9% Claim](#resume-follow-ups--measuring-the-999-claim).
+
+**Disaster Recovery — Lambda & Serverless**
+
+| | |
+|---|---|
+| **What's actually at risk** | Nothing durable lives *in* Lambda — code is in Git, config in IaC. What you actually lose is **in-flight events** and the event-source wiring |
+| **Backup mechanism** | Git + built artifact in S3/ECR; **versions and aliases** are the rollback mechanism; **DLQ / on-failure destination** is the only backup of the events themselves |
+| **Realistic RPO / RTO** | Code RPO ~0 (Git). RTO minutes — an IaC apply. Event RPO = whatever the DLQ caught |
+
+**Recovery runbook:**
+1. **Bad deploy:** don't redeploy — repoint the alias at the previous version. `aws lambda update-alias --name prod --function-version 41`. Instant, and it's why you deploy through an alias rather than `$LATEST`.
+2. **Regional failure:** `terraform apply` the same module against the DR region, then recreate event source mappings (`aws lambda create-event-source-mapping`) — ESMs are regional and are *not* part of the function.
+3. **Re-drive lost events:** SQS DLQ has native redrive (`aws sqs start-message-move-task`); for an async DLQ, a small re-invoke consumer.
+4. Reset **provisioned concurrency** in the DR region — it does not travel with the function and cold starts on a failover surge are what actually breaks the RTO.
+
+⚠️ **The gotcha:** **without a DLQ configured beforehand, events lost during an outage are gone with no record** — Lambda retries twice on async and then drops. And a DynamoDB/Kinesis stream trigger has only **24 hours** of retention: an outage longer than that loses change events *permanently*, no matter how good your table backups are.
 
 ---
 
@@ -544,14 +615,62 @@ Example: 500 msgs/sec × 1.2s duration ≈ 600 concurrency (before safety factor
 | Sorted views | SK encodes priority/rank for deterministic ordering |
 
 **GSI vs LSI**
+
+The base table can only be queried by its PK, so every other access pattern needs a **secondary index** — an alternate view of the same data under a different key, maintained for you by DynamoDB.
+
+**The mental model.** Think of the table as a filing cabinet: the **PK is which drawer**, the **SK is the order of items inside that drawer**. You can only open a drawer whose label you already know.
+```
+Orders:  PK = customerId    SK = orderDate
+
+drawer "C1" ──▶ [2026-01-05] [2026-03-11] [2026-08-22]     ← sorted by SK
+drawer "C2" ──▶ [2026-02-01] [2026-07-30]
+```
+So *"C1's orders between Jan and Aug"* is a cheap Query, but *"where is order O-500?"* has no drawer label to open — that is a full Scan unless an index gives you a second way in:
+- **LSI = the same drawer, re-sorted inside it.**
+- **GSI = a whole new cabinet, re-filed under a different label.**
+
 | | GSI (Global Secondary Index) | LSI (Local Secondary Index) |
 |---|---|---|
-| Partition key | Different from base table | Same as base table |
+| Partition key | **Anything** — different from base table | **Must match** the base table |
 | Sort key | Own, optional | Different from base table |
-| Created | Any time | Only at table creation |
-| Consistency | Eventual only | Can be strongly consistent |
-| Capacity | Own throughput | Shares base table capacity |
-| Cost consideration | Every base write may also write to GSI (write amplification) — project only needed attributes | Rarely used due to creation-time constraint |
+| Physically stored | A **separate table** behind the scenes, replicated asynchronously — hence "global" | **In the same partition** as the base item — hence "local" |
+| Created | Any time; can also be dropped later | **Only at table creation** — never added or removed afterwards |
+| Consistency | **Eventual only — never strongly consistent** (different partition + async replication makes it physically impossible) | **Can be strongly consistent** (co-located, so it's achievable) |
+| Capacity | Own RCU/WCU | Shares base table capacity |
+| Max per table | 20 | 5 |
+| Size limit | None | ⚠️ **10 GB per partition-key value**, counted across the base item collection *and* all its LSIs |
+| Cost consideration | Every base write may also write to GSI (write amplification) — project only needed attributes | Rarely used because of the creation-time constraint |
+
+**Two constraints that settle the choice in practice:**
+- **LSI's 10 GB ceiling** is per partition-key value across the base collection plus every LSI on it. Exceed it and writes start failing with `ItemCollectionSizeLimitExceededException` — so an unbounded collection (every order under `PK=DEALER#7`) eventually bricks itself. Combined with creation-time-only, this is why **~95% of real designs use GSIs**.
+- **A throttled GSI throttles the base table's writes** (on provisioned capacity). Under-provisioning an index takes down the entire write path — a surprising failure mode, and a favourite question.
+
+**Which one to reach for:**
+```
+Need a different partition key?                     → GSI  (an LSI cannot change PK)
+Only a different sort order, and you need
+strong consistency on that read?                    → LSI
+```
+Base `Orders` table (`PK=ORDER#123`, `SK=META#`):
+
+| Access pattern | Index | Keys |
+|---|---|---|
+| One order's items in `createdAt` order | **LSI** | `PK=ORDER#123` (unchanged), `SK=createdAt` |
+| All orders for one customer | **GSI** | `PK=CUSTOMER#42`, `SK=2026-08#ORDER#123` — PK changed, so it *must* be a GSI |
+
+**Projections — the write-amplification lever**
+
+An index need not hold the whole item. What you copy into it is the **projection**, and it is the main dial on index write cost:
+
+| `ProjectionType` | Copied into the index | Write cost |
+|---|---|---|
+| `KEYS_ONLY` | Base table keys + index keys only | Lowest |
+| `INCLUDE` | Keys + a named list of attributes | Tuned — **usually the right answer** |
+| `ALL` | The entire item | Highest — full write amplification |
+
+⚠️ **The fetch-back penalty:** if a Query asks for an attribute the index does not project, DynamoDB silently reads it back from the base table — extra RCU and extra latency, with no error to signal it. So project deliberately: `INCLUDE` exactly what the query's result rows render, and nothing more.
+
+**One-line answer:** "PK decides which partition an item lands in and SK decides its order within that partition — so any access pattern that isn't *known PK, optional SK range* needs a secondary index. An LSI keeps the base table's partition key and changes only the sort key, so it lives in the same partition: it can be strongly consistent, but it must be created with the table and its item collection is capped at 10 GB per partition key. A GSI can use any partition key, so physically it's a separate asynchronously-replicated table: add or drop it any time, its own capacity, but eventually consistent — always. In practice I reach for a GSI unless I specifically need a strongly consistent re-sort, because creation-time-only plus the 10 GB ceiling make LSIs a long-term liability. On either one the projection is the real cost lever — `INCLUDE` only what the query actually renders, because requesting a non-projected attribute triggers a silent fetch back to the base table."
 
 **Capacity modes**
 | | On-Demand | Provisioned (+ Auto Scaling) |
@@ -568,6 +687,81 @@ Example: 500 msgs/sec × 1.2s duration ≈ 600 concurrency (before safety factor
 - Idempotency: `PutItem` with `ConditionExpression: attribute_not_exists(idempotencyKey)`.
 - Optimistic locking / state machine transitions: `UpdateItem ... ConditionExpression: status = :pending` before flipping to `PROCESSING` — server-side atomic check, no distributed lock needed.
 - This gets you concurrency control **without** paying the 2× cost of full Transactions.
+
+**Why it works:** every single-item write (`PutItem`/`UpdateItem`/`DeleteItem`) is atomic, and DynamoDB evaluates the `ConditionExpression` **server-side, inside the item's own lock**. There is no gap between the read and the write for another request to slip into — that gap is exactly what a distributed lock exists to close, so the condition removes the need for one.
+
+**(a) Idempotency — suppress duplicate deliveries**
+```csharp
+try
+{
+    await client.PutItemAsync(new PutItemRequest {
+        TableName = "Orders",
+        Item = new Dictionary<string, AttributeValue> {
+            ["idempotencyKey"] = new(requestId),        // partition key
+            ["orderId"]        = new(newOrderId),
+            ["status"]         = new("PENDING")
+        },
+        ConditionExpression = "attribute_not_exists(idempotencyKey)",
+        ReturnValuesOnConditionCheckFailure = ReturnValuesOnConditionCheckFailure.ALL_OLD
+    });
+    return new { created = true, orderId = newOrderId };
+}
+catch (ConditionalCheckFailedException ex)
+{
+    // Duplicate — SUCCESS, not an error. Return the SAME response the original gave.
+    return new { created = false, orderId = ex.Item["orderId"].S };
+}
+```
+`ReturnValuesOnConditionCheckFailure = ALL_OLD` hands back the existing item **in the exception itself**, saving a follow-up `GetItem`. Worth naming — it's a detail most candidates miss.
+
+**(b) State-machine transition — compare-and-swap, exactly one winner**
+
+The naive version has a race:
+```csharp
+// ❌ RACE: two Lambdas both read PENDING, both proceed, card charged twice
+var order = await GetOrder(id);                 // A reads PENDING; B reads PENDING
+if (order.Status == "PENDING") {                // true for both
+    await SetStatus(id, "PROCESSING");
+    await ChargeCard();                         // charged twice
+}
+```
+The condition collapses read+check+write into one atomic server-side operation:
+```csharp
+await client.UpdateItemAsync(new UpdateItemRequest {
+    TableName = "Orders",
+    Key = new() { ["orderId"] = new(id) },
+    UpdateExpression    = "SET #s = :processing, lockedBy = :worker, lockedAt = :now",
+    ConditionExpression = "#s = :pending",                  // ← the whole trick
+    ExpressionAttributeNames  = new() { ["#s"] = "status" }, // 'status' is a reserved word
+    ExpressionAttributeValues = new() {
+        [":processing"] = new("PROCESSING"),
+        [":pending"]    = new("PENDING"),
+        [":worker"]     = new(workerId),
+        [":now"]        = new(DateTime.UtcNow.ToString("O"))
+    }
+});
+```
+Worker A finds `PENDING` → condition passes → flips it. Worker B now finds `PROCESSING` → condition fails → throws immediately and exits cleanly. **Exactly one winner, guaranteed.**
+
+**(c) Version-number variant** — for a generic "did anyone modify this while I was thinking?" check rather than a named state:
+```csharp
+UpdateExpression    = "SET #data = :d, version = version + :one",
+ConditionExpression = "version = :expectedVersion"
+```
+A failure means someone else wrote in between — re-read and retry.
+
+**Why no distributed lock is needed.** The classic sequence is *acquire lock → read → validate → write → release lock*, and it drags along lock TTL tuning, orphaned locks after a crash, fencing tokens to block stale holders, and one more piece of infrastructure that can go down. A conditional write is that entire block in **one network call** — the `status` attribute *is* the lock, so there is nothing to expire, orphan, fence, or release.
+
+**Cost — where the 2× comes from**
+| Operation (1 KB item) | Write cost |
+|---|---|
+| `PutItem` / `UpdateItem` | **1 WCU** |
+| Same **with** a `ConditionExpression` | **1 WCU** — the condition is free |
+| `TransactWriteItems` | **2 WCU** per item (two-phase commit: prepare + commit) |
+
+One caveat to state: a **failed** condition still costs 1 WCU — the write didn't happen but you're charged. Under heavy contention that matters, though it stays cheaper than a transaction.
+
+**When a conditional write is *not* enough.** The item boundary is the atomicity boundary, so the one case a plain condition cannot express is *a condition on one item guarding a write to another* — `TransactWriteItems` has a dedicated `ConditionCheck` action for exactly that. See *Transactions* below.
 
 **Transactions (`TransactWriteItems`/`TransactGetItems`)**
 - ACID across up to 100 items/tables in one call (4 MB aggregate size limit). Note: this was 25 items until September 2022 — older material and older exam guides still say 25.
@@ -590,10 +784,28 @@ Example: 500 msgs/sec × 1.2s duration ≈ 600 concurrency (before safety factor
 
 #### Capacity Maths & Hot-Partition Mitigation
 
-**The unit definitions get asked directly**, and being able to do the arithmetic out loud separates a real answer from a memorised one:
-- **1 RCU** = one **strongly consistent** read of up to **4 KB/s**, or **two eventually consistent** reads of 4 KB/s. (So eventually consistent reads are half the cost — a genuine cost lever.)
-- **1 WCU** = one write of up to **1 KB/s**. Transactional writes cost **2×**; transactional reads cost 2×.
-- Worked example: 100 reads/sec of 10 KB items, eventually consistent → 10 KB rounds up to **3× 4 KB units**, ÷2 for eventual consistency = **1.5 → 2 RCU per read**, × 100 = **~200 RCU**.
+**The unit definitions get asked directly**, and doing the arithmetic out loud separates a real answer from a memorised one.
+
+| Unit | Buys | Effective rate |
+|---|---|---|
+| **1 RCU** | one **strongly consistent** read of up to **4 KB** | 1/sec |
+| **1 RCU** | **two** *eventually consistent* reads of up to 4 KB | 2/sec |
+| **1 RCU** | half a *transactional* read of 4 KB (txn reads cost 2×) | 0.5/sec |
+| **1 WCU** | one write of up to **1 KB** | 1/sec |
+| **1 WCU** | half a *transactional* write of 1 KB (txn writes cost 2×) | 0.5/sec |
+
+Note the asymmetry: reads get **4 KB** per unit, writes only **1 KB** — writes are 4× dearer per byte, which is why the design advice is to denormalise for reads and minimise write amplification.
+
+**Rounding — where marks are lost.** Always round **up**, per item, per operation:
+- 5 KB item, strongly consistent read → `ceil(5/4)` = **2 RCU**
+- 0.5 KB write → `ceil(0.5/1)` = **1 WCU** (a full KB either way, so many tiny writes waste capacity)
+- 1.5 KB write → **2 WCU**
+- **Read example:** 100 reads/sec of 10 KB items, eventually consistent → `ceil(10/4) = 3` units strongly consistent → ÷2 for eventual consistency = `1.5` → round up = **2 RCU per read** → × 100 = **~200 RCU**
+- **Write example:** 50 writes/sec of 2.5 KB items → `ceil(2.5/1) = 3` WCU each → × 50 = **150 WCU**; make them transactional and it is **300 WCU**
+
+**Naming precision:** RCU/WCU are the **provisioned**, per-second-reserved units. On-demand bills the same 4 KB / 1 KB sizing as **RRU/WRU** (Read/Write *Request* Units) — per request rather than per second reserved. Using the two pairs interchangeably is a small tell.
+
+**One-line answer:** "RCU and WCU are per-second throughput units — one RCU is a strongly consistent read of up to 4 KB, or two eventually consistent ones; one WCU is a 1 KB write. Both round up per item, transactions double them, and GSIs consume their own capacity. The subtleties are that capacity is charged on data read *before* filtering, so a filtered Scan costs the same as an unfiltered one, and that a single partition tops out around 3,000 RCU / 1,000 WCU — so a hot key throttles while table-level metrics still look healthy."
 
 **Write sharding — the fix for a hot partition.** If a partition key has low cardinality (`STATUS#PENDING`, or a date like `2026-08-10`), all traffic lands on one partition and you throttle while table-level capacity looks fine. Add a calculated suffix to spread it:
 ```
@@ -616,26 +828,7 @@ Writes now spread across 10 partitions. The trade-off to state: **reads must now
 
 **❗ Reuse the client.** `AmazonDynamoDBClient` is thread-safe and should be a **singleton** — in Lambda, create it **outside the handler** so it survives warm invocations and reuses connections. Creating one per request is a real and common performance bug.
 
-**Conditional write for idempotency** — the single most important snippet, because it's how you make an at-least-once pipeline safe:
-```csharp
-try
-{
-    await client.PutItemAsync(new PutItemRequest {
-        TableName = "Orders",
-        Item = new Dictionary<string, AttributeValue> {
-            ["PK"]     = new("ORDER#" + orderId),
-            ["SK"]     = new("META#"),
-            ["status"] = new("PENDING")
-        },
-        ConditionExpression = "attribute_not_exists(PK)"   // only if it isn't there yet
-    });
-}
-catch (ConditionalCheckFailedException)
-{
-    // Already processed — this is SUCCESS, not an error. Swallow and return.
-}
-```
-The point to make: `ConditionalCheckFailedException` is **the expected path** on a duplicate delivery, not a failure. Treating it as an error is how teams turn safe retries into false alarms.
+**Conditional write for idempotency** — covered in full under *Conditional writes* above (`attribute_not_exists` + `ReturnValuesOnConditionCheckFailure`). In single-table design the key is `attribute_not_exists(PK)` rather than a dedicated idempotency attribute; everything else is identical, and `ConditionalCheckFailedException` is still the **expected path** on a duplicate delivery, not a failure.
 
 **Query a GSI with a key condition** (never `Scan` in a hot path):
 ```csharp
@@ -667,7 +860,7 @@ await client.TransactWriteItemsAsync(new TransactWriteItemsRequest {
     }
 });
 ```
-Costs **2× WCU** and fails wholesale on any condition failure — use it where correctness demands it, not by default.
+Fails **wholesale** on any single condition failure — one bad item cancels the entire call, and `TransactionCanceledException.CancellationReasons` tells you *which* item and why.
 
 **Pagination — the loop people get wrong.** `Query`/`Scan` return at most **1 MB** per call, so a missing pagination loop silently truncates results:
 ```csharp
@@ -724,7 +917,89 @@ public async Task Handler(DynamoDBEvent evnt, ILambdaContext ctx)
 | Do transactions cost more? | Yes — roughly 2× the capacity of equivalent non-transactional writes/reads. |
 | Does TTL delete instantly? | No — best-effort, can take hours. |
 
-**Senior-level summary (memorize):** "DynamoDB trades query flexibility for massive, predictable scalability. Efficient usage depends on correct partition key design, denormalized access-pattern-first modeling, and avoiding scans, hot partitions, and unnecessary indexes."
+**Senior-level summary (memorize):** "The deal with DynamoDB is simple: you give up the freedom to *ask anything*, and in return your speed does not drop no matter how much the data grows. So do the work backwards — first write down which questions you need to ask, and only then design the table. Pick a partition key with enough variety that the load spreads out, do not be afraid to keep copies of data, and do not do these three things: read the whole table, send all the traffic to one key, and build indexes you do not need."
+
+**Worked example — the Deployment Dashboard (the resume bullet, modelled)**
+
+The same principles on a real table. The dashboard fronts GitHub Actions → CDKTF/Terraform runs across 12 platform services, and it is read far more than it is written: a handful of deployments a day, but the board sits open in everyone's browser.
+
+**1. Access patterns, written down before the schema:**
+
+| | Pattern |
+|---|---|
+| **D1** | One service's deployment history, newest first |
+| **D2** | Everything **in flight right now**, across all services — the landing tile |
+| **D3** | One deployment's detail, including its Terraform plan |
+| **D4** | What went to **prod** on a given day |
+| **D5** | Find a deployment by its GitHub Actions run ID |
+| **D6** | A service's **current live version per environment** — the most-read item on the board |
+
+**2. Keys — and the partition key that looked obvious and was wrong.** `PK = ENV#prod` is the tempting choice and a hot partition by construction: four possible values, and prod takes most of the traffic. `PK = STATUS#IN_PROGRESS` is worse — low cardinality *and* rewritten on every transition. What works is the service:
+```
+PK = SERVICE#dms-export     SK = DEPLOY#2026-08-22T10:15:03Z#run-8871
+```
+| PK | SK | Item | Size | Writes |
+|---|---|---|---|---|
+| `SERVICE#dms-export` | `DEPLOY#<ts>#<runId>` | env, version, status, commit SHA + message, actor, duration | ~1 KB | ~5 — one per status transition |
+| `SERVICE#dms-export` | `CURRENT#prod` | live-version pointer — **D6**, the hottest read on the board | 0.3 KB | 1 per successful deploy |
+| `SERVICE#dms-export` | `META#` | display name, owning team, repo | 0.5 KB | rare |
+| `RUN#8871` | `PTR#` | → the service PK/SK above — **D5** | 0.2 KB | once |
+| `DEPLOY#run-8871` | `PLAN#` | **S3 key** of the Terraform plan output | 0.2 KB | once |
+
+Twelve services is admittedly low cardinality, and the honest answer is that it's fine *at this write rate* — a few deployments per service per day is nowhere near the ~1,000 WCU per-partition ceiling. If this were CI runs at thousands per minute the PK would need a shard suffix. **Cardinality only matters relative to write rate**, and saying so is a better answer than reciting "high cardinality" as a rule.
+
+**3. Denormalise for reads.** The board's rows render service display name, owning team, commit message and actor — which live on the `META#` item and in GitHub, not on the deployment. They're copied into the deployment item at write time. Two reasons: the board is read constantly and written a few times a day, and the copy is *correct* — a deployment record should show the commit message and owning team **as they were at deploy time**, not as they are now.
+
+**4. The Scan trap — D2.** The obvious implementation of "what's running now" is a `Scan` with `FilterExpression: status = :in_progress`. That reads every deployment ever recorded and charges for all of it, getting slower every month while the answer stays 0–3 rows. Instead, a **sparse GSI**: write `GSI1PK = "IN_FLIGHT"` when a deployment starts and **remove the attribute** when it reaches a terminal state. The index then holds only live deployments, so D2 costs ~1 RCU no matter how much history accumulates.
+
+**5. Restraint on indexes.** It's tempting to add a GSI per filter — env, status, commit, actor, date. Five `ALL`-projection GSIs would multiply each of the ~5 status transitions by six. What shipped instead: **one** sparse GSI (D2), **one** `ENV#…#DATE#…` GSI (D4), and for D5 a **write-once pointer item** rather than a GSI — because a GSI keyed on `runId` would be maintained on all five transitions, whereas the pointer is written once and never changes. *A write-once pointer item beats a GSI whenever the lookup key never changes.*
+
+**6. Hot/cold split.** A Terraform plan is easily hundreds of KB and can approach the 400 KB item limit, so it lives in S3 with only its key in DynamoDB. Inline, each of those five status transitions would have cost ~400 WCU instead of 1.
+
+**7. Conditional writes, twice over.** GitHub webhooks retry, so the run pointer is created with `attribute_not_exists(PK)` and a duplicate delivery becomes a no-op. Status transitions use `ConditionExpression: #status = :expected`, so a retried webhook cannot move `SUCCEEDED` back to `APPLYING`. Worth knowing for this bullet specifically: **Terraform's own S3-backend lock table works exactly this way** — a `PutItem` on `LockID` with `attribute_not_exists` — which is why a crashed apply leaves a stale lock that needs `terraform force-unlock`.
+
+| Pattern | How it's served | Cost |
+|---|---|---|
+| D1 | `Query PK=SERVICE#x`, `begins_with(SK,'DEPLOY#')`, `ScanIndexForward=false` | ~1 RCU/page |
+| D2 | `Query` on the sparse `GSI1` | ~1 RCU |
+| D3 | `GetItem` + one S3 GET for the plan | ~0.5 RCU |
+| D4 | `Query GSI2 PK=ENV#prod#DATE#2026-08-22` | ~1 RCU |
+| D5 | `GetItem PK=RUN#8871` → then D3 | 2 × ~0.5 RCU |
+| D6 | `GetItem PK=SERVICE#x, SK=CURRENT#prod` | 0.5 RCU |
+
+**No `Scan` anywhere on the read path** — which is exactly what the summary above is asking for.
+
+### Resume Follow-Ups — The "DynamoDB-Backed Microservices" Bullet
+
+> *"CSRconnect features… DynamoDB-backed microservices."*
+
+Expect the full DynamoDB drill — and expect this to be the hardest-pressed bullet on the resume, because it is the one AWS service that ties the claim to a shipped product. A vague answer costs more here than on Kinesis.
+
+- **Access patterns first** — the only correct opening move. Name the actual queries before the key schema.
+- **Key design** — partition-key cardinality and hot partitions; what the PK/SK actually were and why.
+- **Indexes** — **GSI vs LSI**: LSI at table-creation time only and sharing the partition's 10 GB limit; GSI eventually consistent with its own capacity.
+- **Capacity** — on-demand vs provisioned, and which one a bursty export workload justified.
+- **`Query` vs `Scan`** — and be ready for *"where does your code still Scan, and why is that acceptable?"*
+- **Writes** — conditional writes for idempotency, transactions and their ~2× capacity cost, the 400 KB item limit and what you did when a payload approached it.
+- **Single-table design** — have an opinion, including where you deliberately did *not* apply it.
+
+All of it is worked through in [DynamoDB Deep Dive](#dynamodb-deep-dive) and [DynamoDB Trick Questions](#dynamodb-trick-questions); the other resume bullets are in [Resume Deep-Dives](#resume-deep-dives--the-follow-ups-i-should-expect).
+
+**Disaster Recovery — DynamoDB**
+
+| | |
+|---|---|
+| **What's actually at risk** | Table data, GSIs, and the 24-hour Streams window |
+| **Backup mechanism** | **PITR** (continuous, 35 days, restore to any *second*), **on-demand backups** (kept indefinitely), **AWS Backup** for cross-account/cross-region copies, **Global Tables** for active-active |
+| **Realistic RPO / RTO** | PITR RPO ~5 minutes; Global Tables ~1 second. RTO is the honest problem: a restore **creates a new table** and rebuilds every GSI — minutes for small tables, **hours** for large ones |
+
+**Recovery runbook:**
+1. **Logical corruption (bad batch job, bad migration):** `aws dynamodb restore-table-to-point-in-time --target-table-name Orders-restored --restore-date-time <just before the bad write>`.
+2. **Repoint the app** — read the table name from **SSM Parameter Store** or an env var, never a hardcoded constant. This one design choice is the difference between a 5-minute cutover and a redeploy of every consumer.
+3. **Regional failure with Global Tables:** nothing to restore — point the SDK at the replica region. Conflict resolution is last-writer-wins, which is why the writes had to be idempotent in the first place.
+4. **Reconcile the gap** between your RPO and the incident from the upstream DLQ/source, replaying through the same idempotent write path.
+
+⚠️ **The gotcha:** **you cannot restore in place** — every restore is a new table, so DR without a name-indirection layer means a code deploy in the middle of an incident. And **PITR must be enabled before the incident**; turning it on afterwards gives you nothing. Enable it at table-creation time in the IaC module so it can never be forgotten.
 
 ---
 
@@ -765,7 +1040,7 @@ Both must pass. Fail authentication and you get an `InvalidClientTokenId`/signat
 | AWS is responsible for | You are responsible for |
 |---|---|
 | Running IAM as a global, highly available service | Creating and organising users, groups, roles, policies |
-| Patching and securing the underlying infrastructure | Applying **least privilege** (see [Least Privilege & Permission Boundaries](#new-content-least-privilege--permission-boundaries-in-practice)) |
+| Patching and securing the underlying infrastructure | Applying **least privilege** (see [Least Privilege & Permission Boundaries](#least-privilege--permission-boundaries-in-practice)) |
 | Vulnerability analysis and compliance validation of the service itself | Rotating and protecting credentials; deleting unused ones |
 | Providing the tooling (MFA support, Access Analyzer, credential reports, CloudTrail) | **Enabling and actually reviewing** that tooling |
 | Tenant isolation — never leaking your data to another customer | Removing leavers; auditing who can do what |
@@ -793,9 +1068,7 @@ Account
 
 **Permissions are deny-by-default.** A brand-new IAM user with no policy can do *nothing* — it cannot even list S3 buckets or see the EC2 dashboard. Nothing in AWS is implicitly allowed; every permission is something you deliberately granted. This is the correct answer to "what can a new user do out of the box?"
 
-**Policy types by what they attach to**
-- **Identity-based**: attached to a User, Group, or Role. No `Principal` field — the identity holding the policy *is* the principal.
-- **Resource-based**: attached to the resource itself (S3 bucket policy, SQS queue policy, KMS key policy, Lambda resource policy). **Must** name a `Principal`.
+**Policy types by what they attach to** — **identity-based** (on a User, Group or Role; no `Principal`, since the holder *is* the principal) versus **resource-based** (on the resource itself — S3 bucket, SQS queue, KMS key, Lambda; `Principal` is mandatory). Full treatment in [Policy Types & Structure](#policy-types--structure). What matters *here* is how the two behave across account boundaries:
 
 **Same-account vs cross-account (a precise distinction worth getting right):**
 - **Same account** — either an identity-based policy *or* a resource-based policy allowing the action is sufficient.
@@ -803,6 +1076,53 @@ Account
 - **Cross-account via AssumeRole** — the caller *becomes* the role and gives up their original permissions for that session. Only the role's permissions apply. See [IAM Roles](#iam-roles-policies-assumerole).
 
 That "resource policy = you stay yourself; AssumeRole = you become someone else" contrast is the crispest way to answer "what are the two ways to do cross-account access?"
+
+**The two paths, side by side.** Scenario throughout: an app in **Account A (`111111111111`)** needs to read objects from the `partner-exports` bucket in **Account B (`222222222222`)**.
+
+**Path 1 — resource-based policy (the caller stays itself).** Both sides are required, and the second half is the one people forget.
+
+*Account B* — bucket policy, naming the caller as `Principal`:
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Sid": "AllowAccountAExportReader",
+    "Effect": "Allow",
+    "Principal": { "AWS": "arn:aws:iam::111111111111:role/ExportReader" },
+    "Action": ["s3:GetObject", "s3:ListBucket"],
+    "Resource": ["arn:aws:s3:::partner-exports",
+                 "arn:aws:s3:::partner-exports/*"]
+  }]
+}
+```
+*Account A* — identity policy on `ExportReader`, allowing it to make the call at all:
+```json
+{
+  "Effect": "Allow",
+  "Action": ["s3:GetObject", "s3:ListBucket"],
+  "Resource": ["arn:aws:s3:::partner-exports",
+               "arn:aws:s3:::partner-exports/*"]
+}
+```
+The call itself needs no STS — the app uses its own credentials against B's bucket directly:
+```csharp
+var s3 = new AmazonS3Client();               // no AssumeRole anywhere
+var obj = await s3.GetObjectAsync("partner-exports", "deals/2026-08-23.json");
+```
+
+**Path 2 — AssumeRole (the caller becomes someone else).** Same three pieces, different shape: *Account B* has a **trust policy** saying who may become the role plus a permission policy saying what the role may do; *Account A* needs `sts:AssumeRole` on that role ARN; then the caller trades its identity for temporary credentials. Full walkthrough and the C# call are under [IAM Roles, Policies, AssumeRole](#iam-roles-policies-assumerole).
+
+**Choosing between them:**
+
+| | Resource-based policy | AssumeRole |
+|---|---|---|
+| Identity the resource sees | The caller's own | The assumed role |
+| Permissions in effect | Caller's **∩** resource policy | **Only** the role's — the caller's are dropped for that session |
+| Extra API call | None | `sts:AssumeRole`; credentials expire and must be refreshed |
+| Available for | Only services that *have* resource policies — S3, SQS, SNS, KMS, Lambda, Secrets Manager, API Gateway (and DynamoDB since 2024) | Anything, including services with no resource policy |
+| Best for | One narrow, durable grant — a partner reading one bucket or queue | Broad or multi-service access; anything needing session tagging or an External ID |
+
+⚠️ **The audit difference, which is the detail that separates a good answer here:** with a **resource-based policy**, CloudTrail in Account B records the caller as `arn:aws:iam::111111111111:role/ExportReader` — the *real* identity, in the target account's own trail. With **AssumeRole**, B's trail shows `arn:aws:sts::222222222222:assumed-role/CrossAccountReadRole/ExportSession`, so identifying who actually did it means correlating with the `AssumeRole` event in Account A's trail. If a compliance requirement is "the target account must be able to attribute every access on its own", that argues for the resource-policy path.
 
 ### Hands-On: Users & Groups
 
@@ -824,7 +1144,7 @@ aws iam list-groups-for-user --user-name parteek     # verify
 
 **Point worth making:** IAM users sign in *to a specific account* via that account URL/alias; root signs in by **email address**. That's how you tell from a screenshot which one someone is using.
 
-### Policy Types, Structure & Password Policy
+### Policy Types & Structure
 
 **Three kinds of policy — know which one to recommend:**
 | Type | Managed by | Reusable | When to use |
@@ -901,13 +1221,68 @@ Request
  ├─ Identity policy OR resource policy allows it?  → neither → DENY (implicit)
  └─ else                                 → ALLOW
 ```
-Note what this means: **SCPs and boundaries can only take permissions away, never grant them.** See [Least Privilege & Permission Boundaries](#new-content-least-privilege--permission-boundaries-in-practice) for boundary-vs-SCP detail.
+Note what this means: **SCPs and boundaries can only take permissions away, never grant them.** See [Least Privilege & Permission Boundaries](#least-privilege--permission-boundaries-in-practice) for boundary-vs-SCP detail.
 
 **RBAC vs ABAC:**
 - **RBAC** (role-based) — permissions per job function; you create a new role/policy per team or project. Simple, but the policy count grows with the org.
 - **ABAC** (attribute-based) — permissions driven by **tags**: "you may act on a resource whose `Team` tag matches your own `PrincipalTag/Team`". One policy scales to any number of teams/projects without edits. The standard "how would you scale IAM across 200 microservices?" answer.
 
-#### IAM Policy Structure — Full Explanation
+**A complete ABAC example.** Three pieces have to line up, and the second is where most attempts quietly fail.
+
+*1. The policy* — one policy, attached to every engineer's role, that never needs editing when a team is added:
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Sid": "ActOnOwnTeamsInstances",
+    "Effect": "Allow",
+    "Action": ["ec2:StartInstances", "ec2:StopInstances", "ec2:RebootInstances"],
+    "Resource": "arn:aws:ec2:*:*:instance/*",
+    "Condition": {
+      "StringEquals": { "aws:ResourceTag/Team": "${aws:PrincipalTag/Team}" }
+    }
+  }]
+}
+```
+Read it as the sentence: *allow these actions on any instance whose `Team` tag equals my own `Team` tag.* Onboard a 30th team tomorrow and this policy does not change — that is the entire value proposition.
+
+*2. How the principal gets its tag* — the step that's usually missing. Two routes:
+- **Static** — tag the role itself: `aws iam tag-role --role-name Engineer --tags Key=Team,Value=payments`. Fine when one role serves one team.
+- **Dynamic (session tags)** — the caller supplies the tag at assume time, so *one* role serves every team:
+  ```
+  aws sts assume-role --role-arn arn:aws:iam::111111111111:role/Engineer \
+      --role-session-name alice --tags Key=Team,Value=payments
+  ```
+  This requires **`sts:TagSession`** in the role's trust policy alongside `sts:AssumeRole` — omit it and the call is rejected. With IAM Identity Center or a SAML/OIDC IdP the tag is mapped from a directory attribute instead, which is how this scales for humans.
+
+*3. Control who can set tags — without this, ABAC is not a control at all.* If an engineer can retag an instance, they can grant themselves access to it. So constrain the tagging action too:
+```json
+{
+  "Sid": "OnlyTagWithOwnTeam",
+  "Effect": "Allow",
+  "Action": ["ec2:CreateTags", "ec2:DeleteTags"],
+  "Resource": "arn:aws:ec2:*:*:instance/*",
+  "Condition": {
+    "StringEquals": { "aws:RequestTag/Team": "${aws:PrincipalTag/Team}" },
+    "ForAllValues:StringEquals": { "aws:TagKeys": ["Team", "Environment"] }
+  }
+}
+```
+
+**The before/after that makes the case:**
+
+| | RBAC | ABAC |
+|---|---|---|
+| 30 teams × 4 environments | ~120 policies to write and maintain | **1 policy** |
+| Onboarding a new team | New role + new policy + review cycle | Set one tag |
+| Where the risk lives | Policy sprawl and drift | **Tag integrity** — which is why piece 3 is mandatory |
+
+⚠️ **Three gotchas worth naming:**
+- **Not every service supports `aws:ResourceTag` on every action.** EC2, RDS, Lambda, DynamoDB tables and S3 objects largely do; many `List*`/`Describe*` calls support no resource-level condition at all and need `"Resource": "*"` with no tag condition. So real designs end up **ABAC combined with RBAC**, not ABAC replacing it — check the service authorization reference before promising a pure-ABAC model.
+- **Tag keys and values are case-sensitive.** `Team=Payments` will not match a `PrincipalTag/Team` of `payments`. This is the single most common cause of "the policy looks right but it's denied".
+- **Untagged resources are invisible, not open** — the condition simply doesn't match, so access is denied. Pair ABAC with `aws:RequestTag`-enforced tag-on-create so nothing can land untagged in the first place.
+
+#### Anatomy of a Policy Document
 
 **Read every policy as one sentence.** Four fields carry all the meaning:
 
@@ -967,14 +1342,14 @@ Broad allow + narrow deny is the standard **guardrail** pattern, and it works pr
 | `StringEquals` / `StringNotEquals` | Exact match, case-sensitive |
 | `StringLike` / `StringNotLike` | Match **with wildcards** — the one to use for `repo:my-org/my-repo:*` style patterns |
 | `ArnEquals` / `ArnLike` | ARN comparison (`ArnLike` allows wildcards) |
-| `Bool` | `true`/`false` — e.g. `aws:MultiFactorAuthPresent` |
+| `Bool` | `true`/`false` — e.g. `aws:SecureTransport` to require TLS |
 | `IpAddress` / `NotIpAddress` | CIDR ranges |
 | `NumericLessThan`, `DateGreaterThan` | Numbers and timestamps (temporary access windows) |
 | `Null` | Tests whether a key is **present at all** |
 
 Two modifiers that trip people up:
 - **`...IfExists`** (e.g. `StringEqualsIfExists`) — "enforce this **only if** the key is present in the request." Without it, a request that simply omits the key fails the condition.
-- **`ForAllValues:` / `ForAnyValue:`** — set operators, needed when a request key holds **multiple** values. `ForAnyValue:` passes if **at least one** value matches. `ForAllValues:` passes if **every** value matches — and here's the trap: **`ForAllValues:` also returns true when the key is absent entirely**, so used alone in an `Allow` it can permit more than you intended. Pair it with a `Null` check when it's load-bearing. This is the operator in the multi-tenant DynamoDB example under [Least Privilege & Permission Boundaries](#new-content-least-privilege--permission-boundaries-in-practice):
+- **`ForAllValues:` / `ForAnyValue:`** — set operators, needed when a request key holds **multiple** values. `ForAnyValue:` passes if **at least one** value matches. `ForAllValues:` passes if **every** value matches — and here's the trap: **`ForAllValues:` also returns true when the key is absent entirely**, so used alone in an `Allow` it can permit more than you intended. Pair it with a `Null` check when it's load-bearing. This is the operator in the multi-tenant DynamoDB example under [Least Privilege & Permission Boundaries](#least-privilege--permission-boundaries-in-practice):
 ```json
 "Condition": { "ForAllValues:StringEquals": { "dynamodb:LeadingKeys": ["${aws:PrincipalTag/TenantId}"] } }
 ```
@@ -1006,6 +1381,8 @@ One policy, attached to every user, gives each their own private folder. Common 
 | `Principal` in an identity-based policy | Rejected — `Principal` belongs only in resource-based and trust policies |
 | Expecting an `Allow` to override an explicit `Deny` | It never does, anywhere |
 | Editing a customer-managed policy in place with no rollback plan | It's versioned (5 kept) — use `set-default-policy-version` to roll back |
+
+### Password Policy
 
 **Password policy** (IAM → Account settings) — what you can enforce:
 - Minimum length (AWS allows up to 128 characters)
@@ -1133,32 +1510,259 @@ Both are **required** and evaluated **separately** — they're two distinct docu
 3. STS issues temporary credentials (Access Key, Secret Key, Session Token, expiring in 15 min–12 hrs).
 4. Caller uses those credentials; the role's permission policy governs what they can actually do.
 
-**Example — Lambda execution role trust policy:**
+**The whole thing as one picture.** Two policies, two questions, checked at two different moments:
+
+```
+                            ┌──────────────────────────────┐
+                            │          IAM ROLE            │
+                            └───────┬──────────────┬───────┘
+                                    │              │
+                   ┌────────────────┘              └────────────────┐
+                   ▼                                               ▼
+        ╔══════════════════════════╗                    ╔══════════════════════════╗
+        ║      TRUST POLICY        ║                    ║   PERMISSION POLICIES    ║
+        ║   WHO can become me?     ║                    ║   WHAT can I then do?    ║
+        ╚══════════════════════════╝                    ╚══════════════════════════╝
+                   │                                               │
+          checked ONCE, at                              checked on EVERY
+          assume time                                   subsequent API call
+```
+
+Can't assume the role at all → trust policy. Assumed it but the call is denied → permission policy. That single split diagnoses most IAM tickets.
+
+**Cross-account is a two-key lock.** Neither account can grant access unilaterally:
+
+```
+   ACCOUNT A (111111111111)            STS               ACCOUNT B (222222222222)
+   ────────────────────────            ───               ────────────────────────
+   ┌─────────────┐
+   │  Principal  │
+   └──────┬──────┘
+          │   ╔════════════════ GATE 1 ════════════════╗
+          │   ║ Caller's OWN identity policy must      ║
+          │   ║ Allow sts:AssumeRole on <RoleB ARN>.   ║
+          │   ║ Missing → denied even if B trusts you. ║
+          │   ╚════════════════════════════════════════╝
+          │
+          │  ① sts:AssumeRole(RoleB)      ┌───────┐
+          ├──────────────────────────────▶│  STS  │② reads RoleB's TRUST POLICY
+          │                               │       │  ╔═══════ GATE 2 ═══════╗
+          │                               │       │  ║ Principal matches?   ║
+          │                               │       │  ║ Conditions pass?     ║
+          │                               └───┬───┘  ╚══════════════════════╝
+          │  ③ temporary credentials          │
+          │◀──────────────────────────────────┘
+          │     AccessKey + Secret + SessionToken   (15 min – 12 h)
+          │
+          │  ④ call B's resources                    ┌──────────────────────┐
+          └─────────────────────────────────────────▶│ RoleB PERMISSION     │
+                                                      │ POLICY  ╔ GATE 3 ╗  │
+                                                      │         ╚════════╝  │
+                                                      └──────────────────────┘
+```
+
+Gates 1 and 2 are **AND**, not OR — this is the single most common cross-account failure.
+
+**What `Principal` can point at,** with the trap attached to each:
+
+```
+"Principal": { "AWS": "arn:aws:iam::111111111111:root" }
+     └─▶ ANY principal in that account — delegates the decision to A's admins
+"Principal": { "AWS": "arn:aws:iam::111111111111:role/AppRole" }
+     └─▶ ONE specific role. The right default.
+         ⚠ delete + recreate that role and the trust silently breaks
+           (same ARN, new principal ID)
+"Principal": { "Service": "lambda.amazonaws.com" }
+     └─▶ An AWS service — this is what makes it an "execution role"
+"Principal": { "Federated": "arn:aws:iam::111:oidc-provider/token.actions.githubusercontent.com" }
+     └─▶ An IdP; Action becomes sts:AssumeRoleWithWebIdentity
+         ⚠ MUST be paired with a Condition on `sub`, or ANY GitHub repo
+           on earth can assume your role
+```
+
+**Now the permission side — grants versus ceilings.** This is the distinction that explains most "but the policy allows it" confusion:
+
+```
+   ╔═══════════════════════╗            ╔═══════════════════════════╗
+   ║  GRANTS  (add power)  ║            ║  CEILINGS (only subtract) ║
+   ╠═══════════════════════╣            ╠═══════════════════════════╣
+   ║ • Identity policies   ║            ║ • SCP            (account)║
+   ║   attached to the role║            ║ • Permission boundary     ║
+   ║ • Resource policy on  ║            ║                   (role)  ║
+   ║   the target          ║            ║ • Session policy (session)║
+   ╚═══════════════════════╝            ╚═══════════════════════════╝
+              └──────────────┬────────────────────┘
+                             ▼
+              EFFECTIVE = grant ∩ every ceiling
+```
+
+So a permission boundary containing `AdministratorAccess` grants **nothing** — attach only a boundary and no permission policy and the role can do nothing at all. For the full evaluation chain in text form see [Policy Types & Structure](#policy-types--structure).
+
+**Where the role's permissions physically attach, and the quotas:**
+
+```
+   IAM ROLE
+     ├─ Trust policy .............. exactly 1, mandatory
+     ├─ Managed policies .......... up to 10 attached (raisable to 20)
+     ├─ Inline policies ........... 10,240 characters total
+     └─ Permission boundary ....... 0 or 1
+```
+
+**Session policies — the layer nobody can place.** Passed at assume time, not stored on the role:
+
+```
+   Caller ──── sts:AssumeRole ────▶ STS ────▶ temporary credentials
+                    ├── --policy '<json>'      inline, 2,048 chars
+                    └── --policy-arns a,b,c    up to 10 managed ARNs
+                              ▼
+              Applies to THIS SESSION only. Invisible in the console.
+              Cannot grant anything the role doesn't already have.
+```
+
+The point of them: **one broad role, many narrow sessions.** A multi-tenant service assumes the same role per request but clamps each session to one tenant's key prefix, so a bug cannot cross tenants even though the role itself could.
+
+**Diagnosing from the symptom:**
+
+| Symptom | Layer to check |
+|---|---|
+| Can't assume the role at all | Trust policy (Gate 2) **and** the caller's own `sts:AssumeRole` (Gate 1) |
+| Assumed fine, but every call denied | No permission policy attached — perhaps only a boundary |
+| Policy clearly allows it, still denied | A ceiling is clamping it (SCP / boundary / session policy), or an explicit `Deny` |
+| Works in one account, not another | SCP differs, or the target's resource policy doesn't name you |
+| Worked for an hour, then broke | Credentials expired — or **role chaining**, which hard-caps sessions at **1 hour** regardless of `MaxSessionDuration` |
+| Console shows the right policies but access fails | Session policy — it does not appear in the console |
+
+**The four documents, end to end.** Cross-account needs *two* roles and *four* policies, and the one people forget is that the **source role has its own trust policy** which has nothing to do with the other account. Scenario: a Lambda in **Account A (`111111111111`)** reads a DynamoDB table in **Account B (`222222222222`)**.
+
+```
+  ACCOUNT A — 111111111111                   ACCOUNT B — 222222222222
+  ┌─────────────────────────────┐            ┌─────────────────────────────┐
+  │  OrderExportLambdaRole      │            │  DealsTableReaderRole       │
+  ├─────────────────────────────┤            ├─────────────────────────────┤
+  │ ① TRUST POLICY              │            │ ③ TRUST POLICY              │
+  │   Principal: lambda.amaz…   │            │   Principal: role A's ARN ──┼──┐
+  │   how the Lambda becomes    │            │   ◀── GATE 2                │  │
+  │   this role. Account B      │            │                             │  │
+  │   appears nowhere.          │            │                             │  │
+  ├─────────────────────────────┤            ├─────────────────────────────┤  │
+  │ ② PERMISSION POLICY         │            │ ④ PERMISSION POLICY         │  │
+  │   sts:AssumeRole            │            │   dynamodb:GetItem, Query   │  │
+  │   Resource: role B's ARN ───┼───┐        │   Resource: table/Deals     │  │
+  │   ◀── GATE 1                │   │        │   ◀── GATE 3                │  │
+  └─────────────────────────────┘   │        └─────────────────────────────┘  │
+                                    └────────────────────────────────────────┘
+                        ② names B's role  ·  ③ names A's role
+                              they point at each other
+```
+
+**① Source role — trust policy (Account A).** *Who may become this role?* The Lambda service. This is an ordinary execution-role trust policy — note that Account B is not mentioned:
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Sid": "AllowLambdaToAssume",
+    "Effect": "Allow",
+    "Principal": { "Service": "lambda.amazonaws.com" },
+    "Action": "sts:AssumeRole",
+    "Condition": {
+      "StringEquals": { "aws:SourceAccount": "111111111111" },
+      "ArnLike": {
+        "aws:SourceArn": "arn:aws:lambda:ap-south-1:111111111111:function:order-export"
+      }
+    }
+  }]
+}
+```
+
+**② Source role — permission policy (Account A).** *What may it do?* Assume the target role, plus its own local work. **This is Gate 1:**
 ```json
 {
   "Version": "2012-10-17",
   "Statement": [
-    { "Effect": "Allow", "Principal": { "Service": "lambda.amazonaws.com" }, "Action": "sts:AssumeRole" }
+    {
+      "Sid": "AssumeReaderRoleInAccountB",
+      "Effect": "Allow",
+      "Action": "sts:AssumeRole",
+      "Resource": "arn:aws:iam::222222222222:role/DealsTableReaderRole"
+    },
+    {
+      "Sid": "OwnAccountLogging",
+      "Effect": "Allow",
+      "Action": ["logs:CreateLogStream", "logs:PutLogEvents"],
+      "Resource": "arn:aws:logs:ap-south-1:111111111111:log-group:/aws/lambda/order-export:*"
+    }
   ]
 }
 ```
+Pin `Resource` to the exact role ARN — `"*"` here lets the Lambda assume *any* role that happens to trust it. And note what is **absent**: no `dynamodb:*`. The table is in another account, so a DynamoDB grant on this role does nothing at all.
 
-**Cross-account access pattern (the most interview-relevant IAM scenario):**
-1. Account B creates a role with a trust policy allowing Account A's root/specific role ARN to assume it.
-2. Account B attaches a permission policy scoping what that role can do (e.g., `s3:GetObject` on one bucket).
-3. Account A's caller needs its **own** `sts:AssumeRole` permission targeting that specific role ARN — without this, AssumeRole fails even if Account B's trust policy is correct.
-4. Caller calls `sts:AssumeRole`, gets temporary credentials, uses them against Account B's resource.
-
-```csharp
-var stsClient = new AmazonSecurityTokenServiceClient();
-var request = new AssumeRoleRequest
+**③ Target role — trust policy (Account B).** *Who may become this role?* That specific role in A. **This is Gate 2:**
+```json
 {
-    RoleArn = "arn:aws:iam::222222222222:role/CrossAccountReadRole",
-    RoleSessionName = "CrossAccountSession"
-};
-var response = await stsClient.AssumeRoleAsync(request);
-var creds = response.Credentials; // use against Account B resources
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Sid": "TrustOrderExportRoleInAccountA",
+    "Effect": "Allow",
+    "Principal": { "AWS": "arn:aws:iam::111111111111:role/OrderExportLambdaRole" },
+    "Action": ["sts:AssumeRole", "sts:TagSession"],
+    "Condition": {
+      "StringEquals": { "aws:PrincipalOrgID": "o-abc123xyz" }
+    }
+  }]
+}
 ```
+Include `sts:TagSession` only if you actually pass session tags. `aws:PrincipalOrgID` is the right extra guard *within* your own organisation; for a third-party vendor use `sts:ExternalId` instead (below).
+
+**④ Target role — permission policy (Account B).** *What may it do once assumed?* Read one table. **This is Gate 3:**
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Sid": "ReadDealsTableOnly",
+    "Effect": "Allow",
+    "Action": ["dynamodb:GetItem", "dynamodb:Query"],
+    "Resource": [
+      "arn:aws:dynamodb:ap-south-1:222222222222:table/Deals",
+      "arn:aws:dynamodb:ap-south-1:222222222222:table/Deals/index/*"
+    ]
+  }]
+}
+```
+The `/index/*` ARN is **required** to `Query` a GSI — grant only the table ARN and every index query returns `AccessDenied`, which reads like a bug in your code.
+
+**The matrix — the symmetry is the thing to remember:**
+
+| | **Trust policy** — who can become me | **Permission policy** — what I can do |
+|---|---|---|
+| **Source role** (A) | `lambda.amazonaws.com` | `sts:AssumeRole` on **B's role ARN** |
+| **Target role** (B) | **A's role ARN** | `dynamodb:GetItem`/`Query` on the table |
+
+A's permission policy names B's role; B's trust policy names A's role. Both must exist — neither account can grant the access alone.
+
+**The call — two clients, because the credentials change hands:**
+```csharp
+// Ambient credentials = the SOURCE role (the Lambda execution role)
+var sts = new AmazonSecurityTokenServiceClient();
+
+var assumed = await sts.AssumeRoleAsync(new AssumeRoleRequest {
+    RoleArn         = "arn:aws:iam::222222222222:role/DealsTableReaderRole",
+    RoleSessionName = $"order-export-{context.AwsRequestId}"   // appears in B's CloudTrail
+});
+
+// New client built from the TARGET role's temporary credentials
+var ddb = new AmazonDynamoDBClient(assumed.Credentials);
+var deal = await ddb.GetItemAsync("Deals", key);
+```
+`RoleSessionName` is what Account B sees as `assumed-role/DealsTableReaderRole/<name>` — put a request ID in it or cross-account attribution is impossible.
+
+**Four traps:**
+
+| Trap | Detail |
+|---|---|
+| Target permissions on the source role | The most common wiring error. B's permissions belong on B's role; the source role needs only `sts:AssumeRole`. |
+| Recreating the trusted role | `Principal: <role ARN>` is stored internally as that role's **unique principal ID**. Delete and recreate role A under the same name and B's trust silently stops matching — re-save B's trust policy to fix. |
+| Terraform circular dependency | B's trust policy references A's role ARN, which may not exist on a first apply. Either build the ARN as a string rather than a resource reference, or bootstrap with `:root` and tighten on a second pass. |
+| Re-assuming every invocation | Credentials last 15 min–12 h. Cache them in the warm container and refresh on expiry rather than paying an STS round trip per request. |
 
 **External ID (vendor/third-party access — prevents "confused deputy" attacks):**
 ```json
@@ -1335,7 +1939,7 @@ aws accessanalyzer list-findings --analyzer-arn <arn>
 
 **Golden debugging checklist for "my role has permission but access still fails":** execution role permission → trust policy → resource-based policy (bucket/queue/key policy) → KMS key policy (if encrypted) → SCP/permission boundary.
 
-### [new content] Secrets Manager vs Parameter Store
+### Secrets Manager vs Parameter Store
 
 The original notes reference "Secrets Manager or Parameter Store" for securing secrets in multiple places (Lambda/ECS/CodeBuild sections) but never actually compare them — a direct comparison is a very common senior AWS interview question.
 
@@ -1386,9 +1990,7 @@ The fix is to **re-fetch on authentication failure**, not to poll: catch the aut
 
 **The one-line summary:** *"Secrets Manager for credentials that rotate, Parameter Store for configuration — and cache the value with a TTL while re-fetching on auth failure, because the real production incident isn't a leaked secret, it's a rotated one the app never re-read."*
 
-### [new content] Least Privilege & Permission Boundaries in Practice
-
-The notes mention "least privilege" as a principle repeatedly but never show a concrete before/after example — adding one closes that gap.
+### Least Privilege & Permission Boundaries in Practice
 
 **Anti-pattern (seen constantly in real .NET/Lambda code):**
 ```json
@@ -1467,6 +2069,22 @@ A: Role chaining — the job assumes a role from an already-assumed role, which 
 
 **Q (scenario): The EC2 role clearly allows `s3:GetObject`, but the app still gets AccessDenied. Where do you look?**
 A: In order: is the app actually using the role (`aws sts get-caller-identity` — an ARN of `user/...` instead of `assumed-role/...` means stale `AWS_*` env vars are shadowing the instance profile, since env vars rank above IMDS in the credential chain); then the bucket policy; then the KMS key policy if the object is SSE-KMS encrypted; then SCP/permissions boundary. Also confirm an instance profile exists at all — with Terraform/CloudFormation the role can exist without one.
+
+**Disaster Recovery — IAM & Security**
+
+| | |
+|---|---|
+| **What's actually at risk** | Roles, policies, trust relationships, Identity Center assignments. IAM is **global**, so a regional outage doesn't touch it — the realistic disaster is *you*, via a bad apply or a deletion |
+| **Backup mechanism** | **IaC is the only backup** — IAM has no snapshot facility. **AWS Config** gives you the timeline of what changed; **CloudTrail** gives you who did it |
+| **Realistic RPO / RTO** | RPO = last commit. RTO minutes |
+
+**Recovery runbook:**
+1. **Identify** the change: AWS Config → resource timeline for the role; CloudTrail → `DeleteRole` / `PutRolePolicy` event with the actor.
+2. **Re-apply from IaC.** Don't hand-fix in the console — that creates the drift you'll fight later.
+3. **Rotate anything exposed** during the incident: access keys, and any secret the compromised principal could read.
+4. **Verify** with IAM Access Analyzer that you restored the intended boundary and not something broader.
+
+⚠️ **The gotcha, and it's the one that actually hurts:** **you can break the IAM you need in order to fix IAM.** Keep a **break-glass role** with a vaulted MFA credential that is *not* managed by the same pipeline that could delete it. And know this: recreating a deleted role with the same name gives it a **new unique principal ID** — ARN-based trusts recover, but anything pinned to the principal ID stays silently broken, which is a very confusing hour to spend during an incident.
 
 ---
 
@@ -1701,6 +2319,35 @@ Authenticate the workflow with **GitHub OIDC assuming an AWS role** — no long-
 | How do you test IaC? | `validate` + `plan` in CI, `tflint`, policy-as-code (**tfsec/checkov/OPA**), and **Terratest** for real provision-assert-destroy tests against a sandbox account |
 | Why not just use CDK (not CDKTF)? | AWS CDK synthesises **CloudFormation** — AWS-only, AWS-managed state. **CDKTF** synthesises **Terraform** — multi-cloud, self-managed state. Same authoring ergonomics, different engine underneath |
 
+### Resume Follow-Ups — The Deployment Dashboard Bullet
+
+> *"Deployment Dashboard UI integrating GitHub Actions with CDKTF/Terraform for AWS infrastructure provisioning… cutting manual deployment intervention by 40% and release cycle from 5 days to 3."*
+
+Expect: *how does the pipeline authenticate to AWS? how do you prevent a bad apply? who approves prod?*
+
+- **Authentication: GitHub OIDC assuming an IAM role** — no static access keys in GitHub secrets, trust policy scoped via `sub` to a specific repo **and** branch/environment. Lead with this; it is the highest-value thing in the bullet, and the JSON is in [IAM Roles, Policies, AssumeRole](#iam-roles-policies-assumerole).
+- **Safety: plan on PR (read-only role) → apply on merge (privileged role) from the saved plan file**, plus GitHub **environment protection rules** for manual prod approval, and `tfsec`/`checkov` gates. Depth in [Terraform/CDKTF in Practice](#terraformcdktf-in-practice--depth-questions-to-expect).
+- **State: S3 backend + DynamoDB lock table** — and be ready for *"what if two pipelines apply at the same time?"*
+- **The 40% and the 5→3 days** — same rule as the 99.9% claim: know the denominator and the window. How many deployments per month, measured over what period, and exactly which manual steps the dashboard removed. A percentage without a denominator reads as decoration.
+
+The other resume bullets are in [Resume Deep-Dives](#resume-deep-dives--the-follow-ups-i-should-expect).
+
+**Disaster Recovery — IaC & CI/CD (Terraform state)**
+
+| | |
+|---|---|
+| **What's actually at risk** | **Terraform state** — losing it is worse than losing infrastructure. Also pipeline definitions and build artifacts |
+| **Backup mechanism** | S3 backend with **versioning** (non-negotiable) + optional CRR; the **DynamoDB lock table**; pipeline definitions in Git; artifacts in S3/ECR with versioning |
+| **Realistic RPO / RTO** | State RPO = last apply. RTO minutes, *if* versioning was on |
+
+**Recovery runbook:**
+1. **Corrupted or truncated state:** list versions (`aws s3api list-object-versions --bucket tfstate --prefix prod/terraform.tfstate`) and restore the previous one by copying that `--version-id` over the current key.
+2. **Stale lock after a crashed apply:** `terraform force-unlock <LOCK_ID>` — but confirm no apply is genuinely running first.
+3. **Always `terraform plan` before applying** post-restore, and read it as a drift report — it tells you what reality did while state was wrong.
+4. **Resources that exist but aren't in state:** `terraform import` them back rather than letting the next apply try to recreate them.
+
+⚠️ **The gotcha:** **lost state doesn't destroy anything — it makes Terraform think nothing exists**, so the next `apply` tries to *create* resources that are already there, and you get name conflicts on the lucky path and duplicated infrastructure on the unlucky one. S3 versioning on the state bucket is the single highest-value line in the whole backend config, and it's worth actually testing a rollback rather than assuming it works.
+
 ---
 
 ## S3
@@ -1764,7 +2411,7 @@ Four mechanisms can grant S3 access; knowing which to reach for is the question:
   ]
 }
 ```
-Note both `Resource` entries in the second statement — the bucket ARN *and* the `/*` object ARN. Omitting one is the classic mistake (see the ARN gotcha in [Policy Types, Structure & Password Policy](#policy-types-structure--password-policy)).
+Note both `Resource` entries in the second statement — the bucket ARN *and* the `/*` object ARN. Omitting one is the classic mistake (see the ARN gotcha in [Policy Types & Structure](#policy-types--structure)).
 
 **Block Public Access (BPA)** — four independent toggles, available at both **account** and **bucket** level, **on by default** since 2023:
 1. Block *new* public ACLs
@@ -1872,7 +2519,7 @@ S3 is the far end of the spectrum from EC2 — AWS owns almost all of the infras
 
 **One-liner:** "S3 has never lost my data — but S3 will absolutely let me make it public. Durability is AWS's job; access control and retention are mine."
 
-### [new content] S3 Storage Classes & Lifecycle Policies
+### S3 Storage Classes & Lifecycle Policies
 
 | Storage Class | Use Case | Availability | Min Storage Duration | Retrieval |
 |---|---|---|---|---|
@@ -2108,6 +2755,22 @@ Plus **Legal Hold** — an on/off flag, independent of any retention period, wit
 - **Monitor continuously:** IAM Access Analyzer for external exposure, **Macie** for discovering sensitive data (see [Macie](#macie)), AWS Config rules for public-access and encryption drift.
 
 For the shared-responsibility split, see [S3 Shared Responsibility Model](#s3-shared-responsibility-model) — the short version being that S3 breaches are essentially never durability failures, they're **configuration** failures on the customer's side of the line.
+
+**Disaster Recovery — S3**
+
+| | |
+|---|---|
+| **What's actually at risk** | Objects (accidental delete, overwrite, ransomware) and bucket configuration |
+| **Backup mechanism** | **Versioning** (undelete), **MFA Delete**, **Object Lock** (WORM — the actual ransomware control), **CRR/SRR**, **S3 Batch Replication** for pre-existing objects, lifecycle to Glacier |
+| **Realistic RPO / RTO** | CRR seconds–minutes (**RTC** gives a 15-minute SLA). Versioned restore RTO minutes; Glacier Deep Archive **12 hours** |
+
+**Recovery runbook:**
+1. **Accidental delete on a versioned bucket:** the object isn't gone — a **delete marker** was added. Delete the marker and the object is back: `aws s3api delete-object --key file.json --version-id <delete-marker-id>`.
+2. **Mass restore:** S3 **Batch Operations** with a manifest, rather than a scripted loop over millions of keys.
+3. **Regional failure:** repoint the app at the replica bucket — which only works if CRR was configured *and* the app reads the bucket name from config.
+4. **Archived data:** `restore-object` first and wait out the retrieval tier; Deep Archive is ~12 hours, so it can never be on the critical path of an RTO measured in minutes.
+
+⚠️ **The gotcha:** **CRR only replicates objects created *after* it's enabled** — everything already in the bucket needs S3 Batch Replication, and teams routinely discover this during the incident. Also **replication deliberately does not replicate deletes by default** (good for DR, but the replica drifts), and **versioning alone does not stop a credential compromise** from mass-deleting — that needs Object Lock or MFA Delete.
 
 ---
 
@@ -2475,7 +3138,7 @@ This guide already has a Lambda-vs-ECS-vs-EC2-vs-Fargate comparison table and a 
 
 ---
 
-### [new content] EBS vs EFS vs S3
+### EBS vs EFS vs S3
 
 | | EBS | EFS | S3 |
 |---|---|---|---|
@@ -2725,6 +3388,22 @@ sudo mount -t efs -o tls fs-0123456789abcdef:/ /mnt/efs      # amazon-efs-utils,
 | Availability of the EFS mount targets | Security groups on those mount targets (NFS 2049), and the data your clients write |
 | — | Knowing **instance store is ephemeral** and replicating anything that matters |
 
+**Disaster Recovery — EC2 & Instance Storage**
+
+| | |
+|---|---|
+| **What's actually at risk** | **Instance store data (unrecoverable — gone on stop, not just terminate)**, EBS volumes, machine configuration |
+| **Backup mechanism** | **EBS snapshots** (incremental, stored in S3), **Data Lifecycle Manager** for scheduled snapshots + retention, **AMIs** for whole-machine recovery, cross-region snapshot/AMI copy |
+| **Realistic RPO / RTO** | RPO = your DLM schedule (typically hours). RTO minutes to launch from an AMI |
+
+**Recovery runbook:**
+1. **Instance failure:** launch from the last **golden AMI** via the launch template — if it's behind an ASG this is automatic and there's nothing to do.
+2. **Volume corruption:** `aws ec2 create-volume --snapshot-id snap-xxx --availability-zone <az>`, then detach the bad volume and attach the new one at the same device name.
+3. **Regional failure:** launch from the **AMI you copied to the DR region in advance** (`aws ec2 copy-image`), then reattach/reallocate the Elastic IP and update the Route 53 record.
+4. Confirm the **ASG launch template references the DR-region AMI ID** — AMI IDs are region-specific, so a copied launch template points at an AMI that doesn't exist there.
+
+⚠️ **The gotcha:** **snapshots and AMIs are regional**, so an un-copied snapshot is worthless in exactly the scenario you took it for. Copy AMIs to the DR region **as a build step**, not at incident time. And say the instance-store point plainly: it is **never** backed up and a simple *stop* loses it — so nothing that matters is allowed to live there.
+
 ---
 
 ## Observability & Monitoring
@@ -2776,7 +3455,7 @@ You can also publish custom business metrics (`PutMetricData`) — orders/minute
 
 **Interview-ready closing summary:** "CloudWatch is AWS's core observability service — Logs, Metrics, Alarms, EventBridge, and Dashboards let me detect issues early, debug failures via Logs Insights, and automate remediation across Lambda, SQS, API Gateway, and DynamoDB in production."
 
-### [new content] CloudWatch vs X-Ray: Complementary, Not Competing
+### CloudWatch vs X-Ray: Complementary, Not Competing
 
 The original notes mention X-Ray only briefly ("CloudWatch = Logs + Metrics; X-Ray = Tracing + Service maps") without depth — this expands it, since "CloudWatch vs X-Ray, when do you use each" is a standard senior observability question.
 
@@ -2855,11 +3534,254 @@ aws logs tail /aws/lambda/my-fn --follow --format short      # live tail while d
 ```
 **Two alarm-design details worth stating:** set **`--treat-missing-data`** deliberately (a metric that stops being published because the service is *down* will leave an alarm in `INSUFFICIENT_DATA` forever if you don't), and alarm on **rates via Metric Math** rather than raw counts, since raw error counts are meaningless when traffic volume swings.
 
+### Resume Follow-Ups — Measuring the 99.9% Claim
+
+The bullet *"…automated log maintenance and health checks, sustaining 99.9% uptime across 12 platform services"* lands squarely in this section, because *"how did you know it was 99.9%?"* is a CloudWatch question. The spoken answer and the arithmetic sit with [the Lambda bullet](#resume-follow-ups--the-scheduled-lambda-jobs-999-uptime-bullet); what belongs here is the instrumentation that produces the number.
+
+- **"Log maintenance", concretely** — **retention policies** (log groups default to **Never Expire**, a silent unbounded cost leak; setting retention is often the single biggest CloudWatch saving), **metric filters** to turn log patterns into alarmable metrics, **subscription filters** to stream logs onward, and **export to S3** with lifecycle rules into Glacier for cheap long retention.
+- **Where the availability number comes from** — a success/failure count per service (custom metric via `PutMetricData` or **EMF**, or a metric filter over structured logs), then availability derived with **Metric Math** — `(total - failed) / total * 100` — rather than alarming on raw counts. Raw-count alarms break the moment traffic volume changes; a ratio does not.
+- **Alarming on it** — alarm on the Metric Math expression, **composite alarms** so one root cause does not page five times, SNS to on-call, and one dashboard per service.
+- **`treat-missing-data`** — set it deliberately. A metric that stops being published is the failure mode that most often hides behind a green dashboard.
+- **If they push on *why* a service dipped** rather than *whether* it did, that is a tracing question, not a metrics one — see [CloudWatch vs X-Ray](#cloudwatch-vs-x-ray-complementary-not-competing).
+
 ---
 
 # PART II — Tier 2: Design-Level Confidence
 
 > **Reason about it; be honest about hands-on gaps.** These appear in "how would you architect X?" questions, where structured reasoning matters more than operational war stories. Where I lack production experience the section says so explicitly — that framing consistently lands better than a confident wrong answer.
+
+**Disaster Recovery — Observability**
+
+| | |
+|---|---|
+| **What's actually at risk** | Log groups, dashboards, alarms, and 15 months of metric history. Losing observability *during* an incident is its own outage |
+| **Backup mechanism** | Dashboards/alarms in **IaC**; log retention settings + **export/subscription filter to S3**; metrics cannot be snapshotted — long retention means shipping them out |
+| **Realistic RPO / RTO** | Config RPO = last commit; RTO minutes. Historical metrics beyond 15 months: unrecoverable unless already exported |
+
+**Recovery runbook:**
+1. **Re-apply dashboards and alarms from IaC** — and note this is why they must never be console-only artefacts.
+2. **Logs already in S3:** query directly with Athena; you don't need the log group back to investigate.
+3. **Re-create subscription filters** — they're per-log-group and are silently lost when a log group is recreated.
+4. **Verify alarms actually re-armed** and are in `OK`, not `INSUFFICIENT_DATA` — an alarm on a metric with no datapoints is indistinguishable from healthy.
+
+⚠️ **The gotcha:** **CloudWatch is regional, so a regional outage blinds you precisely when you need sight.** Anything you'd use to *diagnose* a regional failure must be shipped cross-region or to a third party. And a bad IaC apply can delete the dashboards and alarms you'd use to detect that bad apply — which is a good argument for keeping observability in a separate stack from the workload.
+
+---
+
+## Load Balancing, Scalability & Auto Scaling
+
+### Scalability, High Availability, Elasticity & Agility
+
+Four words interviewers deliberately blur together. Define them cleanly and you've answered half the section.
+
+**Scalability** = the system *can* handle more load.
+- **Vertical scaling (scale up)** — a bigger instance. `t3.micro` → `m5.4xlarge`. Simple, no app changes, but there's a hard ceiling (the largest instance type) and it usually needs downtime. This is how you scale things that can't be distributed: RDS primaries, a single large cache node, legacy monoliths.
+- **Horizontal scaling (scale out)** — more instances behind a load balancer. Effectively unlimited, no downtime, better fault tolerance. Requires the app to be **stateless**. This is the default for web/API tiers.
+
+**High Availability** = surviving a failure without downtime, achieved by running in **at least two Availability Zones**. Note this is a *different goal* from scalability: you can be highly scalable in one AZ (and lose everything when that AZ fails) or highly available with two small instances that can't handle load. Interviewers probe exactly this confusion.
+
+**Elasticity** = scaling **automatically, in both directions, matched to actual demand** — so you pay only for what you need right now. Scalability is the capability; elasticity is the automation of it.
+
+**Agility** = how fast you can get new resources at all — minutes instead of a months-long hardware procurement cycle. It has **nothing to do with load**; it's about speed of change. This is the one people get wrong.
+
+| Term | Question it answers | Example |
+|---|---|---|
+| Scalability | *Can* it grow? | An ASG whose max is 20 instances |
+| Elasticity | Does it grow and shrink **by itself**? | That ASG on a target-tracking policy, scaling 2→20→2 across the day |
+| High Availability | Does it survive a failure? | That ASG spread across 3 AZs behind an ALB |
+| Agility | How fast can I get *anything* new? | Spinning up a whole test environment in 10 minutes via Terraform |
+
+**A scalable-but-not-elastic example to have ready:** a fixed fleet of 20 EC2 instances sized for Black Friday. It scales (it handles the peak) but it isn't elastic (you pay for 20 instances in February). That single example demonstrates you understand the difference rather than reciting definitions.
+
+**HA vs Fault Tolerance vs Disaster Recovery:** HA = minimal downtime within a region (multi-AZ); fault tolerance = *zero* interruption from a component failure (redundancy with no impact); DR = recovering from losing an entire region, measured by **RTO/RPO** — see [Disaster Recovery Strategies](#disaster-recovery-strategies).
+
+---
+
+### ALB vs API Gateway vs ELB (NLB/GWLB/CLB)
+
+**ELB family**
+| Type | Layer | Protocols | Best for |
+|---|---|---|---|
+| ALB (Application LB) | 7 | HTTP/HTTPS/WebSocket | Host/path routing, microservices, Lambda targets |
+| NLB (Network LB) | 4 | TCP/UDP/TLS | Extreme throughput, static IP, low latency |
+| GWLB (Gateway LB) | 3 | IP | Transparent traffic inspection (firewalls/IDS appliances) |
+| CLB (Classic, deprecated) | 4/7 | Basic | Legacy only |
+
+**ALB core concepts:** Listener (port/protocol) → Rules (host/path/header conditions) → Target Group (EC2, ECS, IP, **Lambda**) with health checks. Supports TLS termination with SNI (multiple certs on one listener), WebSocket, HTTP/2, and direct Lambda invocation as a target (Lambda returns an HTTP-shaped response, similar to API Gateway proxy integration).
+
+**API Gateway core concepts:** REST API (feature-rich, more expensive — API keys, usage plans, request/response VTL mapping templates, caching) vs HTTP API (cheaper, lower latency, JWT/IAM auth, good default for Lambda-backed serverless) vs WebSocket API (connection-managed real-time).
+
+**ALB vs API Gateway — the mental model that wins interviews**
+> "ALB is a smart Layer-7 load balancer: I have services, route and balance traffic between them. API Gateway is a full API front door: I'm exposing an API to external clients and need auth, throttling, quotas, versioning, transformation, and monitoring built in."
+
+| Aspect | ALB | API Gateway |
+|---|---|---|
+| Primary purpose | Load balancing between backend services | Publishing/managing APIs for consumers |
+| Targets | EC2, ECS/EKS, IP, Lambda | Lambda, HTTP endpoints, AWS service integrations |
+| Built-in throttling/quotas | No (app-level only) | Yes (usage plans, rate limits) |
+| Request transformation | Limited (routing only) | Advanced (VTL mapping templates) |
+| Caching | No | Yes (REST API only) |
+| Pricing | Per-hour + LCU | Per-million-requests (+ cache if enabled) |
+| Typical client | Internal/browser | Mobile/web/3rd-party API consumers |
+
+**Decision examples**
+- Public REST API for a mobile app needing auth/throttling/API keys, Lambda+DynamoDB backend → **API Gateway**.
+- Internal microservices on ECS needing only path/host routing + TLS termination → **ALB**.
+- Real-time chat: fully serverless → **API Gateway WebSocket API**; already on containers → **ALB WebSocket**.
+
+---
+
+### ELB Deep-Dive: Cross-Zone Load Balancing, 504 Timeouts & Shield DDoS Protection
+
+**Cross-Zone Load Balancing:** when enabled, every load balancer node distributes traffic evenly across *all* registered targets in *all* enabled AZs, not just the targets in its own AZ — this evens out load when targets are unevenly distributed across AZs (e.g., 8 targets in AZ-A, 2 in AZ-B). ALB has cross-zone load balancing **on by default, always** (cannot be disabled); NLB has it **off by default** and it's a per-target-group toggle — enabling it on NLB can introduce cross-AZ data transfer charges, which is the usual reason teams leave it off for latency/cost-sensitive NLB use cases. Knowing that ALB and NLB default differently here is a good "gotcha" fact to have ready.
+
+**HTTP 504 Gateway Timeout (ELB):** means the load balancer forwarded the request to a target but never got a timely response back. Two common root causes: an **unhealthy/slow target** (app hung, DB call blocking, thread pool exhausted) or a **traffic spike** overwhelming backend capacity before auto-scaling catches up. A third cause worth naming from standard ELB behavior: a mismatch between the **ALB idle timeout** (default 60s) and the backend's own keep-alive/response time — if your app can legitimately take longer than the ALB's configured idle timeout, you'll see 504s that have nothing to do with target health, and the fix is raising the ALB idle timeout (and your app's keep-alive) rather than chasing a phantom backend bug.
+
+**AWS Shield — tying DDoS protection to Route 53/ELB alongside WAF:** Shield defends at the network/transport layer (L3/L4 volumetric and protocol attacks), while WAF defends at the application layer (L7 — malicious request patterns, rate limiting, bad bots) — they're complementary, not competing, and a senior answer names both together rather than picking one.
+- **Shield Standard:** free, automatically enabled for **every** AWS account on Route 53, CloudFront, and ELB (ALB/NLB/CLB) — no opt-in needed, covers common, automated L3/L4 DDoS attack patterns.
+- **Shield Advanced:** paid, opt-in tier adding larger-attack mitigation capacity, real-time attack visibility/metrics, integration with WAF for automatic rule creation during an attack, cost protection (credits for scaling charges incurred during an attack), and 24/7 access to the AWS DDoS Response Team (DRT).
+- **Practical pairing:** Route 53 (DNS-layer resilience + Shield Standard baseline) + ELB (Shield Standard baseline, upgrade to Advanced for critical public endpoints) + WAF (L7 rate limiting/malicious pattern blocking) is the standard "defend the public edge" stack — worth stating as a layered answer rather than naming just one service.
+
+---
+
+### Load Balancing Fundamentals
+
+**What a load balancer buys you:** spread traffic over many targets, one stable DNS name in front of disposable instances, automatic removal of unhealthy targets, TLS termination in one place, and cross-AZ high availability. The ELB itself is a managed, auto-scaling, multi-AZ fleet — you never patch or size it.
+
+**The four objects, in order:** **Listener** (port + protocol) → **Rules** (conditions: host, path, header, query string, source IP, HTTP method) → **Target Group** (EC2, IP, Lambda, or another ALB) → **Targets**, each continuously **health-checked**.
+
+**Target groups in short** — the object that does most of the actual work, and the one you tune:
+- **What it is:** a named group of targets **plus their health check and traffic behaviour**. It exists independently of the load balancer — one target group can be used by several load balancers, and one load balancer can route to many target groups.
+- **Target types:** `instance` (register by instance ID) · **`ip`** (any IP in the VPC, or on-prem via Direct Connect/VPN — **and the type required for Fargate and `awsvpc` ECS tasks**, since those have their own ENIs) · `lambda` (ALB only) · `alb` (an NLB fronting an ALB, to combine a static IP with Layer-7 routing).
+- **Health check** is configured here, not on the load balancer: protocol, path, **port** (`traffic-port` or an override — e.g. app on 8080, health endpoint on 8081), interval, timeout, healthy/unhealthy thresholds, and **success codes** (the *matcher*, default `200`, often widened to `200-299`).
+- **Three attributes worth knowing beyond [stickiness](#sticky-sessions-session-affinity) and [deregistration delay](#connection-draining--deregistration-delay):**
+  - **Slow start** — ramps traffic to a *new* target over 30–900s instead of giving it a full share immediately. **Off by default, and genuinely useful for .NET/JVM**, where a fresh process has a cold JIT and empty caches: without it, the new target's p99 spikes or it fails health checks under full load the moment it joins.
+  - **Load balancing algorithm** — `round_robin` (default) vs **`least_outstanding_requests`**. Round robin will happily hand a request to a target already stuck on a slow one; LOR is the better choice whenever request durations vary a lot.
+  - **Protocol version** — HTTP1 / HTTP2 / **gRPC**, set on the target group; a gRPC backend needs this or it simply won't work.
+- **Target states:** `initial` → `healthy` / `unhealthy` → `draining` (being removed, finishing in-flight requests) → `unused`. Reading these is usually the fastest way to diagnose "the ALB returns 503".
+- **Weighted target groups:** a listener rule can forward across **multiple target groups by weight** — which is canary/blue-green **at the load balancer**, and the mechanism CodeDeploy uses for ECS blue/green deployments.
+
+For the ALB/NLB/GWLB/CLB comparison table and the ALB-vs-API-Gateway decision, see [ALB vs API Gateway vs ELB](#alb-vs-api-gateway-vs-elb-nlbgwlbclb). The specifics worth adding here:
+
+**ALB (Layer 7)** — routes on HTTP content: host, path, header, query string, method, source IP. Supports **SNI** (many TLS certificates on one listener), HTTP/2, gRPC, WebSocket, **Lambda targets**, native redirect and fixed-response actions, and built-in **Cognito/OIDC authentication** at the listener. Because it terminates HTTP, the original client IP arrives in the **`X-Forwarded-For`** header (plus `X-Forwarded-Proto` and `-Port`) — in ASP.NET Core you must enable `ForwardedHeadersMiddleware` or every client will look like the load balancer, which silently breaks rate limiting, geo-logic, and audit logs.
+
+**NLB (Layer 4)** — millions of requests per second at ultra-low latency. Two properties that decide questions: it can have **one static IP per AZ (and supports Elastic IPs)**, and it **preserves the client source IP** with no header needed. Can pass TLS straight through to targets, or terminate it. Targets can be instances, IPs (including on-prem via Direct Connect), or even an ALB.
+
+**❗ An ALB has no static IP — only a DNS name**, and the IPs behind it change. If a client or partner firewall requires a fixed IP, the answer is **NLB**, **NLB fronting an ALB**, or **Global Accelerator** (see [Global Accelerator](#aws-global-accelerator)). This is one of the most commonly asked ELB questions.
+
+**Gateway Load Balancer — GWLB (Layer 3)** — transparently routes all traffic through a fleet of third-party inspection appliances (firewall, IDS/IPS) using **GENEVE on port 6081**, preserving the original packet. It's a traffic-inspection insertion point, not a conventional load balancer. Pair it with [AWS Network Firewall](#aws-network-firewall) as the AWS-native alternative.
+
+**Classic Load Balancer — CLB** — the legacy Layer 4/7 balancer, now deprecated. It predates target groups, so it registers instances directly and supports neither host/path routing, SNI multi-certificate listeners, nor Lambda targets. The only correct answer for "we're on EC2-Classic"; otherwise migrate to ALB (HTTP) or NLB (TCP/UDP). Note the terminology difference it leaves behind: CLB calls it **"connection draining"**, ALB/NLB call the same thing **"deregistration delay"** (see [Connection Draining](#connection-draining--deregistration-delay)).
+
+**Health checks:** protocol, port, and path (`/health`), plus interval, timeout, and healthy/unhealthy thresholds. A target failing the threshold stops receiving traffic and — if the ASG is configured for it — gets replaced. **Point the check at an endpoint that actually exercises the app's dependencies** (a `/health` that only returns `200 OK` from Kestrel will happily report healthy while the database connection pool is exhausted). ASP.NET Core's `AddHealthChecks()` with DB/cache probes is the right implementation.
+
+### Sticky Sessions (Session Affinity)
+
+**What it does:** pins a given client to the same target for the duration of a session, so in-process session state stays valid.
+
+| Load balancer | Mechanism |
+|---|---|
+| **ALB** | **Duration-based** — LB-generated `AWSALB` cookie with a configurable duration (1 second to 7 days); or **application-based** — the LB honours *your* app's cookie via `AWSALBAPP`, so the app controls session lifetime |
+| CLB | `AWSELB` cookie, or an application cookie |
+| **NLB** | No cookies (it's Layer 4) — stickiness is by **source IP / flow hash** per target group |
+
+**The trade-offs to name:** stickiness undermines even load distribution (one pinned client can hot-spot a target), and when a target is removed on scale-in or deploy, those sessions are **lost anyway** — so it never actually guarantees session survival.
+
+**The senior answer:** stickiness is a workaround for a stateful app tier. The real fix is to externalise session state so any instance can serve any request — **ElastiCache for Redis** or **DynamoDB**. In .NET that's `IDistributedCache` (`AddStackExchangeRedisCache`) instead of in-process `ISession`. Sticky sessions are legitimate for legacy applications you can't refactor, or where a genuinely expensive per-user in-memory context makes affinity worth the cost — say that rather than declaring stickiness simply "bad".
+
+### Connection Draining / Deregistration Delay
+
+Same feature, two names: **"connection draining"** on CLB, **"deregistration delay"** on ALB/NLB target groups.
+
+**What happens:** when a target is being removed (scale-in, deploy, manual deregistration) it enters `draining` state — **no new requests are routed to it**, but in-flight requests are allowed to complete for up to the configured delay. After that, remaining connections are closed.
+
+- Default **300 seconds**; configurable **0–3600**.
+- Tune it to your **longest legitimate request**. Set it too low and you cut off large file uploads or slow reports mid-flight (users see 502/504); set it too high and every deploy and scale-in crawls.
+- Set it to `0` only for workloads with genuinely instantaneous requests where deploy speed matters more.
+
+**"How do you deploy without dropping requests?"** — the complete answer chains three things: an appropriate **deregistration delay**, **ELB health checks** on the ASG so a bad instance is caught, and **ASG lifecycle hooks** (below) so an instance is warmed before it serves and drained before it dies. Add **ASG instance refresh** for a rolling replacement.
+
+### Auto Scaling Groups (ASG)
+
+**What it gives you:** maintains a target number of instances, replaces failed ones automatically, spans multiple AZs (that's the HA part), and registers/deregisters targets with the load balancer as it scales.
+
+**Core settings:** **minimum** (never fewer), **desired** (current target, what scaling policies change), **maximum** (never more, and your cost ceiling). Instances launch from a **launch template** — the modern replacement for the deprecated *launch configuration*; launch templates support versioning, mixed instance types, and mixed On-Demand/Spot.
+
+**❗ The health-check gotcha:** an ASG's health-check type defaults to **EC2 only**, which means it only replaces instances whose *hypervisor-level* status checks fail. An instance whose application has hung — or is returning 500s — looks perfectly healthy to EC2 and is **never replaced**, even while the ALB has already stopped sending it traffic. You must set the health check type to **ELB** so the ASG acts on the load balancer's application-level view. This is a genuine production incident pattern and a very common interview question.
+
+**Scaling policies:**
+| Policy | How it works | When to use |
+|---|---|---|
+| **Target tracking** | "Keep this metric at this value" — e.g. average CPU at 40%. AWS creates and manages the alarms | ✅ **The default recommendation.** Simplest and handles most cases |
+| **Step scaling** | CloudWatch alarm → add/remove N instances, with different steps by alarm severity | When you need aggressive response to big breaches (e.g. +1 at 60% CPU, +4 at 85%) |
+| **Simple scaling** | One alarm → one adjustment, then wait for cooldown | Legacy; step scaling supersedes it |
+| **Scheduled scaling** | Change min/desired/max at a specific time | Known patterns: business hours, a marketing launch, month-end batch |
+| **Predictive scaling** | ML on historical traffic, scales **ahead** of forecast demand | Cyclical daily/weekly traffic where reactive scaling is always a few minutes late |
+
+**What metric to scale on — the senior differentiator.** CPU is the default and often the wrong signal. Better choices:
+- **`ALBRequestCountPerTarget`** for a web/API tier — directly proportional to demand, and it reacts before CPU does.
+- **SQS queue depth** for a worker tier — specifically **backlog per instance** (`ApproximateNumberOfMessagesVisible` ÷ running instances) as a target-tracking metric. This is the canonical answer for "how would you scale a queue-consuming service?", and it's much better than CPU because a worker blocked on I/O shows low CPU while the backlog grows.
+- Custom application metrics (p99 latency, active connections, thread-pool saturation) published to CloudWatch.
+
+**The rest of the ASG surface worth knowing:**
+- **Cooldown / warm-up** — a pause after a scaling action so metrics can settle before the next one, preventing thrash. Target tracking uses *instance warm-up* instead: new instances aren't counted in the metric until they're actually ready.
+- **Lifecycle hooks** — pause an instance in `Pending:Wait` (bootstrap, warm caches, register with a service, run smoke tests) or `Terminating:Wait` (drain connections, flush logs, deregister) before it proceeds. The hook for "do something custom on the way in or out".
+- **Termination policy** — default order: the AZ with the most instances first, then the oldest launch template/configuration, then the instance closest to the next billing hour. Configurable, and `OldestInstance` is common when you want gradual rotation.
+- **Instance refresh** — rolling replacement of every instance with a new launch-template version (e.g. a patched AMI), honouring a minimum healthy percentage. How you ship AMI updates without downtime.
+- **Scale-in protection** — exclude specific instances from scale-in, for a node holding work that can't be interrupted.
+- **Warm pools** — keep pre-initialised, stopped instances ready so scale-out skips boot and bootstrap time; the answer for apps with slow startup where predictive scaling isn't enough.
+
+```bash
+aws autoscaling create-auto-scaling-group --auto-scaling-group-name web-asg \
+  --launch-template LaunchTemplateName=web-lt,Version='$Latest' \
+  --min-size 2 --max-size 10 --desired-capacity 2 \
+  --vpc-zone-identifier "subnet-a,subnet-b,subnet-c" \
+  --target-group-arns arn:aws:elasticloadbalancing:... \
+  --health-check-type ELB --health-check-grace-period 120     # ← ELB, not EC2
+aws autoscaling start-instance-refresh --auto-scaling-group-name web-asg
+```
+
+### Scalability Best Practices
+
+- **Make the app tier stateless** — no in-process session, no local file writes that matter. Everything else on this list depends on it.
+- **Scale out, not up**, for anything that can be distributed; reserve vertical scaling for the things that can't (databases, single-node caches).
+- **Minimum 2 instances across at least 2 AZs** (3 is better) — a single instance is not highly available regardless of instance type.
+- **Set the ASG health check type to ELB**, and make `/health` genuinely check dependencies.
+- **Scale on a demand-correlated metric** (requests per target, queue backlog), not CPU by reflex.
+- **Externalise session and cache state** to ElastiCache/DynamoDB.
+- **Use scheduled or predictive scaling for known events** — reactive scaling always lags a spike by the boot time of an instance.
+- **Test scale-in, not just scale-out.** Most scaling bugs (dropped requests, lost work, orphaned locks) surface on the way *down*, which is what deregistration delay and lifecycle hooks exist for.
+- **Cap `max` deliberately** — it's both a cost ceiling and a blast-radius limit if a bug or an attack drives artificial load.
+
+### Scalability & Load Balancing Shared Responsibility Model
+
+| AWS is responsible for | You are responsible for |
+|---|---|
+| Running and scaling the ELB fleet itself (multi-AZ, patched, no capacity to manage) | **Choosing the right LB type** (ALB/NLB/GWLB) for the protocol and requirements |
+| The ASG control plane — replacing failed instances, honouring your policies | **Setting min/desired/max, the scaling policy, and the metric that drives it** |
+| Health-check infrastructure | **Writing a health endpoint that reflects real application health** |
+| AZ-level infrastructure availability | **Actually spanning multiple AZs** — AWS won't do it for you |
+| TLS termination capability, managed certificates via ACM | Certificate lifecycle, cipher/TLS policy selection, and HTTPS redirect rules |
+| Providing lifecycle hooks and deregistration delay | Tuning them so deploys and scale-in don't drop in-flight requests |
+| — | **Designing the app to be stateless** so horizontal scaling is possible at all |
+
+**Disaster Recovery — Load Balancing & Auto Scaling**
+
+| | |
+|---|---|
+| **What's actually at risk** | ALB/NLB and their listeners and target groups, ASGs, launch templates. All config, no data |
+| **Backup mechanism** | **IaC.** ASGs are self-healing by design, so the recovery story is mostly "re-apply and let it converge" |
+| **Realistic RPO / RTO** | RPO ~0. RTO minutes — plus however long instance warm-up actually takes |
+
+**Recovery runbook:**
+1. **Re-apply from IaC** in the DR region.
+2. **Pre-scale the DR ASG before shifting traffic.** A DR ASG sitting at `min=0` cannot absorb a failover surge — you get a thundering herd against zero capacity, which looks exactly like the outage you're recovering from.
+3. **Shift traffic** with Route 53 **failover or weighted** records against a health check, moving in increments rather than all at once.
+4. **Confirm the ASG health check type is `ELB`, not `EC2`.**
+
+⚠️ **The gotcha:** **an ALB gets a brand-new DNS name when it's recreated**, so anything that hardcoded the hostname breaks — always front it with a Route 53 alias record so the name you publish is yours, not AWS's. And the classic real-world finding, worth repeating because it's so common: **ASG health check type left on `EC2` means a hung application is never replaced** — the instance is "running", so the ASG is satisfied while every request fails. (See [Auto Scaling Groups](#auto-scaling-groups-asg).)
+
+---
 
 ## Containers: Docker, ECS, ECR & Fargate
 
@@ -3259,7 +4181,7 @@ aws ecs execute-command --cluster prod-cluster --task <id> --container myapi \
 ```
 **Debugging order when tasks won't start** (a good practical answer): `describe-services` **events** first, then the **stopped task's `stoppedReason`**. In practice it's almost always one of — the **task execution role** can't pull from ECR or write logs, the image architecture doesn't match (an ARM image on x86 or vice versa), the **health check** fails before the app finishes starting (raise the ALB health-check grace period), no route to ECR from a private subnet (needs a NAT gateway or **VPC endpoints for ECR + S3**), or the container exits immediately because of a missing environment variable.
 
-### [new content] ECS vs EKS vs Fargate vs Lambda for .NET Workloads
+### ECS vs EKS vs Fargate vs Lambda for .NET Workloads
 
 The original notes cover Lambda-vs-ECS and EC2-vs-Fargate individually but never directly answer the very common senior .NET-on-AWS question: *"You're moving a .NET microservices platform to AWS — how do you choose the compute layer?"*
 
@@ -3331,7 +4253,7 @@ Kubernetes' biggest selling point — portability and a rich ecosystem (Helm, op
 
 ---
 
-### [new content] Deploying .NET to AWS: Elastic Beanstalk vs ECS vs Lambda Custom Runtime
+### Deploying .NET to AWS: Elastic Beanstalk vs ECS vs Lambda Custom Runtime
 
 The original notes never directly discuss Elastic Beanstalk, despite it being a common AWS Certified/senior-interview topic and a legitimate, low-effort .NET deployment path.
 
@@ -3348,13 +4270,29 @@ The original notes never directly discuss Elastic Beanstalk, despite it being a 
 - ECS: rolling update via service deployment configuration, or blue/green via CodeDeploy + two target groups.
 - Lambda: versions + aliases, with linear/canary traffic shifting via CodeDeploy.
 
+**Disaster Recovery — Containers (ECS / ECR / Fargate)**
+
+| | |
+|---|---|
+| **What's actually at risk** | Container images in ECR, task definitions, service configuration, and any EFS-backed state |
+| **Backup mechanism** | **ECR cross-region/cross-account replication rules**, **immutable tags**, task definitions (AWS versions these for you) + IaC, **AWS Backup** for EFS |
+| **Realistic RPO / RTO** | Images/config RPO ~0. RTO minutes — register the task definition and create the service |
+
+**Recovery runbook:**
+1. **Bad release:** roll back by updating the service to the **previous task definition revision** — `aws ecs update-service --task-definition my-app:41`. Revisions are immutable, which is what makes this safe.
+2. **Regional failure:** confirm the image is in the DR region's ECR (via a replication rule set up in advance), register the task def there, create the service against the DR cluster and target group.
+3. **EFS state:** restore from an AWS Backup recovery point into a new file system and update the volume configuration.
+4. Scale the DR service up **before** shifting traffic — Fargate task startup plus ALB target registration is minutes, and shifting DNS first just serves errors.
+
+⚠️ **The gotcha:** **a task definition pins the image by full URI, including the registry's account and region.** Copy that task def to another region and it still points at the *original* ECR — so on a real regional outage it cannot pull, and the service fails to start with an error that looks like a permissions problem. Set up ECR replication **and** parameterise the image URI per region. And never deploy `:latest` — without immutable tags or a digest, "roll back to the previous revision" doesn't actually change the image.
+
 ---
 
 ## Relational Databases, Caching & Analytics
 
 > **Tier 2 — reason about, be honest about hands-on.** RDS/Aurora are not part of my hands-on AWS experience (SQL Server on-prem and Cosmos DB are) — see the framing note in [Multi-AZ vs Read Replica](#gaps-multi-az-vs-read-replica--the-1-confused-pair). Analytics services here are Tier 3: know the shape and when to reach for them.
 
-### [new content] RDS Multi-AZ vs Read Replicas vs Aurora
+### RDS Multi-AZ vs Read Replicas vs Aurora
 
 The original notes never covered RDS despite it being one of the most common .NET-on-AWS database choices (SQL Server/PostgreSQL/MySQL via RDS is far more common for .NET shops than DynamoDB for primary OLTP workloads) — this is a material gap for a senior interview.
 
@@ -3653,7 +4591,7 @@ Beyond the storage-layer architecture described above, these are the Aurora feat
 | **Up to 15 read replicas** | vs 5 on standard RDS, with much lower lag because replicas read the *shared* storage volume rather than replaying logs |
 | **Reader / writer / custom endpoints** | The **writer endpoint** always points at the current primary (failover is transparent); the **reader endpoint** load-balances across replicas; **custom endpoints** target a chosen subset — e.g. route heavy reporting queries to two larger replicas so they can't affect the API's replicas |
 | **Aurora Serverless v2** | Scales capacity in fine-grained ACUs in **under a second**, from a fraction of a unit to hundreds — for spiky, unpredictable, or dev/test workloads where a fixed instance is either too small or mostly idle. (v1 scaled slowly and paused; v2 is the version to reference) |
-| **Aurora Global Database** | One primary region plus up to 5 secondary read-only regions, with **typical replication under 1 second** and cross-region failover usually **under a minute**. This is the engine behind Warm Standby / Active-Active DR — see [Disaster Recovery Strategies](#new-content-disaster-recovery-strategies) |
+| **Aurora Global Database** | One primary region plus up to 5 secondary read-only regions, with **typical replication under 1 second** and cross-region failover usually **under a minute**. This is the engine behind Warm Standby / Active-Active DR — see [Disaster Recovery Strategies](#disaster-recovery-strategies) |
 | **Database cloning** | A copy-on-write clone of a whole database in minutes with almost no extra storage cost — the right way to give QA or a data scientist production-like data without a restore |
 | **Backtrack** | Rewinds the cluster in place to a point in time **without a restore** (MySQL-compatible). Recovery from a bad migration in minutes rather than hours |
 | **Fast database cloning + zero-downtime patching + Blue/Green Deployments** | Managed blue/green creates a synchronised copy of the cluster for you to upgrade and test, then switches over in ~a minute |
@@ -3722,6 +4660,26 @@ Beyond the storage-layer architecture described above, these are the Aurora feat
 
 **11. Cost.** `cache.t*` nodes are **burstable** with CPU-credit mechanics like the EC2 T-family, so a steadily busy cache on a `t3` will throttle. Reserved nodes cut cost for steady workloads, and right-sizing matters because you pay per node-hour whether the cache is being hit or not.
 
+**Disaster Recovery — RDS, Aurora & ElastiCache**
+
+| | |
+|---|---|
+| **What's actually at risk** | Relational data. Cache is rebuildable — *unless* you've quietly made Redis a system of record, in which case it needs real backups |
+| **Backup mechanism** | **Automated backups + PITR** (up to 35 days), **manual snapshots** (kept indefinitely), **cross-region automated backup replication**, **cross-region read replicas**, **Aurora Global Database**, Redis RDB snapshots, **AWS Backup** |
+| **Realistic RPO / RTO** | Multi-AZ failover 60–120s (HA, not DR). PITR RPO ~5 min, RTO 10s of minutes. **Aurora Global: RPO <1s, failover <1 min** |
+
+**Recovery runbook:**
+1. **AZ failure:** nothing to do — Multi-AZ fails over to the standby automatically and the **endpoint DNS name stays the same**. This is why apps connect to the endpoint, never to an IP.
+2. **Regional failure — promote the read replica.** This is the core move:
+   ```
+   aws rds promote-read-replica --db-instance-identifier orders-dr-replica
+   ```
+   Promotion breaks replication and makes it a standalone writable primary (a minute or two). For Aurora Global Database use `failover-global-cluster` instead — it's faster and keeps the cluster topology.
+3. **Repoint the application** by updating the connection string **in Secrets Manager / SSM**, not in app config — then the app picks up the new endpoint on its next secret refresh with no redeploy. Alternatively keep a Route 53 CNAME in front of the DB endpoint and just re-point the CNAME.
+4. **Logical corruption (a bad `DELETE` or migration):** replicas are useless here — restore via PITR to a **new** instance just before the bad statement, verify, then cut over.
+
+⚠️ **The gotcha, and it's the most commonly missed thing in this whole section:** **Multi-AZ is not disaster recovery.** It is same-region HA against hardware/AZ failure, and the standby is a *synchronous replica* — so a bad `DELETE FROM orders` is replicated to it instantly and faithfully. Only PITR and snapshots protect against logical damage. Second trap: **automated backups are deleted when you delete the instance** unless you take a final snapshot — so a "clean up the old instance" ticket can destroy your only recovery point.
+
 ---
 
 ## Networking
@@ -3781,7 +4739,7 @@ Beyond the storage-layer architecture described above, these are the Aurora feat
 
 **High-availability note:** NAT Gateways are AZ-scoped. For proper HA, deploy one NAT Gateway per AZ so an AZ failure doesn't take down outbound internet access for every private subnet in the VPC (a single shared NAT Gateway across AZs works but creates a cross-AZ dependency and extra data-transfer cost).
 
-### [new content] VPC Reference Architecture
+### VPC Reference Architecture
 
 ```
                             +------------+
@@ -4036,202 +4994,312 @@ Route 53's name comes from **port 53**, the DNS port. When you create a public h
 
 **Direct service integrations (bypassing Lambda):** API Gateway can integrate directly with certain AWS services — most commonly **DynamoDB** (GetItem/PutItem/Query mapped straight from the HTTP request via a VTL mapping template), but the same "AWS service integration" mechanism extends to **Step Functions** (start an execution directly from an API call) and **Kinesis** (PutRecord straight from the API, useful for high-volume ingestion endpoints). The senior-level point to make: this isn't just a cost optimization — it removes an entire compute layer (and its cold start, patching, and failure surface) for simple CRUD-shaped or fire-and-forget endpoints where a Lambda would add no real logic beyond marshalling the request. The trade-off is VTL mapping templates are clunkier to write/debug than Lambda code, so this pattern is best reserved for genuinely thin passthrough endpoints, not anything needing real business logic.
 
-## Load Balancing, Scalability & Auto Scaling
+**Disaster Recovery — Networking**
 
-### Scalability, High Availability, Elasticity & Agility
-
-Four words interviewers deliberately blur together. Define them cleanly and you've answered half the section.
-
-**Scalability** = the system *can* handle more load.
-- **Vertical scaling (scale up)** — a bigger instance. `t3.micro` → `m5.4xlarge`. Simple, no app changes, but there's a hard ceiling (the largest instance type) and it usually needs downtime. This is how you scale things that can't be distributed: RDS primaries, a single large cache node, legacy monoliths.
-- **Horizontal scaling (scale out)** — more instances behind a load balancer. Effectively unlimited, no downtime, better fault tolerance. Requires the app to be **stateless**. This is the default for web/API tiers.
-
-**High Availability** = surviving a failure without downtime, achieved by running in **at least two Availability Zones**. Note this is a *different goal* from scalability: you can be highly scalable in one AZ (and lose everything when that AZ fails) or highly available with two small instances that can't handle load. Interviewers probe exactly this confusion.
-
-**Elasticity** = scaling **automatically, in both directions, matched to actual demand** — so you pay only for what you need right now. Scalability is the capability; elasticity is the automation of it.
-
-**Agility** = how fast you can get new resources at all — minutes instead of a months-long hardware procurement cycle. It has **nothing to do with load**; it's about speed of change. This is the one people get wrong.
-
-| Term | Question it answers | Example |
-|---|---|---|
-| Scalability | *Can* it grow? | An ASG whose max is 20 instances |
-| Elasticity | Does it grow and shrink **by itself**? | That ASG on a target-tracking policy, scaling 2→20→2 across the day |
-| High Availability | Does it survive a failure? | That ASG spread across 3 AZs behind an ALB |
-| Agility | How fast can I get *anything* new? | Spinning up a whole test environment in 10 minutes via Terraform |
-
-**A scalable-but-not-elastic example to have ready:** a fixed fleet of 20 EC2 instances sized for Black Friday. It scales (it handles the peak) but it isn't elastic (you pay for 20 instances in February). That single example demonstrates you understand the difference rather than reciting definitions.
-
-**HA vs Fault Tolerance vs Disaster Recovery:** HA = minimal downtime within a region (multi-AZ); fault tolerance = *zero* interruption from a component failure (redundancy with no impact); DR = recovering from losing an entire region, measured by **RTO/RPO** — see [Disaster Recovery Strategies](#new-content-disaster-recovery-strategies).
-
----
-
-### ALB vs API Gateway vs ELB (NLB/GWLB/CLB)
-
-**ELB family**
-| Type | Layer | Protocols | Best for |
-|---|---|---|---|
-| ALB (Application LB) | 7 | HTTP/HTTPS/WebSocket | Host/path routing, microservices, Lambda targets |
-| NLB (Network LB) | 4 | TCP/UDP/TLS | Extreme throughput, static IP, low latency |
-| GWLB (Gateway LB) | 3 | IP | Transparent traffic inspection (firewalls/IDS appliances) |
-| CLB (Classic, deprecated) | 4/7 | Basic | Legacy only |
-
-**ALB core concepts:** Listener (port/protocol) → Rules (host/path/header conditions) → Target Group (EC2, ECS, IP, **Lambda**) with health checks. Supports TLS termination with SNI (multiple certs on one listener), WebSocket, HTTP/2, and direct Lambda invocation as a target (Lambda returns an HTTP-shaped response, similar to API Gateway proxy integration).
-
-**API Gateway core concepts:** REST API (feature-rich, more expensive — API keys, usage plans, request/response VTL mapping templates, caching) vs HTTP API (cheaper, lower latency, JWT/IAM auth, good default for Lambda-backed serverless) vs WebSocket API (connection-managed real-time).
-
-**ALB vs API Gateway — the mental model that wins interviews**
-> "ALB is a smart Layer-7 load balancer: I have services, route and balance traffic between them. API Gateway is a full API front door: I'm exposing an API to external clients and need auth, throttling, quotas, versioning, transformation, and monitoring built in."
-
-| Aspect | ALB | API Gateway |
-|---|---|---|
-| Primary purpose | Load balancing between backend services | Publishing/managing APIs for consumers |
-| Targets | EC2, ECS/EKS, IP, Lambda | Lambda, HTTP endpoints, AWS service integrations |
-| Built-in throttling/quotas | No (app-level only) | Yes (usage plans, rate limits) |
-| Request transformation | Limited (routing only) | Advanced (VTL mapping templates) |
-| Caching | No | Yes (REST API only) |
-| Pricing | Per-hour + LCU | Per-million-requests (+ cache if enabled) |
-| Typical client | Internal/browser | Mobile/web/3rd-party API consumers |
-
-**Decision examples**
-- Public REST API for a mobile app needing auth/throttling/API keys, Lambda+DynamoDB backend → **API Gateway**.
-- Internal microservices on ECS needing only path/host routing + TLS termination → **ALB**.
-- Real-time chat: fully serverless → **API Gateway WebSocket API**; already on containers → **ALB WebSocket**.
-
----
-
-### ELB Deep-Dive: Cross-Zone Load Balancing, 504 Timeouts & Shield DDoS Protection
-
-**Cross-Zone Load Balancing:** when enabled, every load balancer node distributes traffic evenly across *all* registered targets in *all* enabled AZs, not just the targets in its own AZ — this evens out load when targets are unevenly distributed across AZs (e.g., 8 targets in AZ-A, 2 in AZ-B). ALB has cross-zone load balancing **on by default, always** (cannot be disabled); NLB has it **off by default** and it's a per-target-group toggle — enabling it on NLB can introduce cross-AZ data transfer charges, which is the usual reason teams leave it off for latency/cost-sensitive NLB use cases. Knowing that ALB and NLB default differently here is a good "gotcha" fact to have ready.
-
-**HTTP 504 Gateway Timeout (ELB):** means the load balancer forwarded the request to a target but never got a timely response back. Two common root causes: an **unhealthy/slow target** (app hung, DB call blocking, thread pool exhausted) or a **traffic spike** overwhelming backend capacity before auto-scaling catches up. A third cause worth naming from standard ELB behavior: a mismatch between the **ALB idle timeout** (default 60s) and the backend's own keep-alive/response time — if your app can legitimately take longer than the ALB's configured idle timeout, you'll see 504s that have nothing to do with target health, and the fix is raising the ALB idle timeout (and your app's keep-alive) rather than chasing a phantom backend bug.
-
-**AWS Shield — tying DDoS protection to Route 53/ELB alongside WAF:** Shield defends at the network/transport layer (L3/L4 volumetric and protocol attacks), while WAF defends at the application layer (L7 — malicious request patterns, rate limiting, bad bots) — they're complementary, not competing, and a senior answer names both together rather than picking one.
-- **Shield Standard:** free, automatically enabled for **every** AWS account on Route 53, CloudFront, and ELB (ALB/NLB/CLB) — no opt-in needed, covers common, automated L3/L4 DDoS attack patterns.
-- **Shield Advanced:** paid, opt-in tier adding larger-attack mitigation capacity, real-time attack visibility/metrics, integration with WAF for automatic rule creation during an attack, cost protection (credits for scaling charges incurred during an attack), and 24/7 access to the AWS DDoS Response Team (DRT).
-- **Practical pairing:** Route 53 (DNS-layer resilience + Shield Standard baseline) + ELB (Shield Standard baseline, upgrade to Advanced for critical public endpoints) + WAF (L7 rate limiting/malicious pattern blocking) is the standard "defend the public edge" stack — worth stating as a layered answer rather than naming just one service.
-
----
-
-### Load Balancing Fundamentals
-
-**What a load balancer buys you:** spread traffic over many targets, one stable DNS name in front of disposable instances, automatic removal of unhealthy targets, TLS termination in one place, and cross-AZ high availability. The ELB itself is a managed, auto-scaling, multi-AZ fleet — you never patch or size it.
-
-**The four objects, in order:** **Listener** (port + protocol) → **Rules** (conditions: host, path, header, query string, source IP, HTTP method) → **Target Group** (EC2, IP, Lambda, or another ALB) → **Targets**, each continuously **health-checked**.
-
-**Target groups in short** — the object that does most of the actual work, and the one you tune:
-- **What it is:** a named group of targets **plus their health check and traffic behaviour**. It exists independently of the load balancer — one target group can be used by several load balancers, and one load balancer can route to many target groups.
-- **Target types:** `instance` (register by instance ID) · **`ip`** (any IP in the VPC, or on-prem via Direct Connect/VPN — **and the type required for Fargate and `awsvpc` ECS tasks**, since those have their own ENIs) · `lambda` (ALB only) · `alb` (an NLB fronting an ALB, to combine a static IP with Layer-7 routing).
-- **Health check** is configured here, not on the load balancer: protocol, path, **port** (`traffic-port` or an override — e.g. app on 8080, health endpoint on 8081), interval, timeout, healthy/unhealthy thresholds, and **success codes** (the *matcher*, default `200`, often widened to `200-299`).
-- **Three attributes worth knowing beyond [stickiness](#sticky-sessions-session-affinity) and [deregistration delay](#connection-draining--deregistration-delay):**
-  - **Slow start** — ramps traffic to a *new* target over 30–900s instead of giving it a full share immediately. **Off by default, and genuinely useful for .NET/JVM**, where a fresh process has a cold JIT and empty caches: without it, the new target's p99 spikes or it fails health checks under full load the moment it joins.
-  - **Load balancing algorithm** — `round_robin` (default) vs **`least_outstanding_requests`**. Round robin will happily hand a request to a target already stuck on a slow one; LOR is the better choice whenever request durations vary a lot.
-  - **Protocol version** — HTTP1 / HTTP2 / **gRPC**, set on the target group; a gRPC backend needs this or it simply won't work.
-- **Target states:** `initial` → `healthy` / `unhealthy` → `draining` (being removed, finishing in-flight requests) → `unused`. Reading these is usually the fastest way to diagnose "the ALB returns 503".
-- **Weighted target groups:** a listener rule can forward across **multiple target groups by weight** — which is canary/blue-green **at the load balancer**, and the mechanism CodeDeploy uses for ECS blue/green deployments.
-
-For the ALB/NLB/GWLB/CLB comparison table and the ALB-vs-API-Gateway decision, see [ALB vs API Gateway vs ELB](#alb-vs-api-gateway-vs-elb-nlbgwlbclb). The specifics worth adding here:
-
-**ALB (Layer 7)** — routes on HTTP content: host, path, header, query string, method, source IP. Supports **SNI** (many TLS certificates on one listener), HTTP/2, gRPC, WebSocket, **Lambda targets**, native redirect and fixed-response actions, and built-in **Cognito/OIDC authentication** at the listener. Because it terminates HTTP, the original client IP arrives in the **`X-Forwarded-For`** header (plus `X-Forwarded-Proto` and `-Port`) — in ASP.NET Core you must enable `ForwardedHeadersMiddleware` or every client will look like the load balancer, which silently breaks rate limiting, geo-logic, and audit logs.
-
-**NLB (Layer 4)** — millions of requests per second at ultra-low latency. Two properties that decide questions: it can have **one static IP per AZ (and supports Elastic IPs)**, and it **preserves the client source IP** with no header needed. Can pass TLS straight through to targets, or terminate it. Targets can be instances, IPs (including on-prem via Direct Connect), or even an ALB.
-
-**❗ An ALB has no static IP — only a DNS name**, and the IPs behind it change. If a client or partner firewall requires a fixed IP, the answer is **NLB**, **NLB fronting an ALB**, or **Global Accelerator** (see [Global Accelerator](#aws-global-accelerator)). This is one of the most commonly asked ELB questions.
-
-**Gateway Load Balancer — GWLB (Layer 3)** — transparently routes all traffic through a fleet of third-party inspection appliances (firewall, IDS/IPS) using **GENEVE on port 6081**, preserving the original packet. It's a traffic-inspection insertion point, not a conventional load balancer. Pair it with [AWS Network Firewall](#aws-network-firewall) as the AWS-native alternative.
-
-**Classic Load Balancer — CLB** — the legacy Layer 4/7 balancer, now deprecated. It predates target groups, so it registers instances directly and supports neither host/path routing, SNI multi-certificate listeners, nor Lambda targets. The only correct answer for "we're on EC2-Classic"; otherwise migrate to ALB (HTTP) or NLB (TCP/UDP). Note the terminology difference it leaves behind: CLB calls it **"connection draining"**, ALB/NLB call the same thing **"deregistration delay"** (see [Connection Draining](#connection-draining--deregistration-delay)).
-
-**Health checks:** protocol, port, and path (`/health`), plus interval, timeout, and healthy/unhealthy thresholds. A target failing the threshold stops receiving traffic and — if the ASG is configured for it — gets replaced. **Point the check at an endpoint that actually exercises the app's dependencies** (a `/health` that only returns `200 OK` from Kestrel will happily report healthy while the database connection pool is exhausted). ASP.NET Core's `AddHealthChecks()` with DB/cache probes is the right implementation.
-
-### Sticky Sessions (Session Affinity)
-
-**What it does:** pins a given client to the same target for the duration of a session, so in-process session state stays valid.
-
-| Load balancer | Mechanism |
+| | |
 |---|---|
-| **ALB** | **Duration-based** — LB-generated `AWSALB` cookie with a configurable duration (1 second to 7 days); or **application-based** — the LB honours *your* app's cookie via `AWSALBAPP`, so the app controls session lifetime |
-| CLB | `AWSELB` cookie, or an application cookie |
-| **NLB** | No cookies (it's Layer 4) — stickiness is by **source IP / flow hash** per target group |
+| **What's actually at risk** | VPCs, subnets, route tables, NAT gateways, security groups, NACLs, VPN and Direct Connect configuration |
+| **Backup mechanism** | **IaC only** — there is no snapshot for networking. AWS Config records the change history |
+| **Realistic RPO / RTO** | RPO = last commit. RTO is uneven: security groups seconds, NAT gateway minutes, VPN tunnels tens of minutes, **Direct Connect weeks** |
 
-**The trade-offs to name:** stickiness undermines even load distribution (one pinned client can hot-spot a target), and when a target is removed on scale-in or deploy, those sessions are **lost anyway** — so it never actually guarantees session survival.
+**Recovery runbook:**
+1. **Re-apply the VPC module** in the DR region — which only works if you planned **non-overlapping CIDRs** up front.
+2. **Re-establish connectivity:** VPN tunnels, VPC peering, or Transit Gateway attachments, then fix up route tables and propagations.
+3. **Update DNS:** Route 53 private hosted zone associations and Resolver rules are per-VPC and don't come along automatically.
+4. **Verify egress before declaring success** — a missing NAT gateway or route produces an app that starts fine and then fails every outbound call, which reads like an application bug.
 
-**The senior answer:** stickiness is a workaround for a stateful app tier. The real fix is to externalise session state so any instance can serve any request — **ElastiCache for Redis** or **DynamoDB**. In .NET that's `IDistributedCache` (`AddStackExchangeRedisCache`) instead of in-process `ISession`. Sticky sessions are legitimate for legacy applications you can't refactor, or where a genuinely expensive per-user in-memory context makes affinity worth the cost — say that rather than declaring stickiness simply "bad".
+⚠️ **The gotcha:** **overlapping CIDR ranges are a DR blocker you can only fix *before* the incident.** If prod and DR were both given `10.0.0.0/16`, you can never peer or transit-gateway them, and you find out at the worst possible moment. Allocate DR CIDRs at design time. Second: **Direct Connect cannot be provisioned in an emergency** — it's a physical cross-connect with weeks of lead time, so every DR plan must assume VPN-over-internet as the fallback path and be tested that way.
 
-### Connection Draining / Deregistration Delay
+---
 
-Same feature, two names: **"connection draining"** on CLB, **"deregistration delay"** on ALB/NLB target groups.
+## Security Services
 
-**What happens:** when a target is being removed (scale-in, deploy, manual deregistration) it enters `draining` state — **no new requests are routed to it**, but in-flight requests are allowed to complete for up to the configured delay. After that, remaining connections are closed.
+### Overview: Which Service Answers Which Question
 
-- Default **300 seconds**; configurable **0–3600**.
-- Tune it to your **longest legitimate request**. Set it too low and you cut off large file uploads or slow reports mid-flight (users see 502/504); set it too high and every deploy and scale-in crawls.
-- Set it to `0` only for workloads with genuinely instantaneous requests where deploy speed matters more.
+The fastest way to sound organised here is to map services to questions rather than reciting a list:
 
-**"How do you deploy without dropping requests?"** — the complete answer chains three things: an appropriate **deregistration delay**, **ELB health checks** on the ASG so a bad instance is caught, and **ASG lifecycle hooks** (below) so an instance is warmed before it serves and drained before it dies. Add **ASG instance refresh** for a rolling replacement.
+| The question | The service |
+|---|---|
+| Who can do what? | **IAM** (see [IAM & Security](#iam--security)) |
+| Is someone flooding me with traffic? | **Shield** (L3/4) + **WAF** (L7) |
+| Is malicious traffic reaching my app? | **WAF**, **Network Firewall** |
+| Are my keys managed properly? | **KMS**, **CloudHSM** |
+| Are my certificates valid and renewing? | **ACM** |
+| Where are my secrets? | **Secrets Manager** / Parameter Store (see [Secrets Manager vs Parameter Store](#secrets-manager-vs-parameter-store)) |
+| **Is something bad happening right now?** | **GuardDuty** (threat detection) |
+| **What weaknesses do I have?** | **Inspector** (vulnerability scanning) |
+| **Where is my sensitive data?** | **Macie** |
+| **Is anything misconfigured or drifting?** | **AWS Config** |
+| Can I see everything in one place? | **Security Hub** |
+| How did this incident actually happen? | **Detective** + **CloudTrail** |
+| Can I prove AWS is compliant to my auditor? | **Artifact** |
 
-### Auto Scaling Groups (ASG)
+### DDoS Protection: Shield & WAF
 
-**What it gives you:** maintains a target number of instances, replaces failed ones automatically, spans multiple AZs (that's the HA part), and registers/deregisters targets with the load balancer as it scales.
+**The three attack shapes** worth naming before the services: **volumetric** (L3/4 — UDP reflection/amplification, SYN floods; goal is to saturate bandwidth), **protocol** (exploiting TCP/IP behaviour), and **application-layer** (L7 — HTTP floods, Slowloris; low bandwidth but expensive per request because each one hits your application and database).
 
-**Core settings:** **minimum** (never fewer), **desired** (current target, what scaling policies change), **maximum** (never more, and your cost ceiling). Instances launch from a **launch template** — the modern replacement for the deprecated *launch configuration*; launch templates support versioning, mixed instance types, and mixed On-Demand/Spot.
+**AWS Shield** — see also the Shield notes in [ELB Deep-Dive](#elb-deep-dive-cross-zone-load-balancing-504-timeouts--shield-ddos-protection).
+- **Shield Standard**: free, automatically on for **every** account, protecting Route 53, CloudFront, Global Accelerator, and ELB against common L3/4 attacks.
+- **Shield Advanced**: paid (~$3,000/month, org-wide), adding larger-scale mitigation, **24/7 access to the Shield Response Team (SRT)**, **cost-protection credits** for scaling charges incurred during an attack, health-based detection, and **WAF included at no extra charge**.
 
-**❗ The health-check gotcha:** an ASG's health-check type defaults to **EC2 only**, which means it only replaces instances whose *hypervisor-level* status checks fail. An instance whose application has hung — or is returning 500s — looks perfectly healthy to EC2 and is **never replaced**, even while the ALB has already stopped sending it traffic. You must set the health check type to **ELB** so the ASG acts on the load balancer's application-level view. This is a genuine production incident pattern and a very common interview question.
+**AWS WAF** — the Layer-7 firewall. Attaches to **CloudFront, ALB, API Gateway, AppSync, and Cognito user pools** (note: **not** to an NLB, because WAF needs HTTP context — a common trick question).
 
-**Scaling policies:**
-| Policy | How it works | When to use |
+- Structure: a **Web ACL** contains **rules** and **rule groups**, evaluated in priority order.
+- **AWS Managed Rule Groups** cover most needs without writing rules: the **Core rule set (OWASP-style)**, SQL injection, known-bad inputs, **IP reputation**, **Anonymous IP** (Tor/VPN/proxy), and **Bot Control**.
+- Rule types: IP set match, **geo match**, string/regex match, size constraint, SQLi/XSS detection, and **rate-based rules** — the built-in rate limiter (e.g. block any IP exceeding 2,000 requests per 5 minutes), which is the answer to "how do you stop credential stuffing or scraping?"
+- Actions: **Allow**, **Block**, **Count**, **CAPTCHA**, **Challenge**.
+- **❗ Best practice: deploy every new rule in `Count` mode first**, watch the logs to see what it *would* have blocked, then switch to `Block`. Going straight to Block is how teams take down their own legitimate traffic — say this and you sound like you've actually run WAF.
+- Log to CloudWatch Logs / S3 / Firehose, and query with Athena.
+- WAF is **regional**, except for CloudFront where the Web ACL is **global (created in `us-east-1`)**.
+
+**AWS Firewall Manager** centrally applies WAF rules, Shield Advanced protections, security-group policies, and Network Firewall rules across **every account in an Organization** — and automatically to newly created resources. It's the answer to "how do you guarantee every account has the baseline WAF rules?"
+
+**The canonical layered edge:** `Route 53 → CloudFront (Shield + WAF at the edge) → ALB (Shield) → private app tier`. Blocking an attack at CloudFront means it never consumes your ALB, compute, or database capacity.
+
+### AWS Network Firewall
+
+A **managed, stateful network firewall and IPS/IDS at the VPC level**, inspecting **all** traffic — not just HTTP.
+
+- Capabilities: stateful traffic filtering, **domain-name filtering for egress** (allow `*.microsoft.com`, block everything else), protocol detection, and **Suricata-compatible IPS rules** for deep packet inspection.
+- Deployment: a dedicated **firewall subnet in each AZ**, with route tables directing traffic through the firewall endpoints before it reaches an IGW/NAT.
+- **Where it's the right answer:** controlled **egress filtering** for compliance ("workloads may only reach an approved allowlist of domains"), intrusion detection at the network layer, and inspecting traffic that a WAF can't see because it isn't HTTP.
+
+**How it differs from everything else that filters traffic:**
+| | Layer | Scope | Deny rules |
+|---|---|---|---|
+| **Security Group** | 4 | ENI/instance | ❌ Allow only |
+| **NACL** | 4 | Subnet | ✅ but stateless, IP/port only |
+| **Network Firewall** | 3–7 | **VPC**, all protocols | ✅ Stateful, domain names, IPS signatures |
+| **WAF** | 7 | CloudFront/ALB/API GW | ✅ HTTP content-aware |
+| **GWLB** | 3 | VPC | Insertion point for **third-party** appliances |
+
+### KMS & CloudHSM
+
+**KMS (Key Management Service)** — managed encryption keys backed by FIPS 140-validated HSMs, integrated with essentially every AWS service (S3, EBS, RDS, Secrets Manager, Lambda env vars…).
+
+- **Key types:** *AWS owned* (invisible, shared), *AWS managed* (`aws/s3`, `aws/ebs` — free, auto-rotated, but you can't edit the policy), and **customer managed keys (CMKs)** — the ones you create, with your own **key policy**, optional **automatic annual rotation**, tags, and a mandatory **7–30 day waiting period before deletion** (deliberately, since deleting a key destroys all data encrypted with it).
+- **❗ The key policy is mandatory and authoritative.** Unlike most resources, an IAM policy granting `kms:Decrypt` is **not sufficient on its own** — the key's own resource policy must also allow the principal (directly, or by delegating to IAM with the `kms:CallerAccount` pattern). "IAM says allow but KMS still denies" is the key policy. **Grants** are the temporary, programmatic alternative for service-to-service delegation.
+- **Envelope encryption — know why it exists:** the `Encrypt` API can only handle **up to 4 KB** of data. So for anything larger, `GenerateDataKey` returns a plaintext data key plus an encrypted copy; you encrypt your data locally with the plaintext key, discard it, and store the encrypted key alongside the ciphertext. That's exactly what S3/EBS do internally, and it's why **KMS request quotas** matter at high throughput (hence S3 Bucket Keys — see [S3 Encryption](#s3-security-encryption--its-four-types)).
+- **Multi-Region keys** replicate key material across regions so you can decrypt in region B what was encrypted in region A — needed for cross-region DR of encrypted data.
+- Every KMS API call is logged in **CloudTrail**, which is the audit advantage of SSE-KMS over SSE-S3.
+
+**CloudHSM** — **single-tenant, dedicated hardware** HSMs in your VPC.
+| | **KMS** | **CloudHSM** |
 |---|---|---|
-| **Target tracking** | "Keep this metric at this value" — e.g. average CPU at 40%. AWS creates and manages the alarms | ✅ **The default recommendation.** Simplest and handles most cases |
-| **Step scaling** | CloudWatch alarm → add/remove N instances, with different steps by alarm severity | When you need aggressive response to big breaches (e.g. +1 at 60% CPU, +4 at 85%) |
-| **Simple scaling** | One alarm → one adjustment, then wait for cooldown | Legacy; step scaling supersedes it |
-| **Scheduled scaling** | Change min/desired/max at a specific time | Known patterns: business hours, a marketing launch, month-end batch |
-| **Predictive scaling** | ML on historical traffic, scales **ahead** of forecast demand | Cyclical daily/weekly traffic where reactive scaling is always a few minutes late |
+| Tenancy | Multi-tenant, managed service | **Dedicated hardware, single tenant** |
+| Key control | AWS manages the HSM; you control policy | **You** manage keys entirely — **AWS has no access and cannot recover them** |
+| FIPS level | 140-2/3 validated | **140-2 Level 3** |
+| Integration | Native with ~every AWS service | Via PKCS#11/JCE/CNG — mostly your own application |
+| Use when | Default for everything | Regulatory mandate for exclusive key custody, custom crypto (e.g. SQL Server TDE with your own keys), or an offloaded CA |
 
-**What metric to scale on — the senior differentiator.** CPU is the default and often the wrong signal. Better choices:
-- **`ALBRequestCountPerTarget`** for a web/API tier — directly proportional to demand, and it reacts before CPU does.
-- **SQS queue depth** for a worker tier — specifically **backlog per instance** (`ApproximateNumberOfMessagesVisible` ÷ running instances) as a target-tracking metric. This is the canonical answer for "how would you scale a queue-consuming service?", and it's much better than CPU because a worker blocked on I/O shows low CPU while the backlog grows.
-- Custom application metrics (p99 latency, active connections, thread-pool saturation) published to CloudWatch.
+**One-liner:** "KMS unless a regulator specifically requires that AWS cannot possibly access my keys — then CloudHSM, accepting that if I lose the keys, the data is gone."
 
-**The rest of the ASG surface worth knowing:**
-- **Cooldown / warm-up** — a pause after a scaling action so metrics can settle before the next one, preventing thrash. Target tracking uses *instance warm-up* instead: new instances aren't counted in the metric until they're actually ready.
-- **Lifecycle hooks** — pause an instance in `Pending:Wait` (bootstrap, warm caches, register with a service, run smoke tests) or `Terminating:Wait` (drain connections, flush logs, deregister) before it proceeds. The hook for "do something custom on the way in or out".
-- **Termination policy** — default order: the AZ with the most instances first, then the oldest launch template/configuration, then the instance closest to the next billing hour. Configurable, and `OldestInstance` is common when you want gradual rotation.
-- **Instance refresh** — rolling replacement of every instance with a new launch-template version (e.g. a patched AMI), honouring a minimum healthy percentage. How you ship AMI updates without downtime.
-- **Scale-in protection** — exclude specific instances from scale-in, for a node holding work that can't be interrupted.
-- **Warm pools** — keep pre-initialised, stopped instances ready so scale-out skips boot and bootstrap time; the answer for apps with slow startup where predictive scaling isn't enough.
+#### Worked Example: Giving a Fargate Task Access to KMS-Encrypted S3 Data
+
+A near-perfect interview scenario, because it needs **four** separate things to be true and candidates usually name one or two. *"My Fargate task can't read the bucket, but the IAM policy clearly allows `s3:GetObject`."*
+
+**1. The TASK role — not the task execution role.** The execution role pulls the image and injects secrets; **your application code** runs under the **task role**. It needs S3 *and* KMS permissions:
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    { "Sid": "ReadObjects", "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:ListBucket"],
+      "Resource": ["arn:aws:s3:::my-bucket", "arn:aws:s3:::my-bucket/*"] },
+
+    { "Sid": "DecryptWithTheCmk", "Effect": "Allow",
+      "Action": ["kms:Decrypt", "kms:DescribeKey"],
+      "Resource": "arn:aws:kms:us-east-1:111122223333:key/1234abcd-...",
+      "Condition": { "StringEquals": { "kms:ViaService": "s3.us-east-1.amazonaws.com" } } }
+  ]
+}
+```
+Writing objects additionally needs **`kms:GenerateDataKey`** (envelope encryption — see above), plus `s3:PutObject`. The **`kms:ViaService`** condition is the least-privilege touch: the role may use the key *only through S3*, never directly.
+
+**2. ❗ The KMS KEY POLICY must also allow that role.** This is the step that's missed, and it's specific to KMS: the key's resource policy is **mandatory and authoritative**, so an IAM policy alone is *not sufficient* unless the key policy delegates to IAM.
+```json
+{
+  "Sid": "AllowTaskRoleToDecrypt",
+  "Effect": "Allow",
+  "Principal": { "AWS": "arn:aws:iam::111122223333:role/my-app-task-role" },
+  "Action": ["kms:Decrypt", "kms:DescribeKey"],
+  "Resource": "*"
+}
+```
+`"Resource": "*"` inside a key policy means *this key*. (The alternative is the standard "delegate to IAM" statement granting the account root `kms:*` — which is what lets IAM policies alone work.)
+
+**3. The bucket policy**, if there is one. Same-account with no restrictive bucket policy → nothing needed. But a bucket policy that **denies** unencrypted transport or requires a specific key will still block you, and **cross-account** access needs an explicit `Allow` there too.
+
+**4. ❗ The network path — the one nobody mentions.** A Fargate task in a **private subnet** must reach *both* services. S3 has a **free gateway endpoint**; **KMS has no gateway endpoint — it needs an interface endpoint** (`com.amazonaws.<region>.kms`) or a NAT gateway. So a task with perfect IAM will simply **hang and time out** if you added the S3 endpoint and forgot the KMS one.
+
+**Read the error to find which of the four is wrong:**
+| Error | Cause |
+|---|---|
+| `AccessDenied` on `GetObject` | The S3 permission in the task role |
+| `KMS.AccessDeniedException`, or *"The ciphertext refers to a customer master key that does not exist… or you are not allowed to access"* | **`kms:Decrypt` missing, or the key policy doesn't name the role** — despite the misleading "does not exist" wording |
+| Request hangs, then times out | **No network path** — missing VPC endpoint or NAT |
+| Works in dev, fails in prod | A per-environment CMK whose key policy was never updated |
+
+**The nuance worth volunteering:** if the *task definition* pulls a secret from Secrets Manager or Parameter Store that's encrypted with a **customer-managed** key, then the **task execution role** *also* needs `kms:Decrypt` — because that decryption happens before your code starts. So a single task can legitimately need `kms:Decrypt` on **two different roles for two different keys**.
+
+**Cross-account variant:** only a **customer-managed** key works (AWS-managed keys cannot be shared). You then need the key policy to name the external principal, the external principal's IAM policy to allow `kms:Decrypt`, and the bucket policy to allow the read — or you use a **KMS grant** for programmatic, temporary delegation.
+
+#### Encryption in Transit (TLS) — End to End
+
+Encryption at rest is a checkbox; **in transit is an architecture decision, because TLS terminates at every hop and each one is a separate choice**:
+```
+Client --TLS(ACM)--> CloudFront --TLS--> ALB --TLS or plain HTTP?--> ECS task --TLS?--> RDS
+                                  ^                    ^                        ^
+                          viewer protocol       target group protocol    force_ssl / sslmode
+```
+- **CloudFront → origin:** the *Origin Protocol Policy* (`https-only` or `match-viewer`). `http-only` to an ALB means the internet-facing leg is encrypted and the AWS-internal leg is not.
+- **ALB → target:** set by the **target group protocol**. HTTP inside the VPC is extremely common and perfectly defensible — but it is **not** "encrypted end to end", and you should say which you've implemented rather than claiming the stronger one.
+- **True end-to-end** means HTTPS on the ALB→target hop too, which needs a certificate on the task. Useful detail: **the ALB does not validate the target's certificate**, so a self-signed cert is acceptable there — you're encrypting the hop, not authenticating the backend.
+- **mTLS**: an ALB can require and verify **client** certificates (`mutual authentication` on the listener), for partner/B2B or IoT callers. **App Mesh / ECS Service Connect** provide mTLS *between services*.
+- **TLS version** — set the listener's **security policy** to a TLS 1.2 (or 1.3) minimum. "We use TLS" without naming the minimum version is what auditors actually query.
+
+**How you enforce it rather than hope for it:**
+| Layer | Enforcement |
+|---|---|
+| S3 | `Deny` with `aws:SecureTransport: false` (see [S3 Bucket Policies](#s3-bucket-policies--access-control)) |
+| ALB | An HTTP:80 listener whose only action is **redirect to HTTPS** |
+| RDS | PostgreSQL `rds.force_ssl=1` / MySQL `require_secure_transport`; client `sslmode=Require` |
+| ElastiCache | Enable **in-transit encryption** at cluster creation (it can't be turned on later) |
+| EFS | Mount with `-o tls` |
+| AWS APIs | Already HTTPS-only (DynamoDB, SQS, KMS…), which is why "is DynamoDB encrypted in transit?" is a yes-by-default |
+
+**Certificates** come from **ACM** for public endpoints and **ACM Private CA** for internal ones — remembering that an ACM *public* certificate's private key **cannot be exported**, so it can't be installed on a task or EC2 instance directly (see [ACM](#acm-aws-certificate-manager) below).
+
+### ACM (AWS Certificate Manager)
+
+**Free public TLS certificates with automatic renewal** — the renewal is the real value, since expired certificates are one of the most common self-inflicted outages.
+
+- **Validation:** **DNS validation** (add a CNAME record; **auto-renews forever** once the record stays in place — always choose this) or **email validation** (manual, breaks renewal if nobody clicks the link).
+- **Integrations:** ALB/NLB, **CloudFront**, API Gateway, AppSync, Elastic Beanstalk.
+- **❗ You cannot export the private key of an ACM *public* certificate.** So you cannot install one directly on an EC2 instance or an on-prem server — terminate TLS at an ALB/CloudFront instead, or use **ACM Private CA** (which does allow export, for internal certs, and is paid). This limitation is a very common question.
+- **❗ Certificates for CloudFront must live in `us-east-1`**; certificates for an ALB must be in the ALB's region. See [CloudFront](#cloudfront-cdn).
+- **Imported** certificates (from an external CA) get **no automatic renewal** — you must rotate them yourself. Monitor expiry with the ACM `DaysToExpiry` metric, an AWS Config rule, or an EventBridge rule on ACM expiry events.
+- **SNI** lets one ALB listener serve many certificates/domains.
+
+### AWS Systems Manager (SSM)
+
+An operations-and-management suite that shows up in interviews mainly through **one killer feature**, but the rest is worth knowing.
+
+**❗ Session Manager — the answer to "how do you get a shell on an EC2 instance?"**
+
+The reflex answer is "SSH via a bastion host in a public subnet." The modern answer is **Session Manager**, and the difference is substantial:
+- **No SSH keys** to distribute, rotate, or leak.
+- **No open inbound ports** — not even 22. The SSM Agent makes an **outbound** connection to the SSM endpoints, so the instance can sit in a **fully private subnet with no inbound rules at all**.
+- **No bastion host** to run, patch, and pay for.
+- **Access is controlled by IAM**, so you grant and revoke shell access with a policy, and **every session is logged to CloudTrail** and can be recorded keystroke-by-keystroke to S3/CloudWatch Logs — which is the audit story a bastion can't match.
+- Works for Windows (PowerShell/RDP via port forwarding) as well as Linux.
+
+**Requirements** (and therefore the usual failure causes): the **SSM Agent** installed and running (pre-installed on Amazon Linux 2/2023 and recent Windows AMIs), an **instance profile** with `AmazonSSMManagedInstanceCore`, and network reachability to the SSM endpoints — either via a NAT gateway or, for a genuinely isolated subnet, **interface VPC endpoints for `ssm`, `ssmmessages`, and `ec2messages`** (see [VPC Endpoints](#vpc-endpoints--privatelink)).
 
 ```bash
-aws autoscaling create-auto-scaling-group --auto-scaling-group-name web-asg \
-  --launch-template LaunchTemplateName=web-lt,Version='$Latest' \
-  --min-size 2 --max-size 10 --desired-capacity 2 \
-  --vpc-zone-identifier "subnet-a,subnet-b,subnet-c" \
-  --target-group-arns arn:aws:elasticloadbalancing:... \
-  --health-check-type ELB --health-check-grace-period 120     # ← ELB, not EC2
-aws autoscaling start-instance-refresh --auto-scaling-group-name web-asg
+aws ssm start-session --target i-0abc123
+# Port-forward a private RDS/RDP endpoint to localhost — replaces an SSH tunnel through a bastion
+aws ssm start-session --target i-0abc123 \
+  --document-name AWS-StartPortForwardingSessionToRemoteHost \
+  --parameters '{"host":["mydb.abc.us-east-1.rds.amazonaws.com"],"portNumber":["5432"],"localPortNumber":["5432"]}'
 ```
 
-### Scalability Best Practices
-
-- **Make the app tier stateless** — no in-process session, no local file writes that matter. Everything else on this list depends on it.
-- **Scale out, not up**, for anything that can be distributed; reserve vertical scaling for the things that can't (databases, single-node caches).
-- **Minimum 2 instances across at least 2 AZs** (3 is better) — a single instance is not highly available regardless of instance type.
-- **Set the ASG health check type to ELB**, and make `/health` genuinely check dependencies.
-- **Scale on a demand-correlated metric** (requests per target, queue backlog), not CPU by reflex.
-- **Externalise session and cache state** to ElastiCache/DynamoDB.
-- **Use scheduled or predictive scaling for known events** — reactive scaling always lags a spike by the boot time of an instance.
-- **Test scale-in, not just scale-out.** Most scaling bugs (dropped requests, lost work, orphaned locks) surface on the way *down*, which is what deregistration delay and lifecycle hooks exist for.
-- **Cap `max` deliberately** — it's both a cost ceiling and a blast-radius limit if a bug or an attack drives artificial load.
-
-### Scalability & Load Balancing Shared Responsibility Model
-
-| AWS is responsible for | You are responsible for |
+**The rest of Systems Manager:**
+| Capability | What it does |
 |---|---|
-| Running and scaling the ELB fleet itself (multi-AZ, patched, no capacity to manage) | **Choosing the right LB type** (ALB/NLB/GWLB) for the protocol and requirements |
-| The ASG control plane — replacing failed instances, honouring your policies | **Setting min/desired/max, the scaling policy, and the metric that drives it** |
-| Health-check infrastructure | **Writing a health endpoint that reflects real application health** |
-| AZ-level infrastructure availability | **Actually spanning multiple AZs** — AWS won't do it for you |
-| TLS termination capability, managed certificates via ACM | Certificate lifecycle, cipher/TLS policy selection, and HTTPS redirect rules |
-| Providing lifecycle hooks and deregistration delay | Tuning them so deploys and scale-in don't drop in-flight requests |
-| — | **Designing the app to be stateless** so horizontal scaling is possible at all |
+| **Parameter Store** | Configuration and secrets storage — it's *part of* SSM (see [Secrets Manager vs Parameter Store](#secrets-manager-vs-parameter-store)) |
+| **Patch Manager** | Scans and applies OS patches on a schedule via **patch baselines** and **maintenance windows**, across EC2 *and* on-prem servers. This is the concrete answer to the "guest OS patching is your responsibility" half of the [EC2 shared responsibility model](#ec2-shared-responsibility-model) |
+| **Run Command** | Execute a command or script across a fleet by tag, with no SSH and full audit logging — "restart the service on all instances tagged `role=web`" |
+| **State Manager** | Enforces desired configuration continuously (agent installed, service running) and corrects drift |
+| **Automation (runbooks)** | Multi-step operational workflows — patch-and-reboot, AMI creation, or the **auto-remediation actions** invoked by [AWS Config](#aws-config) |
+| **Inventory / Fleet Manager** | Collects installed software, patch level, and configuration across the fleet; browse and manage instances without connecting |
+| **Compliance** | Reports patch and configuration compliance per instance |
+
+**Where to volunteer it:** whenever a question involves accessing, patching, or configuring EC2 at scale. "How do you patch 200 instances?" → Patch Manager with maintenance windows, or replace instances from a freshly baked golden AMI via [ASG instance refresh](#auto-scaling-groups-asg) — immutable infrastructure being the stronger answer where the workload allows it.
+
+### AWS Artifact
+
+A **self-service portal for compliance documents** — AWS's audit reports (**SOC 1/2/3, PCI DSS AOC, ISO 27001/27017/27018, FedRAMP**, and country-specific attestations) plus **agreements** you accept online (the **HIPAA BAA**, the GDPR data-processing addendum).
+
+**The trick to avoid:** Artifact does **not** scan, monitor, or secure anything. It's a document repository. Its role is the **shared responsibility model** in practice — when your auditor asks for evidence that the *underlying infrastructure* is compliant, you download it from Artifact; everything above the line (your configurations, your access controls) you have to evidence yourself with Config, CloudTrail, and Security Hub.
+
+### GuardDuty
+
+**Intelligent threat detection** — continuously analyses **CloudTrail management events, VPC Flow Logs, and DNS logs** (plus optional S3 data events, EKS audit logs, RDS login activity, Lambda network activity, and **EBS malware scanning**) using machine learning and threat intelligence feeds.
+
+- **Agentless and log-free to set up** — it reads those sources directly, so there is nothing to install and **enabling it does not require you to turn on (or pay for) the logs themselves**. One click, or organisation-wide from a delegated administrator account.
+- **Typical findings:** crypto-mining, communication with known-malicious IPs or domains, **EC2 instance credentials being used from outside AWS** (i.e. stolen role credentials — see IMDSv2 in [IAM Roles](#iam-roles-policies-assumerole)), unusual API calls or console logins from anomalous locations, port scanning, and reconnaissance against your account.
+- **Automate the response:** findings go to **EventBridge**, so a high-severity finding can trigger a Lambda that isolates an instance's security group, revokes a role's sessions, or opens a ticket — rather than sitting in a console nobody reads.
+
+### Inspector
+
+**Automated vulnerability management** for **EC2 instances, ECR container images, and Lambda functions**.
+
+- **Continuous and event-driven**, not scheduled: it rescans automatically when you deploy a new image, launch an instance, or when a **new CVE is published** — so a package that was clean yesterday gets flagged today.
+- Uses the **SSM agent** for EC2, correlates CVEs with **network reachability** (an unreachable vulnerability is genuinely lower risk), and produces a prioritised risk score.
+- It's the engine behind **ECR enhanced scanning** (see [ECR](#ecr-elastic-container-registry)).
+
+**❗ Inspector vs GuardDuty is the pairing that gets asked:** **Inspector finds weaknesses** — unpatched CVEs, vulnerable dependencies ("the door has a weak lock"). **GuardDuty finds active threats** — malicious behaviour happening now ("someone is picking the lock"). They're complementary; naming both with that distinction is the complete answer.
+
+### Macie
+
+**ML-based sensitive-data discovery for S3.** It inventories your buckets (flagging any that are public, unencrypted, or shared externally) and scans object contents to classify **PII, credentials, financial data, and health data**, with custom data identifiers via regex for your own formats (policy numbers, internal IDs).
+
+Findings flow to **Security Hub** and **EventBridge**. Where it earns its cost: GDPR/HIPAA/PCI data-classification requirements, and answering "do we have customer PII sitting in a data-lake bucket nobody remembered?" — a question that's otherwise unanswerable at scale.
+
+### AWS Config
+
+**Records the configuration of every resource over time, and evaluates it against rules.**
+
+- Produces **configuration items** and a full **change history** — so you can view exactly what a security group looked like last Tuesday, and what changed it (linking to the **CloudTrail** event and therefore the identity).
+- **Rules**: AWS **managed rules** cover most of the common bar — `s3-bucket-public-read-prohibited`, `encrypted-volumes`, `iam-user-mfa-enabled`, `rds-instance-public-access-check`, `required-tags` — plus **custom rules** in Lambda or CloudFormation Guard.
+- **Remediation actions** (via SSM Automation documents) can **auto-fix** a violation — e.g. re-enable Block Public Access the moment someone disables it. Auto-remediation is the answer that separates "we detect drift" from "we prevent drift".
+- **Conformance packs** bundle rules into a compliance framework; **aggregators** roll findings up across all accounts and regions in the Organization.
+- It's **regional** and you pay per configuration item recorded plus per rule evaluation — worth scoping which resource types you record.
+
+### Security Hub & Detective
+
+**Security Hub** is the **single pane of glass**: it normalises and aggregates findings from **GuardDuty, Inspector, Macie, IAM Access Analyzer, Config, Firewall Manager**, and partner tools into one format, then scores you against **security standards** (AWS Foundational Security Best Practices, **CIS Benchmark**, PCI DSS). Cross-account and cross-region aggregation, with automated actions via EventBridge.
+
+**Detective** takes a finding and builds an **interactive behaviour graph** from CloudTrail, VPC Flow Logs, and GuardDuty data so you can investigate root cause — what else that role did, what else that IP touched, when the behaviour started. Security Hub tells you *what* is wrong; Detective helps you work out *how it happened and how far it spread*.
+
+### Defence in Depth — The Summary Answer
+
+The layered story to give when asked "how do you secure a workload on AWS?":
+```
+Edge          Route 53 (DNSSEC) → CloudFront + Shield + WAF
+Network       VPC, private subnets, Security Groups, NACLs, Network Firewall, VPC endpoints
+Identity      IAM least privilege, roles not keys, MFA, SCPs, permissions boundaries
+Data          KMS/CloudHSM encryption at rest, TLS in transit (ACM), S3 Object Lock
+Secrets       Secrets Manager / Parameter Store, IAM DB auth — never in code
+Detect        GuardDuty (threats) · Inspector (vulnerabilities) · Macie (sensitive data) · Config (drift)
+Audit         CloudTrail (org trail → locked log-archive account), VPC Flow Logs, Access Analyzer
+Aggregate     Security Hub (one pane) → EventBridge → automated remediation
+Respond       Detective for investigation, documented runbooks, tested restores
+```
+**One-liner:** "No single control is the answer — the point is that a failure at any one layer isn't sufficient to cause a breach. And the layer I'd check first in any real incident is IAM, because on AWS most breaches are permission or configuration failures, not infrastructure failures."
+
+---
+
+# PART III — Tier 3: Breadth — Recognise and Place
+
+> **One clean sentence each.** Nobody expects a .NET full-stack engineer to have operated these. But not *recognising* a service name reads as a gap, whereas knowing what problem it solves reads as breadth. Learn the decision boundaries, not the configuration details.
+
+**Disaster Recovery — Security Services (KMS, Secrets Manager, ACM)**
+
+| | |
+|---|---|
+| **What's actually at risk** | **KMS keys — and this is the one genuinely unrecoverable loss in AWS.** Also secrets, and certificates |
+| **Backup mechanism** | **Multi-Region KMS keys**, the mandatory **7–30 day** key-deletion waiting period, **Secrets Manager cross-region replicas**, ACM auto-renewal |
+| **Realistic RPO / RTO** | Secrets/certs RPO ~0, RTO minutes. A deleted KMS key past its window: **RTO never** |
+
+**Recovery runbook:**
+1. **Key deletion scheduled in error:** `aws kms cancel-key-deletion --key-id <id>` — this works only inside the 7–30 day window, which exists precisely for this mistake.
+2. **Regional failure:** a **multi-Region key replica** decrypts the *same ciphertext* in the DR region with no re-encryption. If the key was single-region, the data simply cannot be read there.
+3. **Secrets:** promote the cross-region replica (`aws secretsmanager stop-replication-to-replica`) and it becomes a standalone secret in the DR region.
+4. **Certificates:** re-issue via ACM with **DNS validation** (fastest, and auto-renews). Remember CloudFront requires its certificate in **us-east-1**.
+
+⚠️ **The gotcha:** **a deleted KMS key makes every object encrypted with it permanently unreadable — there is no AWS escalation that recovers it.** Alarm on `ScheduleKeyDeletion` in CloudTrail; it should be a paging alert, not a dashboard tile. And the DR-specific trap: **a single-region CMK silently blocks cross-region recovery** — S3 replication to another region fails when the destination can't reach the key, so multi-Region keys (or re-encryption on replication) are a DR requirement, not a nice-to-have.
 
 ---
 
@@ -4424,7 +5492,7 @@ builder.Services.AddHostedService<OrderCreatedConsumer>();
 
 **60-second wrap-up answer:** "The biggest pitfalls in CQRS with SNS/SQS are assuming immediate consistency, exactly-once delivery, or shared queues. Events must publish only after successful commits, consumers must be idempotent, and each consumer needs its own queue with a DLQ. Ordering, retries, and replay have to be designed explicitly — otherwise you get silent data loss or duplicate side effects."
 
-### [new content] EventBridge Deep Dive
+### EventBridge Deep Dive
 
 The original notes mention EventBridge only in passing (as "CloudWatch Events renamed" and as a Lambda trigger) — given how central EventBridge is to modern event-driven .NET architectures on AWS, it deserves its own treatment.
 
@@ -4459,7 +5527,7 @@ Resources:
 
 **Interview takeaway:** EventBridge is the right default for **cross-service domain events with routing logic** and scheduled jobs; SNS+SQS remains the right default for simple, high-throughput fan-out where you don't need content filtering or a schema registry. Many real architectures use both — EventBridge for coarse routing between bounded contexts, SNS/SQS within a bounded context for fan-out to same-team consumers.
 
-### [new content] Event-Driven Architecture Reference Flow
+### Event-Driven Architecture Reference Flow
 
 ```
   Client
@@ -4586,6 +5654,22 @@ This single diagram ties together the order-processing pattern from the original
 
 **The interview answer:** "If I'm **lift-and-shifting** an on-prem application that already speaks JMS/AMQP/MQTT and I don't want to rewrite its messaging layer, Amazon MQ is the migration path. If I'm building something new on AWS, I use SQS/SNS/EventBridge instead — they're serverless, cheaper, and scale without broker management." Rewriting an app's messaging layer purely to adopt SQS during a migration is the mistake this service exists to avoid.
 
+**Disaster Recovery — Messaging & Streaming**
+
+| | |
+|---|---|
+| **What's actually at risk** | In-flight messages. SQS holds up to **14 days**, Kinesis **24 hours by default** (extendable to 365), EventBridge holds **nothing** unless you configured an Archive, and **SNS holds nothing at all** |
+| **Backup mechanism** | **SQS DLQs**, **EventBridge Archive + Replay**, Kinesis extended retention, and the `SNS → SQS` fan-out pattern so a durable copy exists |
+| **Realistic RPO / RTO** | Bounded by retention, not by your backups. RTO minutes to redrive |
+
+**Recovery runbook:**
+1. **Poison messages / failed consumer:** fix the consumer, then redrive the DLQ — `aws sqs start-message-move-task --source-arn <dlq-arn>` moves them back to the source queue natively.
+2. **EventBridge:** start a **replay** from the archive over the exact incident window (`aws events start-replay --event-start-time … --event-end-time …`).
+3. **Kinesis:** re-read from the stored sequence number, or from `TRIM_HORIZON` if the checkpoint itself is gone.
+4. **Reconcile idempotently** — replay *deliberately* produces duplicates, so this only works if the consumers were built with the conditional-write idempotency pattern from the DynamoDB section.
+
+⚠️ **The gotcha:** **SNS on its own is not durable.** No subscriber, or a subscriber that exhausts its retry policy, means the message is gone with **no record anywhere** — which is why anything that matters is `SNS → SQS`, not `SNS → Lambda` directly. And the second-order point that catches people out: **replay is only a recovery option if you built for idempotency beforehand.** If you didn't, replaying a day of events to fix a gap creates a bigger data problem than the gap.
+
 ---
 
 ## Global Edge Services
@@ -4687,280 +5771,23 @@ aws globalaccelerator create-endpoint-group --listener-arn <arn> \
 ```
 **Verification habits:** for CloudFront, check the **`X-Cache`** response header (`Hit from cloudfront` vs `Miss from cloudfront`) and watch the **cache hit ratio** metric — a low ratio almost always means you're forwarding too many headers/cookies/query strings into the cache key. For Global Accelerator, confirm the two static IPs resolve and that endpoint health is `HEALTHY` before shifting the traffic dial.
 
----
+**Disaster Recovery — Global Edge (CloudFront, Route 53, Global Accelerator)**
 
-## Security Services
-
-### Overview: Which Service Answers Which Question
-
-The fastest way to sound organised here is to map services to questions rather than reciting a list:
-
-| The question | The service |
+| | |
 |---|---|
-| Who can do what? | **IAM** (see [IAM & Security](#iam--security)) |
-| Is someone flooding me with traffic? | **Shield** (L3/4) + **WAF** (L7) |
-| Is malicious traffic reaching my app? | **WAF**, **Network Firewall** |
-| Are my keys managed properly? | **KMS**, **CloudHSM** |
-| Are my certificates valid and renewing? | **ACM** |
-| Where are my secrets? | **Secrets Manager** / Parameter Store (see [Secrets Manager vs Parameter Store](#new-content-secrets-manager-vs-parameter-store)) |
-| **Is something bad happening right now?** | **GuardDuty** (threat detection) |
-| **What weaknesses do I have?** | **Inspector** (vulnerability scanning) |
-| **Where is my sensitive data?** | **Macie** |
-| **Is anything misconfigured or drifting?** | **AWS Config** |
-| Can I see everything in one place? | **Security Hub** |
-| How did this incident actually happen? | **Detective** + **CloudTrail** |
-| Can I prove AWS is compliant to my auditor? | **Artifact** |
+| **What's actually at risk** | Distribution and DNS configuration. Route 53 and CloudFront are **global** services, so a regional outage doesn't take them down — they're your failover *control point* |
+| **Backup mechanism** | IaC. Route 53 is one of the most durable services AWS runs; the risk is misconfiguration, not loss |
+| **Realistic RPO / RTO** | RPO ~0. RTO is propagation-bound: CloudFront config **5–15 minutes**, DNS bounded by your record **TTL** |
 
-### DDoS Protection: Shield & WAF
+**Recovery runbook:**
+1. **Origin failure:** with a CloudFront **origin group** configured, failover to the secondary origin is automatic on the specified status codes — no human action.
+2. **Regional failure:** Route 53 **failover records** tied to a health check shift traffic automatically; otherwise update the record and wait out the TTL.
+3. **Serve a static fallback:** repoint the origin at an S3 maintenance page — far better than a timeout while you recover.
+4. **Invalidate cache** after cutting over, or clients keep getting the pre-incident objects.
 
-**The three attack shapes** worth naming before the services: **volumetric** (L3/4 — UDP reflection/amplification, SYN floods; goal is to saturate bandwidth), **protocol** (exploiting TCP/IP behaviour), and **application-layer** (L7 — HTTP floods, Slowloris; low bandwidth but expensive per request because each one hits your application and database).
-
-**AWS Shield** — see also the Shield notes in [ELB Deep-Dive](#elb-deep-dive-cross-zone-load-balancing-504-timeouts--shield-ddos-protection).
-- **Shield Standard**: free, automatically on for **every** account, protecting Route 53, CloudFront, Global Accelerator, and ELB against common L3/4 attacks.
-- **Shield Advanced**: paid (~$3,000/month, org-wide), adding larger-scale mitigation, **24/7 access to the Shield Response Team (SRT)**, **cost-protection credits** for scaling charges incurred during an attack, health-based detection, and **WAF included at no extra charge**.
-
-**AWS WAF** — the Layer-7 firewall. Attaches to **CloudFront, ALB, API Gateway, AppSync, and Cognito user pools** (note: **not** to an NLB, because WAF needs HTTP context — a common trick question).
-
-- Structure: a **Web ACL** contains **rules** and **rule groups**, evaluated in priority order.
-- **AWS Managed Rule Groups** cover most needs without writing rules: the **Core rule set (OWASP-style)**, SQL injection, known-bad inputs, **IP reputation**, **Anonymous IP** (Tor/VPN/proxy), and **Bot Control**.
-- Rule types: IP set match, **geo match**, string/regex match, size constraint, SQLi/XSS detection, and **rate-based rules** — the built-in rate limiter (e.g. block any IP exceeding 2,000 requests per 5 minutes), which is the answer to "how do you stop credential stuffing or scraping?"
-- Actions: **Allow**, **Block**, **Count**, **CAPTCHA**, **Challenge**.
-- **❗ Best practice: deploy every new rule in `Count` mode first**, watch the logs to see what it *would* have blocked, then switch to `Block`. Going straight to Block is how teams take down their own legitimate traffic — say this and you sound like you've actually run WAF.
-- Log to CloudWatch Logs / S3 / Firehose, and query with Athena.
-- WAF is **regional**, except for CloudFront where the Web ACL is **global (created in `us-east-1`)**.
-
-**AWS Firewall Manager** centrally applies WAF rules, Shield Advanced protections, security-group policies, and Network Firewall rules across **every account in an Organization** — and automatically to newly created resources. It's the answer to "how do you guarantee every account has the baseline WAF rules?"
-
-**The canonical layered edge:** `Route 53 → CloudFront (Shield + WAF at the edge) → ALB (Shield) → private app tier`. Blocking an attack at CloudFront means it never consumes your ALB, compute, or database capacity.
-
-### AWS Network Firewall
-
-A **managed, stateful network firewall and IPS/IDS at the VPC level**, inspecting **all** traffic — not just HTTP.
-
-- Capabilities: stateful traffic filtering, **domain-name filtering for egress** (allow `*.microsoft.com`, block everything else), protocol detection, and **Suricata-compatible IPS rules** for deep packet inspection.
-- Deployment: a dedicated **firewall subnet in each AZ**, with route tables directing traffic through the firewall endpoints before it reaches an IGW/NAT.
-- **Where it's the right answer:** controlled **egress filtering** for compliance ("workloads may only reach an approved allowlist of domains"), intrusion detection at the network layer, and inspecting traffic that a WAF can't see because it isn't HTTP.
-
-**How it differs from everything else that filters traffic:**
-| | Layer | Scope | Deny rules |
-|---|---|---|---|
-| **Security Group** | 4 | ENI/instance | ❌ Allow only |
-| **NACL** | 4 | Subnet | ✅ but stateless, IP/port only |
-| **Network Firewall** | 3–7 | **VPC**, all protocols | ✅ Stateful, domain names, IPS signatures |
-| **WAF** | 7 | CloudFront/ALB/API GW | ✅ HTTP content-aware |
-| **GWLB** | 3 | VPC | Insertion point for **third-party** appliances |
-
-### KMS & CloudHSM
-
-**KMS (Key Management Service)** — managed encryption keys backed by FIPS 140-validated HSMs, integrated with essentially every AWS service (S3, EBS, RDS, Secrets Manager, Lambda env vars…).
-
-- **Key types:** *AWS owned* (invisible, shared), *AWS managed* (`aws/s3`, `aws/ebs` — free, auto-rotated, but you can't edit the policy), and **customer managed keys (CMKs)** — the ones you create, with your own **key policy**, optional **automatic annual rotation**, tags, and a mandatory **7–30 day waiting period before deletion** (deliberately, since deleting a key destroys all data encrypted with it).
-- **❗ The key policy is mandatory and authoritative.** Unlike most resources, an IAM policy granting `kms:Decrypt` is **not sufficient on its own** — the key's own resource policy must also allow the principal (directly, or by delegating to IAM with the `kms:CallerAccount` pattern). "IAM says allow but KMS still denies" is the key policy. **Grants** are the temporary, programmatic alternative for service-to-service delegation.
-- **Envelope encryption — know why it exists:** the `Encrypt` API can only handle **up to 4 KB** of data. So for anything larger, `GenerateDataKey` returns a plaintext data key plus an encrypted copy; you encrypt your data locally with the plaintext key, discard it, and store the encrypted key alongside the ciphertext. That's exactly what S3/EBS do internally, and it's why **KMS request quotas** matter at high throughput (hence S3 Bucket Keys — see [S3 Encryption](#s3-security-encryption--its-four-types)).
-- **Multi-Region keys** replicate key material across regions so you can decrypt in region B what was encrypted in region A — needed for cross-region DR of encrypted data.
-- Every KMS API call is logged in **CloudTrail**, which is the audit advantage of SSE-KMS over SSE-S3.
-
-**CloudHSM** — **single-tenant, dedicated hardware** HSMs in your VPC.
-| | **KMS** | **CloudHSM** |
-|---|---|---|
-| Tenancy | Multi-tenant, managed service | **Dedicated hardware, single tenant** |
-| Key control | AWS manages the HSM; you control policy | **You** manage keys entirely — **AWS has no access and cannot recover them** |
-| FIPS level | 140-2/3 validated | **140-2 Level 3** |
-| Integration | Native with ~every AWS service | Via PKCS#11/JCE/CNG — mostly your own application |
-| Use when | Default for everything | Regulatory mandate for exclusive key custody, custom crypto (e.g. SQL Server TDE with your own keys), or an offloaded CA |
-
-**One-liner:** "KMS unless a regulator specifically requires that AWS cannot possibly access my keys — then CloudHSM, accepting that if I lose the keys, the data is gone."
-
-#### Worked Example: Giving a Fargate Task Access to KMS-Encrypted S3 Data
-
-A near-perfect interview scenario, because it needs **four** separate things to be true and candidates usually name one or two. *"My Fargate task can't read the bucket, but the IAM policy clearly allows `s3:GetObject`."*
-
-**1. The TASK role — not the task execution role.** The execution role pulls the image and injects secrets; **your application code** runs under the **task role**. It needs S3 *and* KMS permissions:
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    { "Sid": "ReadObjects", "Effect": "Allow",
-      "Action": ["s3:GetObject", "s3:ListBucket"],
-      "Resource": ["arn:aws:s3:::my-bucket", "arn:aws:s3:::my-bucket/*"] },
-
-    { "Sid": "DecryptWithTheCmk", "Effect": "Allow",
-      "Action": ["kms:Decrypt", "kms:DescribeKey"],
-      "Resource": "arn:aws:kms:us-east-1:111122223333:key/1234abcd-...",
-      "Condition": { "StringEquals": { "kms:ViaService": "s3.us-east-1.amazonaws.com" } } }
-  ]
-}
-```
-Writing objects additionally needs **`kms:GenerateDataKey`** (envelope encryption — see above), plus `s3:PutObject`. The **`kms:ViaService`** condition is the least-privilege touch: the role may use the key *only through S3*, never directly.
-
-**2. ❗ The KMS KEY POLICY must also allow that role.** This is the step that's missed, and it's specific to KMS: the key's resource policy is **mandatory and authoritative**, so an IAM policy alone is *not sufficient* unless the key policy delegates to IAM.
-```json
-{
-  "Sid": "AllowTaskRoleToDecrypt",
-  "Effect": "Allow",
-  "Principal": { "AWS": "arn:aws:iam::111122223333:role/my-app-task-role" },
-  "Action": ["kms:Decrypt", "kms:DescribeKey"],
-  "Resource": "*"
-}
-```
-`"Resource": "*"` inside a key policy means *this key*. (The alternative is the standard "delegate to IAM" statement granting the account root `kms:*` — which is what lets IAM policies alone work.)
-
-**3. The bucket policy**, if there is one. Same-account with no restrictive bucket policy → nothing needed. But a bucket policy that **denies** unencrypted transport or requires a specific key will still block you, and **cross-account** access needs an explicit `Allow` there too.
-
-**4. ❗ The network path — the one nobody mentions.** A Fargate task in a **private subnet** must reach *both* services. S3 has a **free gateway endpoint**; **KMS has no gateway endpoint — it needs an interface endpoint** (`com.amazonaws.<region>.kms`) or a NAT gateway. So a task with perfect IAM will simply **hang and time out** if you added the S3 endpoint and forgot the KMS one.
-
-**Read the error to find which of the four is wrong:**
-| Error | Cause |
-|---|---|
-| `AccessDenied` on `GetObject` | The S3 permission in the task role |
-| `KMS.AccessDeniedException`, or *"The ciphertext refers to a customer master key that does not exist… or you are not allowed to access"* | **`kms:Decrypt` missing, or the key policy doesn't name the role** — despite the misleading "does not exist" wording |
-| Request hangs, then times out | **No network path** — missing VPC endpoint or NAT |
-| Works in dev, fails in prod | A per-environment CMK whose key policy was never updated |
-
-**The nuance worth volunteering:** if the *task definition* pulls a secret from Secrets Manager or Parameter Store that's encrypted with a **customer-managed** key, then the **task execution role** *also* needs `kms:Decrypt` — because that decryption happens before your code starts. So a single task can legitimately need `kms:Decrypt` on **two different roles for two different keys**.
-
-**Cross-account variant:** only a **customer-managed** key works (AWS-managed keys cannot be shared). You then need the key policy to name the external principal, the external principal's IAM policy to allow `kms:Decrypt`, and the bucket policy to allow the read — or you use a **KMS grant** for programmatic, temporary delegation.
-
-#### Encryption in Transit (TLS) — End to End
-
-Encryption at rest is a checkbox; **in transit is an architecture decision, because TLS terminates at every hop and each one is a separate choice**:
-```
-Client --TLS(ACM)--> CloudFront --TLS--> ALB --TLS or plain HTTP?--> ECS task --TLS?--> RDS
-                                  ^                    ^                        ^
-                          viewer protocol       target group protocol    force_ssl / sslmode
-```
-- **CloudFront → origin:** the *Origin Protocol Policy* (`https-only` or `match-viewer`). `http-only` to an ALB means the internet-facing leg is encrypted and the AWS-internal leg is not.
-- **ALB → target:** set by the **target group protocol**. HTTP inside the VPC is extremely common and perfectly defensible — but it is **not** "encrypted end to end", and you should say which you've implemented rather than claiming the stronger one.
-- **True end-to-end** means HTTPS on the ALB→target hop too, which needs a certificate on the task. Useful detail: **the ALB does not validate the target's certificate**, so a self-signed cert is acceptable there — you're encrypting the hop, not authenticating the backend.
-- **mTLS**: an ALB can require and verify **client** certificates (`mutual authentication` on the listener), for partner/B2B or IoT callers. **App Mesh / ECS Service Connect** provide mTLS *between services*.
-- **TLS version** — set the listener's **security policy** to a TLS 1.2 (or 1.3) minimum. "We use TLS" without naming the minimum version is what auditors actually query.
-
-**How you enforce it rather than hope for it:**
-| Layer | Enforcement |
-|---|---|
-| S3 | `Deny` with `aws:SecureTransport: false` (see [S3 Bucket Policies](#s3-bucket-policies--access-control)) |
-| ALB | An HTTP:80 listener whose only action is **redirect to HTTPS** |
-| RDS | PostgreSQL `rds.force_ssl=1` / MySQL `require_secure_transport`; client `sslmode=Require` |
-| ElastiCache | Enable **in-transit encryption** at cluster creation (it can't be turned on later) |
-| EFS | Mount with `-o tls` |
-| AWS APIs | Already HTTPS-only (DynamoDB, SQS, KMS…), which is why "is DynamoDB encrypted in transit?" is a yes-by-default |
-
-**Certificates** come from **ACM** for public endpoints and **ACM Private CA** for internal ones — remembering that an ACM *public* certificate's private key **cannot be exported**, so it can't be installed on a task or EC2 instance directly (see [ACM](#acm-aws-certificate-manager) below).
-
-### ACM (AWS Certificate Manager)
-
-**Free public TLS certificates with automatic renewal** — the renewal is the real value, since expired certificates are one of the most common self-inflicted outages.
-
-- **Validation:** **DNS validation** (add a CNAME record; **auto-renews forever** once the record stays in place — always choose this) or **email validation** (manual, breaks renewal if nobody clicks the link).
-- **Integrations:** ALB/NLB, **CloudFront**, API Gateway, AppSync, Elastic Beanstalk.
-- **❗ You cannot export the private key of an ACM *public* certificate.** So you cannot install one directly on an EC2 instance or an on-prem server — terminate TLS at an ALB/CloudFront instead, or use **ACM Private CA** (which does allow export, for internal certs, and is paid). This limitation is a very common question.
-- **❗ Certificates for CloudFront must live in `us-east-1`**; certificates for an ALB must be in the ALB's region. See [CloudFront](#cloudfront-cdn).
-- **Imported** certificates (from an external CA) get **no automatic renewal** — you must rotate them yourself. Monitor expiry with the ACM `DaysToExpiry` metric, an AWS Config rule, or an EventBridge rule on ACM expiry events.
-- **SNI** lets one ALB listener serve many certificates/domains.
-
-### AWS Systems Manager (SSM)
-
-An operations-and-management suite that shows up in interviews mainly through **one killer feature**, but the rest is worth knowing.
-
-**❗ Session Manager — the answer to "how do you get a shell on an EC2 instance?"**
-
-The reflex answer is "SSH via a bastion host in a public subnet." The modern answer is **Session Manager**, and the difference is substantial:
-- **No SSH keys** to distribute, rotate, or leak.
-- **No open inbound ports** — not even 22. The SSM Agent makes an **outbound** connection to the SSM endpoints, so the instance can sit in a **fully private subnet with no inbound rules at all**.
-- **No bastion host** to run, patch, and pay for.
-- **Access is controlled by IAM**, so you grant and revoke shell access with a policy, and **every session is logged to CloudTrail** and can be recorded keystroke-by-keystroke to S3/CloudWatch Logs — which is the audit story a bastion can't match.
-- Works for Windows (PowerShell/RDP via port forwarding) as well as Linux.
-
-**Requirements** (and therefore the usual failure causes): the **SSM Agent** installed and running (pre-installed on Amazon Linux 2/2023 and recent Windows AMIs), an **instance profile** with `AmazonSSMManagedInstanceCore`, and network reachability to the SSM endpoints — either via a NAT gateway or, for a genuinely isolated subnet, **interface VPC endpoints for `ssm`, `ssmmessages`, and `ec2messages`** (see [VPC Endpoints](#vpc-endpoints--privatelink)).
-
-```bash
-aws ssm start-session --target i-0abc123
-# Port-forward a private RDS/RDP endpoint to localhost — replaces an SSH tunnel through a bastion
-aws ssm start-session --target i-0abc123 \
-  --document-name AWS-StartPortForwardingSessionToRemoteHost \
-  --parameters '{"host":["mydb.abc.us-east-1.rds.amazonaws.com"],"portNumber":["5432"],"localPortNumber":["5432"]}'
-```
-
-**The rest of Systems Manager:**
-| Capability | What it does |
-|---|---|
-| **Parameter Store** | Configuration and secrets storage — it's *part of* SSM (see [Secrets Manager vs Parameter Store](#new-content-secrets-manager-vs-parameter-store)) |
-| **Patch Manager** | Scans and applies OS patches on a schedule via **patch baselines** and **maintenance windows**, across EC2 *and* on-prem servers. This is the concrete answer to the "guest OS patching is your responsibility" half of the [EC2 shared responsibility model](#ec2-shared-responsibility-model) |
-| **Run Command** | Execute a command or script across a fleet by tag, with no SSH and full audit logging — "restart the service on all instances tagged `role=web`" |
-| **State Manager** | Enforces desired configuration continuously (agent installed, service running) and corrects drift |
-| **Automation (runbooks)** | Multi-step operational workflows — patch-and-reboot, AMI creation, or the **auto-remediation actions** invoked by [AWS Config](#aws-config) |
-| **Inventory / Fleet Manager** | Collects installed software, patch level, and configuration across the fleet; browse and manage instances without connecting |
-| **Compliance** | Reports patch and configuration compliance per instance |
-
-**Where to volunteer it:** whenever a question involves accessing, patching, or configuring EC2 at scale. "How do you patch 200 instances?" → Patch Manager with maintenance windows, or replace instances from a freshly baked golden AMI via [ASG instance refresh](#auto-scaling-groups-asg) — immutable infrastructure being the stronger answer where the workload allows it.
-
-### AWS Artifact
-
-A **self-service portal for compliance documents** — AWS's audit reports (**SOC 1/2/3, PCI DSS AOC, ISO 27001/27017/27018, FedRAMP**, and country-specific attestations) plus **agreements** you accept online (the **HIPAA BAA**, the GDPR data-processing addendum).
-
-**The trick to avoid:** Artifact does **not** scan, monitor, or secure anything. It's a document repository. Its role is the **shared responsibility model** in practice — when your auditor asks for evidence that the *underlying infrastructure* is compliant, you download it from Artifact; everything above the line (your configurations, your access controls) you have to evidence yourself with Config, CloudTrail, and Security Hub.
-
-### GuardDuty
-
-**Intelligent threat detection** — continuously analyses **CloudTrail management events, VPC Flow Logs, and DNS logs** (plus optional S3 data events, EKS audit logs, RDS login activity, Lambda network activity, and **EBS malware scanning**) using machine learning and threat intelligence feeds.
-
-- **Agentless and log-free to set up** — it reads those sources directly, so there is nothing to install and **enabling it does not require you to turn on (or pay for) the logs themselves**. One click, or organisation-wide from a delegated administrator account.
-- **Typical findings:** crypto-mining, communication with known-malicious IPs or domains, **EC2 instance credentials being used from outside AWS** (i.e. stolen role credentials — see IMDSv2 in [IAM Roles](#iam-roles-policies-assumerole)), unusual API calls or console logins from anomalous locations, port scanning, and reconnaissance against your account.
-- **Automate the response:** findings go to **EventBridge**, so a high-severity finding can trigger a Lambda that isolates an instance's security group, revokes a role's sessions, or opens a ticket — rather than sitting in a console nobody reads.
-
-### Inspector
-
-**Automated vulnerability management** for **EC2 instances, ECR container images, and Lambda functions**.
-
-- **Continuous and event-driven**, not scheduled: it rescans automatically when you deploy a new image, launch an instance, or when a **new CVE is published** — so a package that was clean yesterday gets flagged today.
-- Uses the **SSM agent** for EC2, correlates CVEs with **network reachability** (an unreachable vulnerability is genuinely lower risk), and produces a prioritised risk score.
-- It's the engine behind **ECR enhanced scanning** (see [ECR](#ecr-elastic-container-registry)).
-
-**❗ Inspector vs GuardDuty is the pairing that gets asked:** **Inspector finds weaknesses** — unpatched CVEs, vulnerable dependencies ("the door has a weak lock"). **GuardDuty finds active threats** — malicious behaviour happening now ("someone is picking the lock"). They're complementary; naming both with that distinction is the complete answer.
-
-### Macie
-
-**ML-based sensitive-data discovery for S3.** It inventories your buckets (flagging any that are public, unencrypted, or shared externally) and scans object contents to classify **PII, credentials, financial data, and health data**, with custom data identifiers via regex for your own formats (policy numbers, internal IDs).
-
-Findings flow to **Security Hub** and **EventBridge**. Where it earns its cost: GDPR/HIPAA/PCI data-classification requirements, and answering "do we have customer PII sitting in a data-lake bucket nobody remembered?" — a question that's otherwise unanswerable at scale.
-
-### AWS Config
-
-**Records the configuration of every resource over time, and evaluates it against rules.**
-
-- Produces **configuration items** and a full **change history** — so you can view exactly what a security group looked like last Tuesday, and what changed it (linking to the **CloudTrail** event and therefore the identity).
-- **Rules**: AWS **managed rules** cover most of the common bar — `s3-bucket-public-read-prohibited`, `encrypted-volumes`, `iam-user-mfa-enabled`, `rds-instance-public-access-check`, `required-tags` — plus **custom rules** in Lambda or CloudFormation Guard.
-- **Remediation actions** (via SSM Automation documents) can **auto-fix** a violation — e.g. re-enable Block Public Access the moment someone disables it. Auto-remediation is the answer that separates "we detect drift" from "we prevent drift".
-- **Conformance packs** bundle rules into a compliance framework; **aggregators** roll findings up across all accounts and regions in the Organization.
-- It's **regional** and you pay per configuration item recorded plus per rule evaluation — worth scoping which resource types you record.
-
-### Security Hub & Detective
-
-**Security Hub** is the **single pane of glass**: it normalises and aggregates findings from **GuardDuty, Inspector, Macie, IAM Access Analyzer, Config, Firewall Manager**, and partner tools into one format, then scores you against **security standards** (AWS Foundational Security Best Practices, **CIS Benchmark**, PCI DSS). Cross-account and cross-region aggregation, with automated actions via EventBridge.
-
-**Detective** takes a finding and builds an **interactive behaviour graph** from CloudTrail, VPC Flow Logs, and GuardDuty data so you can investigate root cause — what else that role did, what else that IP touched, when the behaviour started. Security Hub tells you *what* is wrong; Detective helps you work out *how it happened and how far it spread*.
-
-### Defence in Depth — The Summary Answer
-
-The layered story to give when asked "how do you secure a workload on AWS?":
-```
-Edge          Route 53 (DNSSEC) → CloudFront + Shield + WAF
-Network       VPC, private subnets, Security Groups, NACLs, Network Firewall, VPC endpoints
-Identity      IAM least privilege, roles not keys, MFA, SCPs, permissions boundaries
-Data          KMS/CloudHSM encryption at rest, TLS in transit (ACM), S3 Object Lock
-Secrets       Secrets Manager / Parameter Store, IAM DB auth — never in code
-Detect        GuardDuty (threats) · Inspector (vulnerabilities) · Macie (sensitive data) · Config (drift)
-Audit         CloudTrail (org trail → locked log-archive account), VPC Flow Logs, Access Analyzer
-Aggregate     Security Hub (one pane) → EventBridge → automated remediation
-Respond       Detective for investigation, documented runbooks, tested restores
-```
-**One-liner:** "No single control is the answer — the point is that a failure at any one layer isn't sufficient to cause a breach. And the layer I'd check first in any real incident is IAM, because on AWS most breaches are permission or configuration failures, not infrastructure failures."
+⚠️ **The gotcha:** **edge failover has to be pre-wired, because configuring it during the incident is slower than the incident.** A CloudFront config change takes 5–15 minutes to propagate, and a 3600-second TTL on a DNS record means an hour of clients still going to the dead region. Set **low TTLs (60s) on records you intend to fail over** and configure origin groups and health checks in advance — the whole value of edge services in DR is that they're the one control point a regional outage can't touch.
 
 ---
-
-# PART III — Tier 3: Breadth — Recognise and Place
-
-> **One clean sentence each.** Nobody expects a .NET full-stack engineer to have operated these. But not *recognising* a service name reads as a gap, whereas knowing what problem it solves reads as breadth. Learn the decision boundaries, not the configuration details.
 
 ## Management, Organizations & Billing
 
@@ -4980,7 +5807,7 @@ Practical notes: accounts are either **created** in the org or **invited** into 
 
 ### Service Control Policies (SCPs)
 
-Covered in policy-evaluation terms under [Policy Types, Structure & Password Policy](#policy-types-structure--password-policy) and [Least Privilege & Permission Boundaries](#new-content-least-privilege--permission-boundaries-in-practice). The organisation-level specifics:
+Covered in policy-evaluation terms under [Policy Types & Structure](#policy-types--structure) and [Least Privilege & Permission Boundaries](#least-privilege--permission-boundaries-in-practice). The organisation-level specifics:
 
 - **SCPs are filters, never grants.** They define the *maximum* available permissions for an account. An action still needs an IAM policy to allow it; the SCP only decides whether it's permitted to be allowed at all.
 - They apply to an **OU or account** and are inherited down the tree.
@@ -5083,11 +5910,27 @@ Asked because it gates real features (Trusted Advisor above being the obvious on
 
 **Estimating tools:** the **AWS Pricing Calculator** for forward-looking architecture estimates (shareable, exportable — the right artefact for a design review or a client proposal), and the **Migration Evaluator**/**TCO** analysis for on-prem-versus-AWS business cases. Contrast with [Cost Explorer](#cost-explorer), which is **retrospective**: Pricing Calculator estimates what a design *will* cost, Cost Explorer analyses what you *did* spend.
 
+**Disaster Recovery — Organizations, Accounts & Backup Governance**
+
+| | |
+|---|---|
+| **What's actually at risk** | An entire account, SCPs, Control Tower configuration — and, in the worst case, your backups along with the thing they were backing up |
+| **Backup mechanism** | **AWS Backup vaults with Vault Lock**, cross-account backup copies, Organizations config in IaC, and the **90-day** account-closure recovery window |
+| **Realistic RPO / RTO** | Depends entirely on whether backups live in a *different* account. If they don't, RTO is "never" |
+
+**Recovery runbook:**
+1. **Closed account:** it can be reopened through AWS Support within **90 days** — after that it's permanent.
+2. **SCP lockout:** fix from the **management account**, which SCPs never apply to. This is the only reason that escape hatch exists, so keep management-account access working and separately credentialed.
+3. **Account compromise:** restore into a **clean account** from the cross-account backup vault — never back into the account you don't yet trust.
+4. **Re-apply the baseline** (SCPs, guardrails, Config rules) from IaC before letting workloads back in.
+
+⚠️ **The gotcha, and it's the one that turns an incident into a company event:** **backups stored in the same account as the workload are not backups.** A compromised or mistakenly-deleted account takes both. Put recovery points in a **separate backup account** with **Vault Lock in compliance mode**, which cannot be deleted even by root — that is the actual ransomware and insider-risk control. And test SCPs on a sandbox OU first: one wrong `Deny` can lock every human out of an entire OU, admins included.
+
 ---
 
 ## Cost & Performance
 
-### [new content] Cost Optimization: Savings Plans, Reserved, Spot
+### Cost Optimization: Savings Plans, Reserved, Spot
 
 The original notes cover EC2 pricing models in a list but never contrast them for a purchasing-decision interview question ("How would you reduce our AWS compute bill by 30%?") — this section fills that gap directly.
 
@@ -5169,7 +6012,7 @@ Migrates databases with **the source staying online** during the migration.
 
 ## Well-Architected & Resilience
 
-### [new content] AWS Well-Architected Framework — 6 Pillars
+### AWS Well-Architected Framework — 6 Pillars
 
 The original notes never reference the Well-Architected Framework, despite it being one of the most commonly asked "tell me about AWS best practices generally" senior/architect-level framing questions.
 
@@ -5197,7 +6040,7 @@ A compact, one-line-per-pillar version of the table above, purely for fast memor
 
 **Memory hook:** "Run it well, keep it safe, keep it up, keep it fast, keep it cheap, keep it green" — six pillars, six verbs, in the same order AWS presents them.
 
-### [new content] Disaster Recovery Strategies
+### Disaster Recovery Strategies
 
 The original notes touch on Multi-AZ, Global Tables, and multi-region Lambda concurrency individually but never assemble them into the standard DR-strategy framework AWS interviews expect (Backup & Restore / Pilot Light / Warm Standby / Multi-Site Active-Active) — a clear, material gap for a senior interview.
 
@@ -5245,6 +6088,8 @@ The question that follows any DR answer is **"how do you know it works?"** — a
 # PART IV — Cross-Cutting Reference
 
 > Consolidated best practices, pitfalls, long-form Q&A, and the changelog of how this guide was assembled.
+
+---
 
 ## Best Practices
 
@@ -5419,6 +6264,8 @@ Fourth pass. Where the `[iam-core]` pass filled the IAM fundamentals, this one d
 **Security Services** — an entirely new section. Added a question-to-service routing table; **Shield Standard vs Advanced** and **WAF** (managed rule groups, rate-based rules, the **deploy-in-Count-mode-first** practice, WAF can't attach to an NLB), **Firewall Manager**; **Network Firewall** with a five-way traffic-filtering comparison; **KMS** (key types, the **mandatory key policy**, **envelope encryption** and the 4 KB limit, multi-region keys) **vs CloudHSM**; **ACM** (DNS validation auto-renewal, **private key cannot be exported** so you can't use it on EC2, us-east-1 for CloudFront); **Artifact** (a document repository, not a scanner); **GuardDuty** (threats) **vs Inspector** (vulnerabilities) — stated as an explicit pair; **Macie**; **AWS Config** (rules, auto-remediation, conformance packs); **Security Hub & Detective**; and a layered defence-in-depth summary.
 
 **Management, Organizations & Billing** — another entirely new section. Added **Organizations** (why an account is the strongest isolation boundary, keep workloads out of the management account); **SCPs** at org level including the **management account is exempt** gotcha and deny-list vs allow-list strategies; **Consolidated Billing** (aggregated volume tiers + **RI/SP sharing** as the real savings, and the non-retroactive cost-allocation-tag trap); **Control Tower** (landing zone, preventive/detective/proactive guardrails, Account Factory); **RAM** (shared-subnet central-networking pattern); **Cost Explorer**; **Budgets** incl. **Budget Actions**; **Cost Anomaly Detection** with the explicit **Budgets vs Anomaly Detection** distinction; and **Trusted Advisor** including its **support-tier gating** and how it relates to Compute Optimizer/Config/Security Hub.
+
+---
 
 ## Summary of [resume-aligned] Restructure & Additions (This Pass)
 
