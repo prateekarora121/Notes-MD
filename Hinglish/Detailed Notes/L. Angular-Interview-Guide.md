@@ -633,6 +633,34 @@ Template reference variables (`#var`) trivial DOM access ke liye `@ViewChild` ka
 
 Inko use karo jab aapko template mein hi bas ek quick handle chahiye ho, small UI logic ke liye component-class coupling avoid karte hue.
 
+**[version 19 upgrade]** Angular 7 mein `@Input()`/`@Output()` + `EventEmitter` hi Parent ↔ Child communication ka **sirf ek** tareeka tha. Angular 19 mein signal-based `input()`, `output()`, aur `model()` **stable** ho gaye (pehle v17.1 se developer preview mein), aur inke saath official migration schematics bhi aaye — ab yeh recommended default hain, decorators still supported hain.
+
+*Kya badla aur implement kaise karein:*
+```typescript
+export class UserCardComponent {
+  // v7 style — still works, but no longer the default recommendation
+  @Input() name!: string;
+  @Output() nameChange = new EventEmitter<string>();
+
+  // [version 19 upgrade] — signal-based equivalents
+  name = input.required<string>();          // Signal<string>, required
+  age = input(0);                            // Signal<number>, with default
+  selected = output<string>();                // replaces @Output() + EventEmitter
+
+  // model() gives two-way binding in one line (parent can [(name)]="...")
+  name = model<string>('');
+}
+```
+- **Reading the value:** call it like a function — `this.name()` instead of `this.name`.
+- **Two-way binding:** `model()` replaces the old `@Input() + @Output() nameChange` pair used for `[(ngModel)]`-style custom two-way bindings — the parent just does `<user-card [(name)]="userName" />`.
+- **Migrating an existing codebase:** run the official schematics instead of hand-editing every component:
+  ```bash
+  ng generate @angular/core:signal-input-migration
+  ng generate @angular/core:signal-queries-migration
+  ng generate @angular/core:output-migration
+  ```
+- **Interview angle:** "Why move `@Input`/`@Output` to Signals?" — same fine-grained change-detection benefit as `signal()`/`computed()` elsewhere: Angular knows exactly which binding depends on which input, which is what makes zoneless change detection safe for input-driven components.
+
 ### Routing and Navigation
 
 ```typescript
@@ -1275,6 +1303,32 @@ flowchart LR
 
 **Likely interview framing:** "Hum ek ko doosre ke over choose nahi kar rahe — Signals component-local state aur template bindings ke liye default banate ja rahe hain, jabki RxJS asynchronous streams aur complex operator composition ke liye backbone bana rehta hai. `toSignal`/`toObservable` interop hi wo tarika hai jisse yeh dono is transition ke dauraan same codebase mein coexist karte hain."
 
+**[version 19 upgrade]** Angular 7 mein derived state ko manually recompute karna padta tha (constructor/lifecycle hooks mein ek dusri property se ek property set karke), aur async data-fetching state (loading/error/value) ko hamesha ek `Subject`/RxJS pipeline ke through hand-roll karna padta tha. Angular 19 ne do naye Signal primitives add kiye jo yeh dono gaps close karte hain:
+
+**`linkedSignal()`** — ek writable Signal jo apne aap khud ko reset/recompute kar leta hai jab uska source Signal change hota hai (isse pehle aapko ek `effect()` likhna padta tha jo manually dusre signal ko reset karta):
+```typescript
+export class ProductListComponent {
+  products = signal<Product[]>([...]);
+  // selectedId automatically resets to the first product whenever the list changes
+  selectedId = linkedSignal(() => this.products()[0]?.id);
+}
+```
+
+**`resource()` (experimental)** — Signals ko asynchronous operations ke saath bridge karta hai; ek "async-aware `computed()`" ki tarah socho jo `loading`/`error`/`value` states khud manage karta hai:
+```typescript
+export class UserDetailComponent {
+  userId = input.required<string>();
+
+  userResource = resource({
+    request: () => ({ id: this.userId() }),
+    loader: ({ request }) => fetch(`/api/users/${request.id}`).then(r => r.json()),
+  });
+  // userResource.value(), userResource.isLoading(), userResource.error()
+}
+```
+- **Kab use karein:** `linkedSignal` jahan bhi aapko ek "reset when the source changes" pattern chahiye (selected tab/item, form default recompute). `resource()` simple fetch-on-input-change data loading ke liye — abhi bhi complex retry/debounce/cancellation orchestration ke liye RxJS + `HttpClient` prefer karo, kyunki `resource()` experimental hai aur RxJS jitna operator support nahi deta.
+- **Interview angle:** Yeh dono 2026-era interviews mein "what's the newest thing in Angular" follow-up ke liye good talking points hain — reasonable hai inhe "still evolving/experimental" ki tarah frame karna agar directly stability ke baare mein poocha jaaye.
+
 ### State Management (NgRx aur Alternatives)
 
 State management application-wide data ko manage karta hai aur components ko consistent rakhta hai. Common approaches, roughly formality/complexity ke increasing order mein:
@@ -1852,6 +1906,39 @@ export const appConfig: ApplicationConfig = {
 
 **Yeh ek strong senior talking point kyun hai:** hydration correctness exactly waisa hi nuanced, "yeh kyun matter karta hai" topic hai jo us insaan ko differentiate karta hai jisne production mein SSR ship kiya hai us insaan se jisne sirf docs padhe hain — flicker-free hydration aur event replay Angular team ke liye genuinely hard, recent engineering problems the, koi incremental sugar nahi.
 
+**[version 19 upgrade]** Angular 7 mein SSR (Angular Universal) ka behavior binary tha — poori app ya to server par render hoti thi ya nahi, aur poori app ek hi baar mein hydrate hoti thi. Angular 19 isse do directions mein granular banata hai:
+
+**Incremental Hydration (experimental)** — familiar `@defer` syntax use karte hue, template ke individual sections ko mark kar sakte ho taaki woh server par "grayscale"/inert state mein render ho (JS download nahi hota) aur sirf tab hydrate ho jab ek specific trigger fire ho — poori app ko ek saath hydrate karne ke bajaye:
+```typescript
+// app.config.ts
+export const appConfig: ApplicationConfig = {
+  providers: [
+    provideClientHydration(withIncrementalHydration()),
+  ]
+};
+```
+```html
+<!-- below-the-fold widget stays inert until it scrolls into view, then hydrates -->
+@defer (hydrate on viewport) {
+  <product-recommendations />
+} @placeholder {
+  <div class="skeleton"></div>
+}
+```
+Supported triggers: `on viewport`, `on interaction`, `on idle`, `on immediate`, aur `never` (static content jo kabhi hydrate nahi hona chahiye, e.g. ek blog post ka body).
+
+**Event Replay — Angular 19 se default enabled**: v17 mein introduce hua tha, ab explicit `provideClientHydration()` config ke bina bhi by default on hai.
+
+**Route-level render mode** — ab per-route decide kar sakte ho ki woh SSR, CSR, ya prerendered ho, same app ke andar (e.g. marketing pages prerender ho jaayein, dashboard purely CSR rahe):
+```typescript
+// app.routes.server.ts
+export const serverRouteConfig: ServerRoute[] = [
+  { path: 'dashboard', renderMode: RenderMode.Client },
+  { path: '**', renderMode: RenderMode.Prerender },
+];
+```
+- **Interview angle:** "How would you optimize SSR for a page with one heavy, below-the-fold widget?" — incremental hydration is the direct answer (vs. v7-era "hydrate everything or nothing").
+
 ### Progressive Web Apps aur Service Workers
 
 Ek **PWA** ek web app hai jisme native-app-like capabilities hoti hain: offline support, background sync, push notifications, fast/cacheable performance, installability.
@@ -2304,6 +2391,12 @@ Neeche wale **[new content]** sections "Angular 7" (2018) baseline aur current (
 12. **esbuild / Vite-based Application Builder (Angular 17+)** — CLI ka build pipeline materially change hua; troubleshooting aur `angular.json` configuration ko affect karta hai.
 13. **Hydration (Angular 16+) and Event Replay (Angular 17+)** — Angular Universal SSR mein old "destructive rehydration" flicker/wasted-work problem fix karta hai; agar achhe se discuss ho to production SSR experience ka strong evidence hai.
 
+**[version 19 upgrade] additions (this pass)** — in tagged inline call-outs mein specifically Angular 19-only features cover hui hain jo pehle kahin nahi thi, har ek exactly us jagah insert ki gayi jahan original v7 content unhe supersede karta hai:
+
+14. **Signal-based `input()` / `output()` / `model()` — stable in v19** (Component Communication section mein) — `@Input()`/`@Output()` + `EventEmitter` decorators ko replace karta hai; `model()` two-way binding ke liye `@Input`+`@Output` pair ko ek single declaration mein collapse karta hai. Official migration schematics included.
+15. **`linkedSignal()` aur `resource()` (Angular 19)** (Signals section mein) — derived/self-resetting state (`linkedSignal`) aur async data-fetching (`resource`, experimental) ke liye v7-era manual patterns (constructor recompute, hand-rolled RxJS loading/error state) ka Signals-native replacement.
+16. **Incremental Hydration, default Event Replay, aur Route-level Render Mode (Angular 19)** (SSR/Hydration section mein) — poori-app-ek-saath hydration model ko `@defer`-based per-section hydration se replace karta hai; per-route SSR/CSR/prerender mix karne deta hai jo v7 ke binary SSR-on-or-off model mein possible nahi tha.
+
 **Inline flagged contradictions (aapke review ke liye):**
 - **Token storage — RESOLVED.** `AuthInterceptor` example pehle directly `localStorage.getItem('token')` read karta tha, jo elsewhere aur BFF architecture section mein "tokens kabhi localStorage/sessionStorage mein store nahi hote" guidance ko contradict karta tha. Example ab ek `TokenService` inject karta hai, isliye storage posture ek implied default ke bajaye ek explicit decision hai, aur `localStorage`-vs-BFF trade-off dono jagah state kiya gaya hai (dekho [Angular Security](#angular-security)).
 - **`ng build --prod` vs `--configuration production`:** source notes different places mein `ng build --prod` (older CLI syntax) aur `ng build --configuration production` (current syntax) dono use karte hain. `--prod` current CLI versions mein deprecated/removed hai — going forward `--configuration production` (ya shorthand `-c production`) use karo; aapke notes ne dono use kiye the isliye context mein dono rakhe gaye, lekin `--prod` ko outdated flag kiya ja raha hai.
@@ -2318,3 +2411,23 @@ Is pass ne ek formal gap-analysis review se identified teen sections add kiye, j
 3. **Accessibility (a11y): ARIA, CDK a11y Module, Focus Management** (SSR, PWA & Cross-Cutting mein, Angular Security ke baad inserted) — kaafi enterprise projects par ek hard compliance requirement hone ke bawajood a11y ki prior guide mein zero coverage thi. Custom widgets par ARIA roles/states/roving-tabindex, Angular CDK ke `FocusTrap`/`LiveAnnouncer`/`FocusMonitor` primitives, aur modals/dynamic content ke liye full three-step focus-management sequence (trigger focus capture karo → focus trap aur move in karo → close par focus restore karo) jise zyadatar home-grown implementations galat karte hain, covers karta hai.
 
 Teeno ko is candidate ke hands-on Angular 4/7 experience ke relative forward-looking/conceptual mark kiya gaya hai jahan relevant ho (particularly Module Federation), version-sensitive content ke liye guide ke baaki hisse mein use ki gayi honest framing ke consistent.
+
+## Quick "Most Frequently Asked" Cheat List
+
+Agar time kam hai, yeh woh concepts hain jo almost har senior/lead Angular interview mein show up karte hain — har ek ke saath ek short explanation aur is guide mein wo detail kahan milega:
+
+1. **Ivy vs View Engine** (v9 mein default, v13 mein View Engine removal) — Ivy Angular ka rendering/compilation pipeline hai jo View Engine ko replace karta hai: smaller bundles (better tree-shaking), faster incremental compilation, browser devtools mein directly inspectable components, aur better template type-checking. v9 mein default bana, aur v13 tak View Engine ko codebase se poori tarah hata diya gaya — ab sirf Ivy exist karta hai. **Interview mein poochne ka common tareeka:** "Ivy kya solve karta hai jo View Engine nahi karta tha?" — answer: bundle size, compile speed, aur debuggability, kyunki Ivy components ko locally compile karta hai (View Engine puri app ko globally compile karta tha). Dekho [Architecture Overview](#architecture-overview) aur [Version Feature Comparison Table](#version-feature-comparison-table).
+
+2. **Standalone Components** (v14 preview → v15 stable → v17/v19 default) — components/directives/pipes ko `NgModule` ke bina declare karne ki ability, `imports: [...]` directly component decorator par. Yeh is puri guide ka single biggest structural shift hai: v7 mein har cheez `NgModule`-declared hoti thi, aur ab poori app `bootstrapApplication()` se bina ek bhi `NgModule` likhe bootstrap ho sakti hai. **Interview mein poochne ka common tareeka:** "Standalone components NgModules ka replacement hain ya coexist karte hain?" — answer: dono coexist kar sakte hain (incremental migration ke liye zaroori), lekin v17 se naye CLI-generated apps default standalone hote hain. Dekho [[new content] Standalone Components](#new-content-standalone-components-angular-14-default-since-v17).
+
+3. **Signals** (`signal`/`computed`/`effect`, v16 preview → stable, plus `linkedSignal`/`resource` v19 mein) — ek fine-grained reactive primitive jo Angular ke runtime ko exactly batata hai ki kaunsi value change hui, jisse surgical DOM updates aur zoneless change detection possible hote hain. `linkedSignal()` self-resetting derived state ke liye hai, `resource()` async data-fetching ko Signals ke andar wrap karta hai. **Interview mein poochne ka common tareeka:** "Signals RxJS ko replace karte hain?" — answer: nahi, Signals synchronous view state ke liye hain, RxJS asynchronous streams ke liye; dono `toSignal()`/`toObservable()` se interop karte hain. Dekho [[new content] Angular Signals](#new-content-angular-signals-angular-16) aur [[new content] RxJS vs Signals](#new-content-rxjs-vs-signals--kab-kaunsa-use-karein).
+
+4. **New control-flow syntax `@if`/`@for`/`@switch`** (v17) vs. old structural directives — `*ngIf`/`*ngFor`/`*ngSwitch` ko replace karta hai; naya syntax Ivy ke through directly compile hota hai (`<ng-template>` desugaring ki zaroorat nahi), aur `@for` mein `track` expression **mandatory** hai (jabki purane `*ngFor` mein `trackBy` optional tha). Benchmarks mein up to ~90% faster loop rendering. **Interview mein poochne ka common tareeka:** "`@for` mein `track` kyun mandatory kiya gaya?" — answer: kyunki `trackBy` ko optional chhodna ek common performance pitfall tha (large lists par unnecessary DOM churn); mandatory karke Angular team ne developers ko sahi pattern follow karne ke liye force kiya. Dekho [[new content] New Control-Flow Syntax](#new-content-new-control-flow-syntax-if--for--switch-angular-17) aur [trackBy / track in Loops](#trackby--track-in-loops).
+
+5. **Zoneless change detection** (v18, experimental) aur Signals se iska relation — Zone.js dependency ko poori tarah remove karta hai; change detection ab async APIs ko monkey-patch karke trigger hone ke bajaye Signals/explicit triggers se driven hota hai. Yeh sirf tab safely kaam karta hai jab state changes Signals ke through track ho rahe hon — agar koi code Signal ke bahar state mutate karta hai, zoneless CD us change ko miss kar sakta hai. **Interview mein poochne ka common tareeka:** "Zoneless CD adopt karne se pehle kya check karoge?" — answer: ki saara reactive state Signals (ya `markForCheck`/`OnPush`-compatible patterns) use kar raha ho, kyunki Zone.js ka "automatically detect har async operation" safety net ab nahi hai. Dekho [[new content] Zoneless Change Detection](#new-content-zoneless-change-detection-angular-18).
+
+6. **Typed Reactive Forms** (v14) aur jo type-safety gap yeh close karta hai — v7 mein `FormGroup`/`FormControl` untyped the (`form.value` `any` type ka hota tha), isliye `form.get('emial')` (typo) silently `null` return karta tha compile error ke bajaye. v14 se `FormGroup`/`FormControl` generics ke saath properly typed hain, isliye typo'd control names ab compile-time par fail hote hain. **Interview mein poochne ka common tareeka:** "Typed forms se pehle kya problem thi aur kaise fix hui?" — answer: runtime `null`/`undefined` bugs jo silently through nikal jaate the, ab compiler catch karta hai. Dekho [[new content] Typed Reactive Forms](#new-content-typed-reactive-forms-angular-14).
+
+7. **`@defer` / deferrable views** (v17) aur **incremental hydration** (v19) — `@defer` template-region-level lazy loading enable karta hai (route-level se aage), triggers jaise `on viewport`/`on interaction`/`on idle` ke saath. Incremental hydration isi `@defer` syntax ko SSR ke saath combine karta hai — server-rendered sections tab tak inert/"grayscale" rehte hain jab tak unka trigger fire na ho, taaki poori app ek saath hydrate hone ke bajaye sirf zaroori parts pehle interactive hon. **Interview mein poochne ka common tareeka:** "Ek heavy, below-the-fold widget wale page ko kaise optimize karoge?" — answer: `@defer (hydrate on viewport)` exactly is use-case ke liye hai. Dekho [[new content] Deferrable Views: @defer](#new-content-deferrable-views-defer-angular-17) aur [[new content] Hydration aur Event Replay](#new-content-hydration-angular-16-aur-event-replay-angular-17).
+
+8. **Functional interceptors/guards** aur **`inject()` function** (v14–15) — class-based `HttpInterceptor` (+ `HTTP_INTERCEPTORS`/`multi: true` boilerplate) aur class-based `CanActivate` guards ko simple functions se replace karta hai (`HttpInterceptorFn` + `withInterceptors()`, `CanActivateFn`), jo `inject()` use karke dependencies grab karte hain constructor ke bina. Yeh standalone apps mein idiomatic DI style hai. **Interview mein poochne ka common tareeka:** "`inject()` kab fail hota hai?" — answer: jab ek injection context ke bahar call kiya jaaye (e.g., ek `setTimeout` callback ke andar) — runtime error throw hota hai; dependencies ko function ke top par pehle se capture karna hota hai ya `runInInjectionContext()` use karna padta hai. Dekho [[new content] The inject() Function](#new-content-the-inject-function-angular-14), [[new content] Functional Interceptors](#new-content-functional-interceptors-angular-15), aur [Route Guards](#route-guards).
