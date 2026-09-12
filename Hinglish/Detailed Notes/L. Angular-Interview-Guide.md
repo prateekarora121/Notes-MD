@@ -2431,3 +2431,545 @@ Agar time kam hai, yeh woh concepts hain jo almost har senior/lead Angular inter
 7. **`@defer` / deferrable views** (v17) aur **incremental hydration** (v19) — `@defer` template-region-level lazy loading enable karta hai (route-level se aage), triggers jaise `on viewport`/`on interaction`/`on idle` ke saath. Incremental hydration isi `@defer` syntax ko SSR ke saath combine karta hai — server-rendered sections tab tak inert/"grayscale" rehte hain jab tak unka trigger fire na ho, taaki poori app ek saath hydrate hone ke bajaye sirf zaroori parts pehle interactive hon. **Interview mein poochne ka common tareeka:** "Ek heavy, below-the-fold widget wale page ko kaise optimize karoge?" — answer: `@defer (hydrate on viewport)` exactly is use-case ke liye hai. Dekho [[new content] Deferrable Views: @defer](#new-content-deferrable-views-defer-angular-17) aur [[new content] Hydration aur Event Replay](#new-content-hydration-angular-16-aur-event-replay-angular-17).
 
 8. **Functional interceptors/guards** aur **`inject()` function** (v14–15) — class-based `HttpInterceptor` (+ `HTTP_INTERCEPTORS`/`multi: true` boilerplate) aur class-based `CanActivate` guards ko simple functions se replace karta hai (`HttpInterceptorFn` + `withInterceptors()`, `CanActivateFn`), jo `inject()` use karke dependencies grab karte hain constructor ke bina. Yeh standalone apps mein idiomatic DI style hai. **Interview mein poochne ka common tareeka:** "`inject()` kab fail hota hai?" — answer: jab ek injection context ke bahar call kiya jaaye (e.g., ek `setTimeout` callback ke andar) — runtime error throw hota hai; dependencies ko function ke top par pehle se capture karna hota hai ya `runInInjectionContext()` use karna padta hai. Dekho [[new content] The inject() Function](#new-content-the-inject-function-angular-14), [[new content] Functional Interceptors](#new-content-functional-interceptors-angular-15), aur [Route Guards](#route-guards).
+
+---
+
+## Practice App: One Project, Every Concept Above
+
+Neeche ek single, coherent Angular 19 practice project hai — ek suggested file tree ke saath — jisme upar wale saare 8 cheat-list topics (aur unke andar mention hui har sub-concept) real, runnable code ke through cover hoti hai. Har topic ka apna folder/component hai taaki aap ek waqt mein ek concept practice kar sako.
+
+**Setup (once):**
+```bash
+npm install -g @angular/cli@19
+ng new interview-practice-app --standalone --routing --style=scss --ssr
+cd interview-practice-app
+```
+
+**Suggested file tree:**
+```
+src/
+  main.ts
+  app/
+    app.config.ts
+    app.config.server.ts
+    app.routes.ts
+    app.routes.server.ts
+    app.ts                          # root standalone component
+    core/
+      auth.service.ts                # used by guards + interceptor
+      auth.interceptor.ts            # topic 8
+      auth.guard.ts                  # topic 8
+    practice/
+      ivy-debug/ivy-debug.ts         # topic 1
+      standalone-demo/standalone-demo.ts   # topic 2
+      signals-lab/signals-lab.ts     # topic 3
+      control-flow-lab/control-flow-lab.ts # topic 4
+      zoneless-counter/zoneless-counter.ts # topic 5
+      typed-form/typed-form.ts       # topic 6
+      defer-hydration/defer-hydration.ts   # topic 7
+```
+
+### 1. Ivy vs View Engine — practice code
+
+Ivy khud ek "feature aap likhte ho" nahi hai (v9 se hi default hai) — practice ka point yeh **verify** karna hai ki Ivy actually kaam kar raha hai, aur strict template type-checking (jo sirf Ivy enable karta hai) on karna hai.
+
+```typescript
+// src/app/practice/ivy-debug/ivy-debug.ts
+import { Component, ElementRef, viewChild, AfterViewInit } from '@angular/core';
+
+@Component({
+  selector: 'app-ivy-debug',
+  standalone: true,
+  template: `
+    <div #target>Inspect me with Angular DevTools</div>
+    <button (click)="proveIvy()">Prove this runs on Ivy</button>
+  `,
+})
+export class IvyDebugComponent implements AfterViewInit {
+  target = viewChild.required<ElementRef<HTMLDivElement>>('target');
+
+  ngAfterViewInit() {
+    // ɵcmp only exists on Ivy-compiled components — this throws/undefined on View Engine
+    const anyThis = this as any;
+    console.log('Ivy component def (ɵcmp):', (anyThis.constructor as any).ɵcmp);
+  }
+
+  proveIvy() {
+    // Ivy-only global debug API — inspect any DOM node's component instance from the console
+    console.log((window as any).ng.getComponent(this.target().nativeElement.parentElement));
+  }
+}
+```
+
+```jsonc
+// tsconfig.json — enable Ivy's strict template type-checking (not possible under View Engine)
+{
+  "angularCompilerOptions": {
+    "strictTemplates": true,
+    "strictInjectionParameters": true,
+    "strictInputAccessModifiers": true
+  }
+}
+```
+Run `ng build` and try typo-ing a property inside the template — `strictTemplates` catches it at compile time, proving Ivy's template checker is active.
+
+### 2. Standalone Components — practice code
+
+```typescript
+// src/main.ts — no NgModule, no AppModule, no platformBrowserDynamic().bootstrapModule()
+import { bootstrapApplication } from '@angular/platform-browser';
+import { App } from './app/app';
+import { appConfig } from './app/app.config';
+
+bootstrapApplication(App, appConfig).catch((err) => console.error(err));
+```
+
+```typescript
+// src/app/app.ts — root standalone component
+import { Component } from '@angular/core';
+import { RouterOutlet } from '@angular/router';
+
+@Component({
+  selector: 'app-root',
+  standalone: true,
+  imports: [RouterOutlet],
+  template: `<router-outlet />`,
+})
+export class App {}
+```
+
+```typescript
+// src/app/practice/standalone-demo/standalone-demo.ts
+import { Component } from '@angular/core';
+import { NgOptimizedImage } from '@angular/common'; // imported directly, no NgModule wrapper needed
+
+@Component({
+  selector: 'app-standalone-demo',
+  standalone: true,
+  imports: [NgOptimizedImage], // <-- this is the whole point: import only what you use
+  template: `
+    <img ngSrc="/assets/logo.png" width="120" height="120" priority />
+    <p>This component has zero NgModule anywhere in its dependency chain.</p>
+  `,
+})
+export class StandaloneDemoComponent {}
+```
+
+```typescript
+// src/app/app.config.ts
+import { ApplicationConfig } from '@angular/core';
+import { provideRouter } from '@angular/router';
+import { routes } from './app.routes';
+
+export const appConfig: ApplicationConfig = {
+  providers: [provideRouter(routes)],
+};
+```
+
+### 3. Signals — practice code (signal, computed, effect, linkedSignal, resource, model)
+
+```typescript
+// src/app/practice/signals-lab/signals-lab.ts
+import { Component, signal, computed, effect, linkedSignal, resource, model } from '@angular/core';
+
+interface Product { id: number; name: string; price: number; }
+
+@Component({
+  selector: 'app-signals-lab',
+  standalone: true,
+  template: `
+    <!-- signal + computed -->
+    <p>Count: {{ count() }} | Doubled: {{ doubled() }}</p>
+    <button (click)="count.set(count() + 1)">+1</button>
+
+    <!-- model() two-way binding -->
+    <input [(ngModel)]="searchTerm" placeholder="filter products" />
+
+    <!-- linkedSignal: resets automatically when 'products' changes -->
+    <select [(ngModel)]="selectedId">
+      @for (p of products(); track p.id) {
+        <option [value]="p.id">{{ p.name }}</option>
+      }
+    </select>
+    <button (click)="removeFirstProduct()">Remove first product</button>
+
+    <!-- resource(): async data fetching as a signal -->
+    @if (userResource.isLoading()) {
+      <p>Loading user…</p>
+    } @else if (userResource.error()) {
+      <p>Failed to load user</p>
+    } @else {
+      <p>User: {{ userResource.value()?.name }}</p>
+    }
+  `,
+})
+export class SignalsLabComponent {
+  // basic signal + computed
+  count = signal(0);
+  doubled = computed(() => this.count() * 2);
+
+  // model() — writable two-way-bindable signal
+  searchTerm = model('');
+
+  products = signal<Product[]>([
+    { id: 1, name: 'Keyboard', price: 49 },
+    { id: 2, name: 'Mouse', price: 25 },
+  ]);
+
+  // linkedSignal — auto-resets to the first product whenever the list changes
+  selectedId = linkedSignal(() => this.products()[0]?.id);
+
+  // effect — side effect that reruns whenever any read signal changes
+  constructor() {
+    effect(() => {
+      console.log(`Selected product changed to id=${this.selectedId()}`);
+    });
+  }
+
+  removeFirstProduct() {
+    this.products.update((list) => list.slice(1)); // selectedId auto-recomputes via linkedSignal
+  }
+
+  // resource() — experimental async signal (loading/error/value handled for you)
+  userId = signal(1);
+  userResource = resource({
+    request: () => ({ id: this.userId() }),
+    loader: ({ request }) =>
+      fetch(`https://jsonplaceholder.typicode.com/users/${request.id}`).then((r) => r.json()),
+  });
+}
+```
+
+```typescript
+// RxJS <-> Signals interop, in the same lab file or a sibling service
+import { toSignal, toObservable } from '@angular/core/rxjs-interop';
+import { interval } from 'rxjs';
+
+export class InteropDemo {
+  // Observable -> Signal
+  ticks = toSignal(interval(1000), { initialValue: 0 });
+  // Signal -> Observable (e.g. to feed into an RxJS operator chain)
+  // ticksAsObservable$ = toObservable(this.ticks);
+}
+```
+
+### 4. New Control-Flow Syntax — practice code (`@if`/`@else if`/`@else`, `@for` + `track` + `@empty`, `@switch`)
+
+```typescript
+// src/app/practice/control-flow-lab/control-flow-lab.ts
+import { Component, signal } from '@angular/core';
+
+type Status = 'loading' | 'error' | 'success';
+
+@Component({
+  selector: 'app-control-flow-lab',
+  standalone: true,
+  template: `
+    <!-- @if / @else if / @else -->
+    @if (status() === 'loading') {
+      <p>Loading…</p>
+    } @else if (status() === 'error') {
+      <p>Something went wrong.</p>
+    } @else {
+      <p>Data ready!</p>
+    }
+
+    <!-- @for with mandatory track, plus @empty -->
+    <ul>
+      @for (item of items(); track item.id; let i = $index, isFirst = $first, isLast = $last) {
+        <li [class.first]="isFirst" [class.last]="isLast">{{ i }}: {{ item.label }}</li>
+      } @empty {
+        <li>No items yet.</li>
+      }
+    </ul>
+    <button (click)="clearItems()">Clear list (shows @empty)</button>
+
+    <!-- @switch / @case / @default -->
+    @switch (role()) {
+      @case ('admin') { <p>Admin panel</p> }
+      @case ('editor') { <p>Editor tools</p> }
+      @default { <p>Read-only view</p> }
+    }
+  `,
+})
+export class ControlFlowLabComponent {
+  status = signal<Status>('success');
+  role = signal<'admin' | 'editor' | 'viewer'>('viewer');
+  items = signal([
+    { id: 1, label: 'First' },
+    { id: 2, label: 'Second' },
+  ]);
+
+  clearItems() {
+    this.items.set([]); // triggers the @empty block
+  }
+}
+```
+
+### 5. Zoneless Change Detection — practice code
+
+```typescript
+// src/app/app.config.ts — remove Zone.js dependency entirely
+import { ApplicationConfig, provideExperimentalZonelessChangeDetection } from '@angular/core';
+import { provideRouter } from '@angular/router';
+import { routes } from './app.routes';
+
+export const appConfig: ApplicationConfig = {
+  providers: [
+    provideExperimentalZonelessChangeDetection(), // [new content] Angular 18
+    provideRouter(routes),
+  ],
+};
+```
+
+```json
+// angular.json — remove zone.js from polyfills once zoneless is adopted
+// "polyfills": []   // instead of "polyfills": ["zone.js"]
+```
+
+```typescript
+// src/app/practice/zoneless-counter/zoneless-counter.ts
+import { Component, signal, ChangeDetectionStrategy } from '@angular/core';
+
+@Component({
+  selector: 'app-zoneless-counter',
+  standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush, // required discipline under zoneless CD
+  template: `
+    <p>Ticks: {{ ticks() }}</p>
+    <button (click)="ticks.set(ticks() + 1)">Tick (Signal write — updates view correctly)</button>
+    <button (click)="brokenTick()">Broken tick (plain field — view will NOT update)</button>
+  `,
+})
+export class ZonelessCounterComponent {
+  ticks = signal(0);
+
+  // deliberately NOT a signal, to demonstrate the zoneless gotcha from the guide:
+  private brokenCounter = 0;
+  brokenTick() {
+    this.brokenCounter++; // mutating state outside a Signal — zoneless CD won't know to re-render
+    console.log('brokenCounter is now', this.brokenCounter, '(but the view is stale)');
+  }
+}
+```
+
+### 6. Typed Reactive Forms — practice code
+
+```typescript
+// src/app/practice/typed-form/typed-form.ts
+import { Component } from '@angular/core';
+import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
+
+interface SignupForm {
+  email: string;
+  password: string;
+  age: number;
+}
+
+@Component({
+  selector: 'app-typed-form',
+  standalone: true,
+  imports: [ReactiveFormsModule],
+  template: `
+    <form [formGroup]="form" (ngSubmit)="submit()">
+      <input formControlName="email" placeholder="Email" />
+      @if (form.controls.email.invalid && form.controls.email.touched) {
+        <small>Enter a valid email.</small>
+      }
+
+      <input formControlName="password" type="password" placeholder="Password" />
+      <input formControlName="age" type="number" placeholder="Age" />
+
+      <button type="submit" [disabled]="form.invalid">Submit</button>
+    </form>
+  `,
+})
+export class TypedFormComponent {
+  private fb = inject(FormBuilder); // topic 8's inject(), used here too
+
+  // FormGroup<{...}> is fully typed — form.value.emial (typo) fails to compile
+  form: FormGroup<{
+    email: import('@angular/forms').FormControl<string>;
+    password: import('@angular/forms').FormControl<string>;
+    age: import('@angular/forms').FormControl<number>;
+  }> = this.fb.nonNullable.group({
+    email: this.fb.nonNullable.control('', [Validators.required, Validators.email]),
+    password: this.fb.nonNullable.control('', [Validators.required, Validators.minLength(8)]),
+    age: this.fb.nonNullable.control(18, [Validators.min(13)]),
+  });
+
+  submit() {
+    // form.value is typed as { email: string; password: string; age: number }
+    const value: SignupForm = this.form.getRawValue();
+    console.log(value);
+  }
+}
+```
+```typescript
+// don't forget the import at the top of the file:
+import { inject } from '@angular/core';
+```
+
+### 7. `@defer` / Deferrable Views + Incremental Hydration — practice code
+
+```typescript
+// src/app/practice/defer-hydration/defer-hydration.ts
+import { Component } from '@angular/core';
+
+@Component({
+  selector: 'app-defer-hydration',
+  standalone: true,
+  template: `
+    <h2>Above the fold — loads immediately</h2>
+
+    <!-- viewport trigger: loads when scrolled into view -->
+    @defer (on viewport; prefetch on idle) {
+      <heavy-recommendations-widget />
+    } @placeholder (minimum 200ms) {
+      <div class="skeleton">Recommendations loading soon…</div>
+    } @loading (after 100ms; minimum 1s) {
+      <div>Fetching recommendations…</div>
+    } @error {
+      <div>Could not load recommendations.</div>
+    }
+
+    <!-- interaction trigger: loads on click/keydown -->
+    @defer (on interaction(loadCommentsBtn)) {
+      <comments-section />
+    } @placeholder {
+      <button #loadCommentsBtn>Show comments</button>
+    }
+
+    <!-- idle + timer combined triggers -->
+    @defer (on idle; on timer(5s)) {
+      <chat-widget />
+    }
+  `,
+})
+export class DeferHydrationComponent {}
+```
+
+```typescript
+// src/app/app.config.ts — incremental hydration (v19)
+import { provideClientHydration, withIncrementalHydration } from '@angular/platform-browser';
+
+export const appConfig: ApplicationConfig = {
+  providers: [
+    provideClientHydration(withIncrementalHydration()), // [version 19 upgrade]
+  ],
+};
+```
+
+```html
+<!-- add 'hydrate' to any @defer trigger to control hydration, independent of rendering -->
+@defer (hydrate on viewport) {
+  <product-recommendations />
+} @placeholder {
+  <div class="skeleton"></div>
+}
+
+<!-- static content that should never hydrate -->
+@defer (hydrate never) {
+  <static-terms-of-service-block />
+}
+```
+
+```typescript
+// src/app/app.routes.server.ts — route-level render mode (v19)
+import { RenderMode, ServerRoute } from '@angular/ssr';
+
+export const serverRouteConfig: ServerRoute[] = [
+  { path: 'dashboard', renderMode: RenderMode.Client },       // pure CSR
+  { path: 'product/:id', renderMode: RenderMode.Server },      // SSR per request
+  { path: '**', renderMode: RenderMode.Prerender },            // static prerender
+];
+```
+
+### 8. Functional Interceptors/Guards + `inject()` — practice code
+
+```typescript
+// src/app/core/auth.service.ts
+import { Injectable, signal } from '@angular/core';
+
+@Injectable({ providedIn: 'root' })
+export class AuthService {
+  isLoggedIn = signal(false);
+  token = signal<string | null>(null);
+
+  login(token: string) {
+    this.token.set(token);
+    this.isLoggedIn.set(true);
+  }
+}
+```
+
+```typescript
+// src/app/core/auth.interceptor.ts — functional interceptor (v15)
+import { HttpInterceptorFn } from '@angular/common/http';
+import { inject } from '@angular/core';
+import { AuthService } from './auth.service';
+
+export const authInterceptor: HttpInterceptorFn = (req, next) => {
+  const auth = inject(AuthService); // inject() used outside a constructor (v14)
+  const token = auth.token();
+
+  if (!token) return next(req);
+
+  return next(
+    req.clone({
+      setHeaders: { Authorization: `Bearer ${token}` },
+    }),
+  );
+};
+```
+
+```typescript
+// src/app/core/auth.guard.ts — functional guard (v14+)
+import { CanActivateFn, Router } from '@angular/router';
+import { inject } from '@angular/core';
+import { AuthService } from './auth.service';
+
+export const authGuard: CanActivateFn = (route, state) => {
+  const auth = inject(AuthService);
+  const router = inject(Router);
+
+  if (auth.isLoggedIn()) return true;
+
+  router.navigate(['/login'], { queryParams: { redirectTo: state.url } });
+  return false;
+};
+```
+
+```typescript
+// src/app/app.config.ts — wire the functional interceptor in
+import { provideHttpClient, withInterceptors } from '@angular/common/http';
+import { authInterceptor } from './core/auth.interceptor';
+
+export const appConfig: ApplicationConfig = {
+  providers: [
+    provideHttpClient(withInterceptors([authInterceptor])),
+    // ...provideRouter, provideExperimentalZonelessChangeDetection, provideClientHydration, etc.
+  ],
+};
+```
+
+```typescript
+// src/app/app.routes.ts — functional guard wired into a lazy route
+import { Routes } from '@angular/router';
+import { authGuard } from './core/auth.guard';
+
+export const routes: Routes = [
+  {
+    path: 'dashboard',
+    canActivate: [authGuard],
+    loadComponent: () => import('./practice/signals-lab/signals-lab').then((m) => m.SignalsLabComponent),
+  },
+  {
+    path: 'defer-demo',
+    loadComponent: () =>
+      import('./practice/defer-hydration/defer-hydration').then((m) => m.DeferHydrationComponent),
+  },
+];
+```
+
+**Running it:** wire each practice component into `app.routes.ts` behind its own path (`/ivy`, `/standalone`, `/signals`, `/control-flow`, `/zoneless`, `/form`, `/defer`), run `ng serve`, and click through each route while watching the console/Angular DevTools — that single run touches every concept listed in the cheat list above, end to end.
