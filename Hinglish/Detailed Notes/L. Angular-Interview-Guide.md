@@ -1,6 +1,6 @@
 # Angular Senior/Lead Interview Guide
 
-> Source notes ka title "Angular 7" (2018-era) tha, lekin modern senior interviews (2026) latest stable Angular tak ka knowledge assume karte hain (v18/19-class features: default se standalone APIs, Signals, naya control-flow syntax, `@defer`, zoneless change detection). Yeh guide aapke original notes preserve karta hai, unko reorganize karta hai, har open question ka answer deta hai, aur Angular 7 aur current Angular ke beech gap close karne ke liye add ki gayi har cheez ko clearly tag karta hai. Additions **[new content]** se prefixed hain.
+> Source notes ka title "Angular 7" (2018-era) tha, lekin modern senior interviews (2026) latest stable Angular tak ka knowledge assume karte hain (v18/19-class features: default se standalone APIs, Signals, naya control-flow syntax, zoneless change detection). Yeh guide aapke original notes preserve karta hai, unko reorganize karta hai, har open question ka answer deta hai, aur Angular 7 aur current Angular ke beech gap close karne ke liye add ki gayi har cheez ko clearly tag karta hai. Additions **[new content]** se prefixed hain.
 
 ## Table of Contents
 
@@ -37,38 +37,24 @@
    - [RxJS Operators Cheat Sheet](#rxjs-operators-cheat-sheet)
    - [[new content] Angular Signals (Angular 16+)](#new-content-angular-signals-angular-16)
    - [[new content] RxJS vs Signals — When to Use Which](#new-content-rxjs-vs-signals--when-to-use-which)
-   - [State Management (NgRx and Alternatives)](#state-management-ngrx-and-alternatives)
-   - [[new content] SignalStore / NgRx Signals (Angular 17+)](#new-content-signalstore--ngrx-signals-angular-17)
-   - [[gaps] NgRx Entity Adapters, Facade Pattern, and Selector Memoization](#gaps-ngrx-entity-adapters-facade-pattern-and-selector-memoization)
-   - [[new content] Dependency Injection: Hierarchical Injectors Deep Dive](#new-content-dependency-injection-hierarchical-injectors-deep-dive)
-   - [[gaps] Micro-Frontends / Module Federation for Angular](#gaps-micro-frontends--module-federation-for-angular)
 4. [Performance](#performance)
    - [Change Detection Deep Dive](#change-detection-deep-dive)
    - [[new content] Zoneless Change Detection (Angular 18+)](#new-content-zoneless-change-detection-angular-18)
    - [OnPush Strategy and Pitfalls](#onpush-strategy-and-pitfalls)
    - [trackBy / track in Loops](#trackby--track-in-loops)
-   - [[new content] Deferrable Views: @defer (Angular 17+)](#new-content-deferrable-views-defer-angular-17)
-   - [Lazy Loading and Preloading](#lazy-loading-and-preloading)
    - [Bundle Size, Tree Shaking, Build Optimization](#bundle-size-tree-shaking-build-optimization)
    - [Angular CLI vs Webpack](#angular-cli-vs-webpack)
    - [[new content] esbuild / Vite-based Application Builder (Angular 17+)](#new-content-esbuild--vite-based-application-builder-angular-17)
    - [Angular Build & Runtime Lifecycle](#angular-build--runtime-lifecycle)
    - [HTTP Request Lifecycle](#http-request-lifecycle)
-5. [SSR, PWA & Cross-Cutting](#ssr-pwa--cross-cutting)
-   - [Angular Universal / SSR](#angular-universal--ssr)
-   - [[new content] Hydration (Angular 16+) and Event Replay (Angular 17+)](#new-content-hydration-angular-16-and-event-replay-angular-17)
-   - [Progressive Web Apps and Service Workers](#progressive-web-apps-and-service-workers)
-   - [Angular Security](#angular-security)
-   - [[gaps] Accessibility (a11y): ARIA, CDK a11y Module, Focus Management](#gaps-accessibility-a11y-aria-cdk-a11y-module-focus-management)
-   - [Deployment: Firebase and GitHub Pages](#deployment-firebase-and-github-pages)
-6. [Enterprise Architecture Case Study (BFF + CQRS + .NET)](#enterprise-architecture-case-study-bff--cqrs--net)
-7. [Testing](#testing)
-8. [Best Practices](#best-practices)
-9. [Common Pitfalls](#common-pitfalls)
-10. [Version Feature Comparison Table](#version-feature-comparison-table)
-11. [Sample Interview Q&A](#sample-interview-qa)
-12. [Summary of Additions](#summary-of-additions)
-13. [Summary of [gaps] Additions (This Pass)](#summary-of-gaps-additions-this-pass)
+5. [Enterprise Architecture Case Study (BFF + CQRS + .NET)](#enterprise-architecture-case-study-bff--cqrs--net)
+6. [Testing](#testing)
+7. [Best Practices](#best-practices)
+8. [Common Pitfalls](#common-pitfalls)
+9. [Version Feature Comparison Table](#version-feature-comparison-table)
+10. [Sample Interview Q&A](#sample-interview-qa)
+11. [Summary of Additions](#summary-of-additions)
+12. [Summary of [gaps] Additions (This Pass)](#summary-of-gaps-additions-this-pass)
 
 ---
 
@@ -117,7 +103,6 @@ Classic (NgModule-based) building blocks, source notes ke according:
 5. **Services & DI** — components ke across logic share karte hain.
 6. **Routing** (`RouterModule`) — navigation.
 7. **Forms** — template-driven aur reactive.
-8. **State Management** — NgRx ya service-based.
 
 ```mermaid
 flowchart TD
@@ -292,7 +277,7 @@ Angular ke saath paired do most common UI options:
 
 | Library | What it is | Notes |
 |---|---|---|
-| **Angular Material** | Google ki official Material Design component library, specifically Angular ke liye built | Deep Angular integration (CDK par built, reactive forms ke saath naturally kaam karta hai), SCSS ke through theming, accessible-by-default components (baad mein cover kiya gaya CDK `a11y` module dekho) |
+| **Angular Material** | Google ki official Material Design component library, specifically Angular ke liye built | Deep Angular integration (CDK par built, reactive forms ke saath naturally kaam karta hai), SCSS ke through theming, accessible-by-default components |
 | **Bootstrap** | Ek general-purpose, framework-agnostic CSS framework | Angular-specific nahi — plain CSS classes ke through use hota hai, ya Angular-idiomatic components ke liye `ngx-bootstrap`/`ng-bootstrap` jaisi ek wrapper library ke through (jQuery-driven widgets ke bajaye directives) |
 
 CLI schematic ke through Angular Material install karna:
@@ -1329,285 +1314,6 @@ export class UserDetailComponent {
 - **Kab use karein:** `linkedSignal` jahan bhi aapko ek "reset when the source changes" pattern chahiye (selected tab/item, form default recompute). `resource()` simple fetch-on-input-change data loading ke liye — abhi bhi complex retry/debounce/cancellation orchestration ke liye RxJS + `HttpClient` prefer karo, kyunki `resource()` experimental hai aur RxJS jitna operator support nahi deta.
 - **Interview angle:** Yeh dono 2026-era interviews mein "what's the newest thing in Angular" follow-up ke liye good talking points hain — reasonable hai inhe "still evolving/experimental" ki tarah frame karna agar directly stability ke baare mein poocha jaaye.
 
-### State Management (NgRx aur Alternatives)
-
-State management application-wide data ko manage karta hai aur components ko consistent rakhta hai. Common approaches, roughly formality/complexity ke increasing order mein:
-
-- **Service-based state** (simple; ek service jo `BehaviorSubject` ya Signal hold karti hai)
-- **RxJS with `BehaviorSubject`**
-- **NgRx** (Redux pattern, RxJS-based)
-- **Akita, NGXS, Apollo GraphQL (client cache)** — alternatives ke roop mein mention kiya gaya
-
-**NgRx** — RxJS ke upar Redux-pattern state management.
-
-| Concept | Role |
-|---|---|
-| Store | State ke liye central, single source of truth |
-| Actions | Plain objects jo describe karte hain ki *kya hua* |
-| Reducers | Pure functions jo action se new state compute karte hain |
-| Effects | Side effects handle karte hain (API calls, etc.), aur further actions dispatch karte hain |
-| Selectors | State ke specific, memoized slices retrieve karte hain |
-
-```typescript
-export const increment = createAction('INCREMENT');
-
-const counterReducer = createReducer(
-  initialState,
-  on(increment, state => ({ count: state.count + 1 }))
-);
-
-@Injectable()
-export class MyEffects {
-  loadData$ = createEffect(() => this.actions$.pipe(
-    ofType(loadData),
-    mergeMap(() => this.http.get('/api/data').pipe(map(data => loadDataSuccess({ data }))))
-  ));
-
-  constructor(private actions$: Actions, private http: HttpClient) { }
-}
-
-export const selectCount = (state: AppState) => state.count;
-```
-
-Setup: `ng add @ngrx/store`.
-
-NgRx vs `BehaviorSubject`-based state:
-
-| Feature | NgRx | BehaviorSubject |
-|---|---|---|
-| Complexity | Zyada | Kam |
-| Structure | Actions, reducers, effects | Simple service-based state |
-| Performance at scale | Large apps ke liye optimized | Small/medium apps ke liye theek-thaak |
-| Side effects | Effects ke through handle hota hai | Service methods mein handle hota hai |
-
-**Senior guidance ki NgRx kab reach karein:** NgRx ki ceremony (actions/reducers/effects/selectors, aur boilerplate — even naye `createActionGroup`/`createFeature` helpers ke saath bhi) large teams aur complex, cross-cutting shared state wale apps mein pay off karti hai, jahan strict unidirectional data flow, time-travel debugging aur bahut contributors ke across strong conventions ki zarurat hoti hai. Small-to-medium apps ya well-bounded feature state ke liye, signal/service-based store usually onboard aur maintain karne mein simpler hota hai — interviewers chahte hain ki aap apna choice justify karo, NgRx ko reflexively default na bana do.
-
-### [new content] SignalStore / NgRx Signals (Angular 17+)
-
-NgRx ab `@ngrx/signals` ship karta hai, jo local ya feature state ke liye classic Actions/Reducers/Effects pattern ka ek lighter-weight, Signal-native alternative hai, jiska goal NgRx ka boilerplate kam karna hai while good DX (devtools, testability) maintain karte hue:
-
-```typescript
-export const CounterStore = signalStore(
-  { providedIn: 'root' },
-  withState({ count: 0 }),
-  withComputed(({ count }) => ({
-    doubled: computed(() => count() * 2)
-  })),
-  withMethods((store) => ({
-    increment() { patchState(store, { count: store.count() + 1 }); }
-  }))
-);
-```
-
-**Yeh kyun matter karta hai:** yeh us sawal ka modern jawab hai ki "kya classic NgRx most feature state ke liye overkill nahi hai?" — SignalStore actions/reducers/effects se bahut kam ceremony ke saath structured, testable state management deta hai, aur zarurat padne par cross-cutting/global state ke liye classic NgRx store ke saath bhi interoperate karta hai. 2026 mein interviewers se expect karo ki woh aapse classic NgRx aur SignalStore ko contrast karne ke liye kahein aur yeh articulate karne ke liye kahein ki kab kaunsa appropriate hai — complex async orchestration (retries, cancellation races, sagas-like flows) ke liye classic NgRx effects abhi bhi zyada mature choice hain, jabki SignalStore simpler feature/component-local state ke liye suit karta hai.
-
-### [gaps] NgRx Entity Adapters, Facade Pattern, aur Selector Memoization
-
-Upar wala existing NgRx coverage Store/Actions/Reducers/Effects/Selectors tak isolated concepts ke roop mein hi ruk jaata hai. Teen cheezein jo senior-level review missing flag karta hai: `@ngrx/entity` ke normalized CRUD helpers, components ko NgRx internals se decouple karne ke liye facade pattern, aur *kaise* `createSelector` actually memoization achieve karta hai (sirf yeh nahi ki karta hai).
-
-**`@ngrx/entity` — `EntityAdapter`.** Most real NgRx state ID se keyed records ka collection hota hai (users, orders, products). Isko array (`User[]`) ke roop mein hand-roll karne ka matlab hai har update/delete ek `O(n)` array scan aur manual immutable-copy dance ban jaata hai. `EntityAdapter` collection ko dictionary-shaped state (`{ ids: string[], entities: { [id]: User } }`) mein normalize kar deta hai aur free mein typed CRUD reducer helpers plus selectors generate kar deta hai:
-
-```typescript
-import { createEntityAdapter, EntityState } from '@ngrx/entity';
-import { createReducer, on } from '@ngrx/store';
-
-interface User { id: string; name: string; email: string; }
-
-// EntityState<User> = { ids: string[]; entities: { [id: string]: User } }
-interface UserState extends EntityState<User> {
-  loading: boolean;
-  selectedUserId: string | null;
-}
-
-const adapter = createEntityAdapter<User>({
-  selectId: (user) => user.id,          // defaults to `entity.id` if omitted
-  sortComparer: (a, b) => a.name.localeCompare(b.name), // optional, keeps `ids` sorted
-});
-
-const initialState: UserState = adapter.getInitialState({
-  loading: false,
-  selectedUserId: null,
-});
-
-const userReducer = createReducer(
-  initialState,
-  on(loadUsersSuccess, (state, { users }) => adapter.setAll(users, state)),
-  on(addUser,          (state, { user })  => adapter.addOne(user, state)),
-  on(updateUser,       (state, { update }) => adapter.updateOne(update, state)),
-  on(deleteUser,       (state, { id })    => adapter.removeOne(id, state)),
-  on(upsertManyUsers,  (state, { users }) => adapter.upsertMany(users, state)),
-);
-```
-
-`adapter.getSelectors()` char canonical selectors generate kar deta hai isliye aapko phir kabhi `Object.values(entities)` hand-write nahi karna padta:
-
-```typescript
-const { selectIds, selectEntities, selectAll, selectTotal } = adapter.getSelectors();
-
-export const selectUserIds     = createSelector(selectUserState, selectIds);
-export const selectUserEntities = createSelector(selectUserState, selectEntities); // dictionary, O(1) lookup by id
-export const selectAllUsers    = createSelector(selectUserState, selectAll);       // User[]
-export const selectUserCount   = createSelector(selectUserState, selectTotal);
-```
-
-**`EntityAdapter` senior level par kyun matter karta hai:** `selectEntities` `Array.find()` scan ke instead O(1) lookup-by-id (`entities[userId]`) deta hai — jab list kuch sau items se aage badh jaati hai aur frequently lookup hoti hai (e.g., har render par `selectedUserId` ko `User` mein resolve karna) to yeh ek real performance difference banata hai. Yeh update semantics ko bhi standardize karta hai (`updateOne` ek proper immutable merge karta hai) isliye team mein koi bhi feature-wise slightly-different, subtly-buggy array-splicing logic reinvent nahi karta.
-
-**Facade pattern.** Direct `Store` access (`store.select(...)`, `store.dispatch(...)`) ko ek injectable service ke peeche wrap karna, taaki components kabhi bhi directly NgRx symbols import na karein:
-
-```typescript
-@Injectable({ providedIn: 'root' })
-export class UserFacade {
-  private store = inject(Store);
-
-  users$ = this.store.select(selectAllUsers);
-  loading$ = this.store.select(selectUserLoading);
-  selectedUser$ = this.store.select(selectSelectedUser);
-
-  loadUsers(): void {
-    this.store.dispatch(loadUsers());
-  }
-
-  selectUser(id: string): void {
-    this.store.dispatch(selectUser({ id }));
-  }
-}
-```
-
-```typescript
-@Component({ /* ... */ })
-export class UserListComponent {
-  private facade = inject(UserFacade);
-  users$ = this.facade.users$;
-
-  onSelect(id: string) {
-    this.facade.selectUser(id);
-  }
-}
-```
-
-**Interviewers iske baare mein kyun poochte hain:** facade pattern larger apps ke liye NgRx ki apni documented recommendation hai. Benefits: (1) components generic `Store` type aur raw action/selector imports ke instead ek small, testable, app-specific API surface par depend karte hain; (2) state-management implementation ko swap karna (e.g., ek feature ko `@ngrx/signals` ke `SignalStore` mein migrate karna) sirf facade ko rewrite karne ki zarurat rakhta hai, har consuming component ko nahi; (3) component unit tests mein facade ko mock karna (`{ provide: UserFacade, useValue: fakeFacade }`) har test ke liye right selector wiring ke saath `MockStore` khada karne se dramatically easier hai. Trade-off jo senior candidates ko acknowledge karna chahiye: har feature ke liye indirection aur boilerplate ka ek extra layer — yeh worth it hota hai jab ek feature ka state ek-do se zyada components consume karte hain, aur single-component-only slice of state ke liye arguably unnecessary hai.
-
-**`createSelector` kaise memoize karta hai.** Yeh selectors ke peeche ka mechanical "why" hai jise zyadatar candidates use kar sakte hain lekin explain nahi kar sakte:
-
-```typescript
-export const selectUserState = (state: AppState) => state.users;
-export const selectFilterText = (state: AppState) => state.ui.filterText;
-
-export const selectFilteredUsers = createSelector(
-  selectAllUsers,
-  selectFilterText,
-  (users, filterText) => users.filter(u => u.name.includes(filterText)) // "projector" function
-);
-```
-
-`createSelector` **last set of input arguments** (reference se, `===` use karke) aur **last result** cache karta hai. Har call par yeh har input selector (`selectAllUsers`, `selectFilterText`) ko re-invoke karta hai aur reference equality use karke har returned value ko previous call ki value se compare karta hai:
-
-- Agar **har** input ka result last time se `===` hai, to projector function **re-run nahi** hota — cached result immediately return ho jaata hai.
-- Agar **koi bhi** input ka result reference se different hai, to projector ek baar re-run hota hai, aur new result (aur new input references) next time ke liye cache ban jaate hain.
-
-Yahi exact wajah hai ki immutable updates selector performance ke liye bhi waisi hi matter karte hain jaise `OnPush` ke liye karte hain: agar ek reducer `state.users` ko in place mutate kar deta hai naya array/object return karne ke instead, to `selectAllUsers` hamesha *same reference* return karta rahega, isliye `===` "unchanged" bolega even jab underlying data change ho gaya ho (is case mein recompute ko correctly skip karna hi sahi hai kyunki actually kuch update hona hi nahi chahiye tha) — lekin conversely, agar ek reducer har action par ek *naya* array/object banata hai even jab data logically identical ho (e.g., ek reducer jo unconditionally `return { ...state }` karta hai), to selector cache har dispatch par defeat ho jaata hai aur projector needlessly recompute karta hai. `createSelector` ka memoization cache size **1** hota hai — yeh sirf sabse recent call yaad rakhta hai, isliye same selector ko alternating argument sets ke saath call karna (selector factory se banaye gaye parameterized selectors ke saath common) cache ko thrash kar sakta hai aur har baar recompute kar sakta hai; yeh ek real, frequently-tested gotcha hai ("mera selector memoize kyun nahi ho raha?").
-
-```mermaid
-flowchart TD
-    A[Selector called] --> B{All input selector<br/>results === last time?}
-    B -->|Yes| C[Return cached result<br/>— projector NOT called]
-    B -->|No| D[Run projector function]
-    D --> E[Cache new inputs + result]
-    E --> F[Return new result]
-```
-
-### [new content] Dependency Injection: Hierarchical Injectors Deep Dive
-
-Source notes DI basics cover karte hain lekin injector tree ko fully unpack nahi karte, jise senior interviews directly probe karte hain (e.g., "agar aap same token ko do levels par provide karo to kya hota hai?").
-
-```mermaid
-flowchart TD
-    R[Platform Injector] --> Root[Root / ModuleInjector - providedIn: root]
-    Root --> Route[Route Injector - providers in a lazy-loaded route config]
-    Route --> Comp[Component Injector - providers in @Component]
-    Comp --> Child[Child Component Injector - viewProviders]
-```
-
-Key rules:
-- Angular kisi dependency ko resolve karne ke liye requesting component/directive se injector tree mein **upar** walk karta hai jab tak usse requested token ke liye provider na mil jaaye, phir stop kar deta hai — *nearest* provider hi jeetta hai.
-- Ek component ke `providers` array mein registered service us component ke liye fresh instantiate hoti hai (aur uske descendants dwara share hoti hai) — even agar same class kahin aur `providedIn: 'root'` bhi ho; component-level registration us subtree ke liye root wali ko shadow kar deti hai.
-- `viewProviders` `providers` se exactly ek tarike se differ karta hai: yeh `<ng-content>` ke through projected content ko invisible hota hai — projected content apni dependencies *apne khud ke* origin ke injector se resolve karta hai, host component ke view injector se nahi. Yeh almost sabko trip up kar deta hai jinhone practice mein isse face nahi kiya hota.
-- **Multi-providers** (`{ provide: TOKEN, useClass: X, multi: true }`) — `HTTP_INTERCEPTORS` jaisi cheezon ke liye use hote hain — inse multiple values ek token ke under accumulate ho jaate hain, iske instead ki last registration previous ones ko overwrite kar de.
-- **`@Optional()`, `@Self()`, `@SkipSelf()`, `@Host()`** — DI resolution modifiers. Agar koi provider nahi milta to `@Optional()` throw karne ke instead `null` return karta hai; `@Self()` resolution ko sirf requesting injector tak restrict kar deta hai (upar walk nahi hota); `@SkipSelf()` local injector ko skip kar deta hai aur search ek level upar se start karta hai (classic use: ek `ControlContainer` pattern jahan child ko *parent* ka instance chahiye, apna nahi); `@Host()` walk ko current component ki host boundary par stop kar deta hai. Yeh advanced hain lekin kisi bhi senior-level DI mastery claim karne wale ke liye real interview material hain.
-
-### [gaps] Micro-Frontends / Module Federation for Angular
-
-Existing notes mein kahin bhi cover nahi kiya gaya, aur ek increasingly common lead-level system-design question hai jab kisi org mein ek se zyada Angular teams same product surface mein ship kar rahi hoti hain.
-
-**Yeh kya problem solve karta hai:** ek team dwara owned ek single large Angular app organizationally scale nahi karti jab multiple independent teams ko apni-apni product ki areas build aur deploy karni ho (e.g., "Checkout" team, "Account" team, "Search" team) bina ek shared release train coordinate kiye. Micro-frontends se har team UI ka apna piece own, build, test aur **independently deploy** kar sakti hai, jo runtime par ek overall application ("shell") mein compose hota hai.
-
-**Webpack Module Federation** (original mechanism, aur newer tooling ke under bhi abhi tak wahi mechanism jis par zyadatar Angular Module Federation setups build hote hain) ek webpack build (ek "remote") ko runtime par specific modules expose karne deta hai, aur doosri build (the "host"/shell) unko consume karti hai **bina dono ko saath compile kiye** — shell ko build time par remote ke source code ki zarurat nahi hoti, sirf ek runtime manifest URL ki:
-
-```javascript
-// remote's webpack.config.js (checkout-app) — exposes a module
-new ModuleFederationPlugin({
-  name: 'checkoutApp',
-  filename: 'remoteEntry.js',
-  exposes: {
-    './CheckoutModule': './src/app/checkout/checkout.module.ts',
-  },
-  shared: ['@angular/core', '@angular/common', '@angular/router'],
-});
-
-// shell's webpack.config.js — consumes it
-new ModuleFederationPlugin({
-  name: 'shell',
-  remotes: {
-    checkoutApp: 'checkoutApp@https://checkout.example.com/remoteEntry.js',
-  },
-  shared: ['@angular/core', '@angular/common', '@angular/router'],
-});
-```
-
-Angular ke liye specifically, Angular CLI ke abstractions ke against raw webpack Module Federation config ko hand-roll karna painful hai, isliye ecosystem standard **`@angular-architects/module-federation`** schematic hai, jo isko Angular CLI builder ke upar wire karta hai aur (apni modern form mein) build time par remote ka URL jaane bina bhi dynamic remote loading support karta hai:
-
-```typescript
-// shell's routes — lazy-load a remote exposed module, resolved at runtime
-{
-  path: 'checkout',
-  loadChildren: () =>
-    loadRemoteModule({
-      type: 'module',
-      remoteEntry: 'https://checkout.example.com/remoteEntry.js',
-      exposedModule: './CheckoutModule',
-    }).then(m => m.CheckoutModule),
-}
-```
-
-```mermaid
-flowchart TD
-    Shell[Shell App - routing shell, auth, layout] -->|loads at runtime| RemoteA[Remote: Checkout App - own repo, own pipeline]
-    Shell -->|loads at runtime| RemoteB[Remote: Account App - own repo, own pipeline]
-    Shell -->|loads at runtime| RemoteC[Remote: Search App - own repo, own pipeline]
-    RemoteA -.shared deps.-> Shared["@angular/core, @angular/common (singleton, shared)"]
-    RemoteB -.shared deps.-> Shared
-    RemoteC -.shared deps.-> Shared
-```
-
-**Key mechanics jo ek interviewer aapse jaanna expect karta hai:**
-- `shared` config wahi hai jo har remote ko apna `@angular/core`/`@angular/common`/`@angular/router` ka full copy ship karne se rokta hai — inhe runtime par host aur remotes ke across singletons ki tarah negotiate kiya jaata hai, jisse duplicate framework instances avoid hote hain (jo otherwise federation boundary ke across DI, routing aur change detection ko break kar dete) aur bundle size bloated hone se bachta hai.
-- Har remote ek independently buildable, independently deployable artifact hota hai — ek remote ki team apne khud ke URL par naya version ship kar sakti hai bina shell ko bilkul bhi rebuild ya redeploy kiye, jab tak exposed module ka public contract break nahi hota.
-- Version skew hi real operational cost hai: agar shell aur remote kisi shared singleton dependency ke major version par disagree karte hain, to Module Federation runtime par warn/fail karega, shell ke build time par nahi — jo monorepo ke compile-time type error se kahin zyada baad ka, catch karna harder failure point hai.
-
-**Yeh complexity kab worth hoti hai vs. ek monorepo/Nx workspace:** Module Federation apna cost sirf tab earn karta hai jab teams ko **independent deployability** chahiye ho — matlab, team B ko team A par wait kiye ya usse release coordinate kiye bina production mein ship karna aana chahiye. Agar real constraint sirf "kaafi teams, ek codebase, fast builds aur enforced boundaries chahiye" hai — independent runtime deployment nahi — to well-defined library boundaries (`nx.json` tags/lint rules jo enforce karein ki kaunsi libs kis par depend kar sakti hain) wala ek **Nx monorepo** organizational benefit ka zyadatar hissa (clear ownership, enforced boundaries, independently buildable/testable libs) dramatically kam operational complexity ke saath de deta hai: ek build pipeline, ek versioning story, koi runtime dependency-negotiation risk nahi, aur jab shared contract change hota hai to compile-time (runtime nahi) par breakage. Senior/lead framing jo ek interviewer sunna chahta hai: "Module Federation ek *organizational/deployment* problem solve karta hai, code-organization problem nahi — pehle Nx module boundaries ke liye reach karo, aur Module Federation sirf tab add karo jab independent deployment cadence genuinely ek business requirement ho, sirf ek nice-to-have nahi."
-
-| Concern | Nx Monorepo (single deployable) | Module Federation (micro-frontends) |
-|---|---|---|
-| Team independence | Shared build/release pipeline; lint boundaries ke through enforced | Per team true independent build + deploy |
-| Build/version coordination | Repo ke across Angular/shared deps ka single version | Runtime version negotiation; skew ek real risk hai |
-| Failure mode for a breaking change | Compile-time (CI fail hota hai) | Often runtime (loaded remote shell ke saath incompatible) |
-| Operational complexity | Kam — ek CI/CD pipeline | Zyada — per-remote pipelines, runtime manifest hosting, shared-dependency governance |
-| Best fit | Zyadatar orgs, multiple teams ke saath bhi, jo release cadence share kar sakte hain | Large orgs jahan teams ko *must* independent schedules par deploy karna hota hai |
-
-(Is candidate ke background par Note: yeh actual hands-on Angular 4/7 experience ke relative forward-looking material hai — isse honestly conceptual/architectural knowledge ki tarah flag karo, claimed production experience ki tarah nahi, jab tak aapne genuinely isse implement na kiya ho.)
-
----
-
 ## Performance
 
 ### Change Detection Deep Dive
@@ -1728,50 +1434,6 @@ Naye `@for` control-flow syntax mein, `track` **mandatory** hai, optional nahi �
 
 Jab interviewer "aap `*ngFor` ko kaise optimize karte ho" se aage push karke "agar 50,000 rows hon to" pooche, tab yehi correct answer hai — `trackBy` *update* cost kam karta hai, virtual scrolling off-screen DOM ko bilkul bhi materialize na karke *render* cost kam karta hai.
 
-### [new content] Deferrable Views: @defer (Angular 17+)
-
-`@defer` **template regions** (sirf routes/modules nahi) ke liye ek built-in, declarative lazy-loading mechanism hai — yeh deferred content (aur uske component/directive/pipe dependencies) ko ek separate JS chunk mein split karta hai jo sirf tab load hota hai jab koi trigger condition fire hoti hai.
-
-```html
-@defer (on viewport) {
-  <heavy-chart [data]="chartData" />
-} @placeholder {
-  <div class="skeleton"></div>
-} @loading (minimum 500ms) {
-  <spinner />
-} @error {
-  <p>Failed to load chart.</p>
-}
-```
-
-Common triggers: `on idle` (default — jab browser idle ho tab load hota hai), `on viewport` (jab block scroll karke view mein aata hai, `IntersectionObserver` use karke, tab load hota hai), `on interaction` (specified trigger element par click/keydown par load hota hai), `on hover`, `on timer(2s)`, aur `when someCondition` (ek custom boolean expression/Signal).
-
-**Senior interview ke liye yeh kyun matter karta hai:** yeh directly Core Web Vitals ko target karta hai — heavy, below-the-fold, ya rarely-interacted-with UI (charts, modals, comment sections, admin-only widgets) ko ab initial bundle mein ship hone ki zarurat nahi hai sirf isliye ki woh critical content ke saath same component template mein declared hai. `@defer` se pehle, isse achieve karne ke liye manually ek separate lazy route mein split karna padta tha ya `ViewContainerRef.createComponent()` ke saath ek dynamically-imported component banana padta tha — same effect ke liye kaafi zyada ceremony. `@defer` ab woh pehli cheez hai jise reach karna chahiye jab poocha jaaye "route-level lazy loading se aage initial bundle size kaise reduce karoge."
-
-### Lazy Loading aur Preloading
-
-Lazy loading ek feature module (ya, modern Angular mein, ek route-level standalone component) ki loading ko us waqt tak defer karta hai jab tak uska route visit nahi hota, jisse initial bundle shrink ho jaata hai:
-
-```typescript
-const routes: Routes = [
-  { path: 'dashboard', loadChildren: () => import('./dashboard/dashboard.module').then(m => m.DashboardModule) }
-];
-```
-
-**Preloading** initial app stable hone *ke baad* background mein quietly lazy modules load karke "lazy route par first navigation slow feel hota hai" wali problem solve karta hai, isliye jab tak user click karta hai, module already cached hota hai:
-
-```typescript
-@NgModule({
-  imports: [
-    RouterModule.forRoot(routes, { preloadingStrategy: PreloadAllModules })
-  ],
-  exports: [RouterModule]
-})
-export class AppRoutingModule {}
-```
-
-`PreloadAllModules` Angular ki built-in strategy hai; aap sab kuch preload karne ke instead sirf specific routes ko selectively preload karne ke liye ek **custom `PreloadingStrategy`** bhi likh sakte ho (e.g., user role ya "likely next page" heuristic ke basis par) — agar poocha jaaye "kya sab kuch preload karna hamesha achha idea hai?" to yeh mention karne ke liye ek good follow-up hai (answer: nahi — constrained/mobile networks par, sab kuch preload karna critical initial resources ke saath compete kar sakta hai; usage analytics ke basis par selective preloading zyada sophisticated answer hai).
-
 ### Bundle Size, Tree Shaking, Build Optimization
 
 - **Tree shaking** — build process (esbuild/webpack) final bundle se unused components, services aur dead code ko remove kar deta hai.
@@ -1874,305 +1536,6 @@ flowchart TD
 6. Interceptors response par phir se chalte hain, **reverse** order mein (error handling, logging, loader-stop).
 7. Observable emit karta hai — `.subscribe()` (ya `async` pipe) component ko data deliver karta hai.
 8. Change detection chalta hai, bindings diff karta hai aur zarurat ke mutabik DOM patch karta hai.
-
----
-
-## SSR, PWA & Cross-Cutting
-
-### Angular Universal / SSR
-
-Angular Universal server-side rendering enable karta hai: app browser ko ship karne se pehle server (Node.js) par ek initial HTML snapshot render karta hai, jisse perceived load time improve hota hai aur crawlers/SEO fully rendered content dekh paate hain.
-
-Setup (source mein reference kiya gaya legacy schematic): `ng add @nguniversal/express-engine`. **[new content — currency note]**: Angular 17 se, SSR setup directly core CLI mein integrate ho gaya hai — `ng add @angular/ssr` (ya `ng new` chalate waqt simply SSR select karna) — separate `@nguniversal` packages `@angular/ssr` / `@angular/platform-server` mein fold ho gaye hain. Agar aaj SSR setup karne ke liye poocha jaaye to modern command mention karo; `@nguniversal/express-engine` package naam legacy/deprecated hai.
-
-Benefits: improved SEO, faster initial (perceived) page load, slow networks/devices par better performance, kyunki browser full JS bundle parse aur bootstrap hone se pehle hi meaningful content dikha deta hai.
-
-### [new content] Hydration (Angular 16+) aur Event Replay (Angular 17+)
-
-Classic Angular Universal SSR mein ek significant, often-glossed-over problem thi: server-rendered HTML load hone ke baad, Angular ka client-side bootstrap apni component tree aur event listeners attach karne ke liye poore DOM ko scratch se **destroy aur completely re-render** kar deta tha ("destructive rehydration") — jisse ek visible flicker aur wasted work hoti thi, kyunki server ne already correct markup produce kar diya hota tha.
-
-**Non-destructive hydration** (`provideClientHydration()`, Angular 16/17 se stable) isse fix karta hai: Angular existing server-rendered DOM nodes ko tear down karne ke instead reuse karta hai, apna internal state aur event listeners already-painted markup par attach karta hai.
-
-```typescript
-// app.config.ts
-export const appConfig: ApplicationConfig = {
-  providers: [
-    provideClientHydration(),
-  ]
-};
-```
-
-**Event replay** (Angular 17+, Chrome team ki event dispatch library par built) un user interactions (clicks, etc.) ko capture karta hai jo "HTML painted" aur "Angular fully bootstrapped and hydrated" ke beech ki window *ke dauraan* hote hain, aur hydration complete hone par unhe replay karta hai — isliye jo user page appear hote hi instant button click kar deta hai, uska click silently swallow nahi hota.
-
-**Yeh ek strong senior talking point kyun hai:** hydration correctness exactly waisa hi nuanced, "yeh kyun matter karta hai" topic hai jo us insaan ko differentiate karta hai jisne production mein SSR ship kiya hai us insaan se jisne sirf docs padhe hain — flicker-free hydration aur event replay Angular team ke liye genuinely hard, recent engineering problems the, koi incremental sugar nahi.
-
-**[version 19 upgrade]** Angular 7 mein SSR (Angular Universal) ka behavior binary tha — poori app ya to server par render hoti thi ya nahi, aur poori app ek hi baar mein hydrate hoti thi. Angular 19 isse do directions mein granular banata hai:
-
-**Incremental Hydration (experimental)** — familiar `@defer` syntax use karte hue, template ke individual sections ko mark kar sakte ho taaki woh server par "grayscale"/inert state mein render ho (JS download nahi hota) aur sirf tab hydrate ho jab ek specific trigger fire ho — poori app ko ek saath hydrate karne ke bajaye:
-```typescript
-// app.config.ts
-export const appConfig: ApplicationConfig = {
-  providers: [
-    provideClientHydration(withIncrementalHydration()),
-  ]
-};
-```
-```html
-<!-- below-the-fold widget stays inert until it scrolls into view, then hydrates -->
-@defer (hydrate on viewport) {
-  <product-recommendations />
-} @placeholder {
-  <div class="skeleton"></div>
-}
-```
-Supported triggers: `on viewport`, `on interaction`, `on idle`, `on immediate`, aur `never` (static content jo kabhi hydrate nahi hona chahiye, e.g. ek blog post ka body).
-
-**Event Replay — Angular 19 se default enabled**: v17 mein introduce hua tha, ab explicit `provideClientHydration()` config ke bina bhi by default on hai.
-
-**Route-level render mode** — ab per-route decide kar sakte ho ki woh SSR, CSR, ya prerendered ho, same app ke andar (e.g. marketing pages prerender ho jaayein, dashboard purely CSR rahe):
-```typescript
-// app.routes.server.ts
-export const serverRouteConfig: ServerRoute[] = [
-  { path: 'dashboard', renderMode: RenderMode.Client },
-  { path: '**', renderMode: RenderMode.Prerender },
-];
-```
-- **Interview angle:** "How would you optimize SSR for a page with one heavy, below-the-fold widget?" — incremental hydration is the direct answer (vs. v7-era "hydrate everything or nothing").
-
-### Progressive Web Apps aur Service Workers
-
-Ek **PWA** ek web app hai jisme native-app-like capabilities hoti hain: offline support, background sync, push notifications, fast/cacheable performance, installability.
-
-```
-ng add @angular/pwa
-```
-Yeh ek service worker registration, ek Web App Manifest, aur icons scaffold karta hai.
-
-Ek **Service Worker** ek background script hai jo:
-- Offline use ke liye resources cache karta hai.
-- Configured caching strategies ke mutabik network requests ko intercept/handle karta hai.
-- Push notifications enable karta hai.
-
-Caching strategy example (`ngsw-config.json`):
-
-```json
-{
-  "assetGroups": [
-    {
-      "name": "app",
-      "installMode": "prefetch",
-      "updateMode": "prefetch",
-      "resources": {
-        "files": ["/favicon.ico", "/index.html"],
-        "urls": ["/api/**"]
-      }
-    }
-  ]
-}
-```
-
-PWA check karna: Chrome DevTools → Lighthouse audit.
-
-Background sync — user actions ko offline store karta hai aur connectivity wapas aate hi unhe send kar deta hai. Push notifications — client ke liye server-initiated real-time updates, `@angular/service-worker` ke through enabled.
-
-Service worker updates handle karna:
-
-```typescript
-constructor(updates: SwUpdate) {
-  updates.available.subscribe(() => {
-    if (confirm('New version available. Load new version?')) {
-      window.location.reload();
-    }
-  });
-}
-```
-
-**[new content] `SwUpdate` API modernization:** upar dikhaye gaye boolean-events-based `updates.available`/`updates.activated` observables legacy API shape hain; current versions `updates.versionUpdates` expose karte hain (ek discriminated-union event type ka Observable: `VersionReadyEvent`, `VersionInstallationFailedEvent`, etc.), jo *kya* hua uske baare mein zyada precise hai. Agar aapko current Angular version ke against yeh likhne ke liye kaha jaaye, to `versionUpdates` ko `VersionReadyEvent` ke liye filter karna prefer karo — target project ke Angular version ke against exact API verify karo kyunki yeh releases ke across evolve hua hai.
-
-### Angular Security
-
-Built-in security features: XSS protection, CSRF prevention support, CSP support, HTML/URLs/styles ki sanitization.
-
-**XSS (Cross-Site Scripting)** — kisi page mein malicious scripts inject karna. Angular interpolation aur zyadatar property bindings ke through bound values ko auto-sanitize kar deta hai:
-
-```html
-<p>{{ userInput }}</p>              <!-- safe: auto-escaped -->
-<p [innerHTML]="userInput"></p>     <!-- dangerous: bypasses much of the auto-escaping context -->
-```
-
-Explicit trust decisions ke liye `DomSanitizer`:
-
-```typescript
-constructor(private sanitizer: DomSanitizer) { }
-safeUrl = this.sanitizer.bypassSecurityTrustUrl(userInput);
-```
-
-**Volunteer karne layak interview point:** `bypassSecurityTrustX` methods ko "main personally vouch kar raha hoon ki yeh input safe hai" ki tarah treat karna chahiye — inhe sirf us content par call karo jisse aap control karte ho ya jo independently server-side validate/sanitize kiya gaya ho (e.g., ek known-good CMS-rendered HTML field), kabhi directly raw user input par nahi, warna aapne wahi XSS hole reopen kar diya jisse Angular aapko protect kar raha tha.
-
-**CSP (Content Security Policy)** — restrict karta hai ki page kaunse scripts/resources load/execute kar sakta hai, aur even agar koi injection slip ho jaaye to bhi XSS impact ko mitigate karta hai:
-
-```html
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'">
-```
-
-**CSRF** — Angular ke `HttpClient` mein `HttpXsrfTokenExtractor`/`withXsrfConfiguration` ke through "double-submit cookie" pattern ke liye built-in support hai (client server dwara set ki gayi cookie read karta hai aur state-changing requests par usse header ki tarah echo karta hai) — lekin yeh out of the box sirf tab kaam karta hai jab *backend* us cookie/header pair ko set aur validate karne ke liye configured ho; yeh automatic security nahi hai, yeh ek cooperating client-server contract hai.
-
-**CORS** — server-side concern hai (`Access-Control-Allow-Origin` headers); Angular ka HttpClient sirf request banata hai, browser enforcement (same-origin policy) hi woh cheez hai jise CORS headers relax karte hain.
-
-**HTTP Parameter Pollution** — same parameter ko multiple baar supply karna (`?user=admin&user=guest`) taaki inconsistent server-side parsing logic ko confuse karne ki koshish ki ja sake — primarily ek backend validation concern hai, lekin ek interview vocabulary term ki tarah jaanna worth hai.
-
-Secure authentication practices: JWTs, **HttpOnly cookies** mein stored tokens (`localStorage` mein nahi, jo kisi bhi injected script se readable hota hai — ek direct XSS mitigation), aur routes ko protect karne wale Auth Guards.
-
-```typescript
-@Injectable({ providedIn: 'root' })
-export class AuthGuard implements CanActivate {
-  constructor(private authService: AuthService) { }
-  canActivate(): boolean {
-    return this.authService.isLoggedIn();
-  }
-}
-```
-
-**Token storage par Note:** HttpClient section ka `AuthInterceptor` example directly `localStorage` read karne ke instead ek `TokenService` inject karta hai, precisely isliye ki *token kahan rehta hai* ek separate, explicit decision bana rahe. Yeh dono postures equivalent nahi hain: `localStorage`/`sessionStorage` simplest aur extremely common hai, lekin kisi bhi injected script se readable hota hai, isliye koi bhi XSS token theft ban jaata hai — sirf low-stakes apps ke liye defensible. BFF + HttpOnly-cookie pattern token ko browser JavaScript se poori tarah bahar rakhta hai (interceptor bearer header ke instead `withCredentials: true` send karta hai), jiski cost ek backend investment hai jiske badle mein ek bahut chota blast radius milta hai; enterprise scale par yehi defensible answer hai. Ek senior candidate ko trade-off name karna chahiye aur us specific app ke liye ek posture commit karni chahiye, `localStorage` version ko best practice ki tarah present karne ke instead.
-
-Brute-force mitigations: API par rate limiting, login par CAPTCHA, account lockout — yeh bhi primarily backend-enforced hote hain, lekin Angular se expect kiya jaata hai ki woh resulting UX (lockout messages, CAPTCHA widgets) ko correctly surface kare.
-
-### [gaps] Accessibility (a11y): ARIA, CDK a11y Module, Focus Management
-
-Existing notes mein poori tarah se absent hai, aur ek genuinely common senior/lead-level topic hai — accessibility enterprise aur government-adjacent projects par frequently ek hard compliance requirement (WCAG 2.1/2.2 AA, Section 508) hoti hai, koi optional nicety nahi, aur interviewers isse use karte hain "ek working UI ship karna" ko "ek aisa UI ship karna jise sach mein sab use kar sakein" se separate karne ke liye.
-
-**Custom components par ARIA attributes.** Native HTML elements (`<button>`, `<input>`, `<select>`) free mein built-in accessibility semantics ke saath aate hain — screen readers ko already pata hota hai ki `<button>` clickable aur focusable hota hai. `<div>`s/`<span>`s se bane custom Angular components (ek custom dropdown, ek custom tab strip, ek custom modal) mein by default **isme se kuch bhi nahi** hota aur component ke `host` metadata ya template bindings ke through bound ARIA (`role`, `aria-*`) attributes ke through explicitly declare karna zaroori hota hai:
-
-```typescript
-@Component({
-  selector: 'app-custom-tabs',
-  template: `
-    <div role="tablist" [attr.aria-label]="ariaLabel">
-      @for (tab of tabs; track tab.id) {
-        <button
-          role="tab"
-          [id]="'tab-' + tab.id"
-          [attr.aria-selected]="tab.id === activeTabId"
-          [attr.aria-controls]="'panel-' + tab.id"
-          [tabindex]="tab.id === activeTabId ? 0 : -1"
-          (click)="selectTab(tab.id)"
-          (keydown.arrowRight)="focusNextTab()"
-          (keydown.arrowLeft)="focusPreviousTab()">
-          {{ tab.label }}
-        </button>
-      }
-    </div>
-    @for (tab of tabs; track tab.id) {
-      <div
-        role="tabpanel"
-        [id]="'panel-' + tab.id"
-        [attr.aria-labelledby]="'tab-' + tab.id"
-        [hidden]="tab.id !== activeTabId">
-        <ng-container *ngTemplateOutlet="tab.content"></ng-container>
-      </div>
-    }
-  `
-})
-export class CustomTabsComponent { /* ... */ }
-```
-
-Key points jo interviewers sunna chahte hain: `role="tablist"`/`role="tab"`/`role="tabpanel"` assistive tech ko batata hai ki widget *kya hai* kyunki markup generic `<div>`/`<button>` hai; `aria-selected` us state ko communicate karta hai jo visually obvious hoti hai (ek highlighted tab) lekin otherwise screen reader ke liye invisible hoti hai; roving `tabindex` (active tab par `0`, baaki par `-1`, arrow-key handlers ke saath combined) ek composite widget ko har individual tab button ke through tab karne ke instead ek single `Tab` stop ke saath keyboard-navigable banane ka standard pattern hai.
-
-**Angular CDK ka `a11y` module** (`@angular/cdk/a11y`) pre-built primitives provide karta hai taaki teams har component ke liye yeh logic hand-roll na karein:
-
-| Utility | Purpose |
-|---|---|
-| `FocusTrap` / `cdkTrapFocus` | `Tab`/`Shift+Tab` keyboard focus ko ek container ke andar confine karta hai — modals/dialogs ke liye essential hai taaki focus silently open modal ke peeche wale page content mein escape na kar sake |
-| `LiveAnnouncer` | Ek ARIA live region ke through screen-reader users ko programmatically ek message announce karta hai, un state changes ke liye jinhe otherwise focus nahi milta (e.g., "3 results found," "Item added to cart," async validation errors) |
-| `FocusMonitor` | Detect karta hai ki koi element *kaise* focused hua (mouse, keyboard, touch, ya programmatically) — modern UX conventions ke mutabik sirf keyboard users ke liye focus-visible outlines dikhana enable karta hai, mouse clicks ke liye nahi |
-| `InteractivityChecker` | Determine karta hai ki koi element apni current state (disabled, hidden, `tabindex`) ko dekhte hue genuinely focusable/tabbable hai ya nahi, `FocusTrap`/`FocusMonitor` dwara internally use hota hai |
-| `ListKeyManager` / `ActiveDescendantKeyManager` | List-like composite widgets (menus, autocomplete option lists) ke liye arrow-key navigation aur active-item tracking manage karta hai |
-
-```typescript
-import { LiveAnnouncer } from '@angular/cdk/a11y';
-
-@Component({ /* ... */ })
-export class SearchResultsComponent {
-  private liveAnnouncer = inject(LiveAnnouncer);
-
-  onResultsLoaded(count: number) {
-    this.liveAnnouncer.announce(`${count} results found`, 'polite');
-  }
-}
-```
-
-**Modals/dynamic content ke liye focus management — woh pattern jise ek interviewer aapse end-to-end describe karne ke liye kahega:**
-
-```typescript
-import { FocusTrap, FocusTrapFactory } from '@angular/cdk/a11y';
-
-@Component({
-  selector: 'app-modal',
-  template: `
-    <div #modalContainer role="dialog" aria-modal="true" [attr.aria-labelledby]="titleId">
-      <h2 [id]="titleId">{{ title }}</h2>
-      <ng-content></ng-content>
-      <button (click)="close()">Close</button>
-    </div>
-  `
-})
-export class ModalComponent implements AfterViewInit, OnDestroy {
-  @ViewChild('modalContainer') containerRef!: ElementRef;
-  private focusTrapFactory = inject(FocusTrapFactory);
-  private focusTrap!: FocusTrap;
-  private previouslyFocusedElement: HTMLElement | null = null;
-
-  ngAfterViewInit() {
-    // 1. Remember what had focus before the modal opened, to restore it later.
-    this.previouslyFocusedElement = document.activeElement as HTMLElement;
-
-    // 2. Trap Tab/Shift+Tab focus inside the modal.
-    this.focusTrap = this.focusTrapFactory.create(this.containerRef.nativeElement);
-    this.focusTrap.focusInitialElementWhenReady();
-  }
-
-  close() {
-    this.onClose.emit();
-  }
-
-  ngOnDestroy() {
-    this.focusTrap?.destroy();
-    // 3. Restore focus to whatever triggered the modal, so keyboard users
-    //    aren't dropped back at the top of the page (a very common a11y bug).
-    this.previouslyFocusedElement?.focus();
-  }
-}
-```
-
-Woh teen steps jo ek senior candidate ko bina pooche narrate karne chahiye: **(1)** focus move karne se pehle triggering element ka focus capture karo, **(2)** jab dynamic content open ho tab uske andar focus trap karo (`cdk-trap-focus` directive ya programmatically `FocusTrapFactory`) aur initial focus usme move karo (usually dialog heading ya first actionable control), **(3)** close hone par, explicitly focus ko trigger element par restore karo — zyadatar home-grown modals steps 1 aur 3 mein galti karte hain, silently keyboard/screen-reader users ka focus context drop kar dete hain, jo sabse common real-world a11y bugs mein se ek hai aur ek frequent audit finding hai.
-
-**Interview framing:** "Custom Angular widgets par accessibility automatic nahi hai — generic elements se bana kuch bhi cheez explicit ARIA roles/states, keyboard interaction handling, aur deliberate focus management maangta hai. CDK ka `a11y` module (`FocusTrap`, `LiveAnnouncer`, `FocusMonitor`) specifically isliye exist karta hai taaki teams ko har component ke liye yeh genuinely tricky, easy-to-get-subtly-wrong behaviors hand-roll na karna pade." Agar poocha jaaye ki aap isse kaise verify karoge, to baseline ki tarah automated tooling (axe-core / `@angular-eslint` a11y lint rules / Lighthouse accessibility audit) mention karo, lekin honestly batao ki automated tools shaayad real WCAG issues ka ek tihaai hi catch karte hain — actual keyboard-only aur screen-reader (NVDA/VoiceOver) manual testing hi baaki ko catch karta hai.
-
-### Deployment: Firebase aur GitHub Pages
-
-Neeche [Enterprise Architecture Case Study](#enterprise-architecture-case-study-bff--cqrs--net) mein cover kiye gaye full enterprise S3+CloudFront/ECS pipeline ke liye reach karne se pehle, demos, side projects aur take-home assignments ke liye do sabse lightest-weight, sabse common deployment targets jaanna worth hai — yeh interviews mein ek quick "aaj isse kaise ship karoge" follow-up ki tarah aate hain.
-
-**Firebase Hosting par Deploy karna:**
-
-```bash
-npm install -g firebase-tools   # 1. install the Firebase CLI
-firebase login                  # 2. authenticate with a Google account
-firebase init                   # 3. select Hosting, point it at dist/<project-name>
-firebase deploy                 # 4. build first (ng build), then push to Firebase's CDN
-```
-
-Firebase Hosting almost koi configuration ke bina free HTTPS, ek global CDN, aur easy custom-domain support deta hai — cloud infrastructure khada kiye bina quick production-like deployments ke liye ek common choice.
-
-**GitHub Pages par Deploy karna:**
-
-```bash
-ng add angular-cli-ghpages
-ng deploy --base-href=/repo-name/
-```
-
-`angular-cli-ghpages` ek CLI builder hai jo `ng deploy` ko app build karne aur `dist/` output ko automatically `gh-pages` branch mein push karne ke liye wire kar deta hai. `--base-href` flag yahan specifically matter karta hai: GitHub Pages ek project site ko ek subpath (`https://username.github.io/repo-name/`) se serve karta hai, domain root se nahi, isliye Angular router aur asset URLs ko build time par woh base path baked-in chahiye hota hai — `--base-href` bhool jaana sabse common reason hai jiski wajah se ek GitHub Pages Angular deployment broken asset/route links ke saath blank page dikhata hai.
-
-**Senior framing:** Firebase Hosting aur GitHub Pages static SPA hosting, demos, aur portfolios ke liye appropriate hain — yeh un scenarios ke liye fit nahi hote jinhe custom Node server ke saath server-side rendering, backend proxying, ya enterprise compliance/observability requirements chahiye, jo exactly wahi jagah hai jahan neeche wala BFF/CloudFront architecture instead right answer ban jaata hai.
 
 ---
 
@@ -2309,12 +1672,11 @@ it('resolves after timeout', fakeAsync(() => {
 - Components mein manual `.subscribe()` ke bajaye **`async` pipe** (ya `toSignal` ke through Signals) prefer karo — yeh subscription lifecycle aur change-detection integration aapke liye handle karta hai, leak bugs ki ek whole class eliminate karta hai.
 - **Components ko thin rakho** — business logic, data access, aur orchestration ko services mein push karo; components ko mostly template ↔ service wire karna chahiye.
 - Simplest form se aage kisi bhi cheez ke liye **Reactive Forms** (ideally **typed**) use karo; template-driven forms ko genuinely small, simple cases ke liye reserve karo.
-- Feature areas ko route ke hisaab se **lazy load** karo, aur heavy in-page content ke liye jise initial bundle mein ship karne ki zaroorat nahi hai **`@defer`** use karo.
+- Feature areas ko route ke hisaab se **lazy load** karo (`loadChildren`/`loadComponent`), taaki initial bundle mein wahi ship ho jo user ko pehle load par chahiye.
 - Cross-cutting HTTP concerns (auth headers, error handling, loading indicators) ko repeated per-call code mein nahi, **interceptors** mein centralize karo.
 - Deliberately unsubscribe karo — pehle `async` pipe, phir `takeUntilDestroyed()`, aur jo cases pehle do cover nahi karte unke fallback ke liye `ngOnDestroy()` mein manual `Subscription.unsubscribe()`.
 - `angular.json` mein **bundle budgets** enforce karo aur blind optimize karne ke bajaye Angular DevTools + Lighthouse se regularly profile karo.
 - `bypassSecurityTrustX` sanitizer calls, user content par `[innerHTML]`, aur `localStorage`-stored tokens ko un cheezon ki tarah treat karo jinhe ek explicit, justified security decision chahiye — defaults nahi.
-- State-management tooling (plain service/Signal, NgRx Signals, classic NgRx) ko actual app complexity ke proportionate choose karo — sirf NgRx ka naam drop na karo, choice ko justify karne ke liye ready raho.
 
 ## Common Pitfalls
 
@@ -2326,8 +1688,7 @@ it('resolves after timeout', fakeAsync(() => {
 - `Renderer2` use karne ke bajaye **`ElementRef.nativeElement` styles/attributes ko directly mutate karna** — SSR aur platform-agnostic rendering ke under break ho jaata hai.
 - **Ek source Observable par `forkJoin` jo kabhi complete nahi hota** — silently forever hang ho jaata hai, koi emission nahi, koi error nahi.
 - Large ya frequently-updated lists par **`trackBy` ke bina `*ngFor` ko "fine" assume karna** — unnecessary DOM churn aur janky UI leads karta hai.
-- Ek low-stakes app se aage kisi bhi cheez ke liye **JWTs ko `localStorage` mein store karna** — XSS-exposed; more defensible BFF/HttpOnly-cookie pattern se contrast karo (dekho [Angular Security](#angular-security) mein flagged contradiction).
-- **NgRx ko default ki tarah treat karna** un apps/teams ke liye jinhe actually iski guarantees chahiye, ek deliberate choice ke bajaye — simpler apps ke liye real complexity cost add karta hai.
+- Ek low-stakes app se aage kisi bhi cheez ke liye **JWTs ko `localStorage` mein store karna** — XSS-exposed; more defensible pattern BFF/HttpOnly-cookie-based token storage hai (dekho [`HttpInterceptor` with an HttpOnly cookie](#httpinterceptor-with-an-httponly-cookie) practice section).
 - **Assume karna ki Signals RxJS ko replace kar dete hain** — yeh different problems solve karte hain (synchronous view state vs asynchronous streams); interop (`toSignal`/`toObservable`) explain karne ki expectation rakho, ek wholesale migration nahi.
 - Old `*ngFor` templates jinme kabhi `trackBy` nahi tha unhe port karte waqt **yeh bhool jaana ki naye `@for` syntax mein `track` mandatory hai** — migration schematic isko flag karega, lekin manual conversions silently isko omit kar sakte hain (identity-based tracking par fall back karte hue, exact wahi problem reintroduce karte hue jise `@for` ka matlab tha aapko avoid karne ke liye force karna).
 - **`inject()` ko ek injection context ke bahar call karna** (e.g., ek unrelated `setTimeout`/`Promise.then` callback ke andar) — runtime par throw karta hai; dependencies ko beforehand capture karo ya `runInInjectionContext()` use karo.
@@ -2343,9 +1704,7 @@ it('resolves after timeout', fakeAsync(() => {
 | Change detection | Zone.js-based Default/OnPush | Zone.js Default/OnPush **plus** experimental zoneless (Signal-driven) |
 | Dependency injection | Constructor injection | Constructor injection **aur** `inject()` function |
 | Forms | Untyped `FormGroup`/`FormControl` | Strictly typed reactive forms |
-| Ek template ke andar lazy content | Available nahi (sirf route/module level) | Template-region-level lazy loading ke liye `@defer` |
 | Build tooling | Angular CLI ke through Webpack | esbuild + Vite-based `application` builder (v17 se default) |
-| SSR | Destructive rehydration ke saath Angular Universal (`@nguniversal`) | `@angular/ssr`, non-destructive hydration + event replay |
 | E2E testing | Protractor (tab-current) | Protractor removed; Cypress/Playwright/WebdriverIO |
 | Rendering engine | View Engine (v9 mein Ivy shipped hua) | Ivy |
 | HTTP interceptors | Class-based `HttpInterceptor` + `HTTP_INTERCEPTORS` multi-provider | `withInterceptors()` ke through functional interceptors (class-based still supported) |
@@ -2384,33 +1743,17 @@ Neeche wale **[new content]** sections "Angular 7" (2018) baseline aur current (
 5. **Functional Interceptors (Angular 15+)** — modern `provideHttpClient(withInterceptors(...))` pattern, jo `HTTP_INTERCEPTORS`/`multi:true` boilerplate ko replace karta hai.
 6. **Angular Signals (Angular 16+)** — arguably abhi single most-asked "Angular mein naya kya hai" question; ek naya reactive primitive jise Angular ka runtime khud samajhta hai.
 7. **RxJS vs Signals — Kab Kaunsa Use Karein** — directly us trade-off question ka answer deta hai jo har interviewer Signals aane ke baad poochta hai.
-8. **SignalStore / NgRx Signals (Angular 17+)** — classic NgRx ceremony ka lighter-weight, Signal-native alternative; interviewers expect karte hain ki aap dono ko contrast karo.
-9. **Dependency Injection: Hierarchical Injectors Deep Dive** — `@Optional`/`@Self`/`@SkipSelf`/`@Host` aur multi-providers ko unpack karta hai, jinhe original notes ne sirf shallowly touch kiya tha.
-10. **Zoneless Change Detection (Angular 18+)** — Zone.js ko remove karta hai, Signals se enabled; ek forward-looking lekin real topic hai (evolving/verify exact stability ki tarah flagged).
-11. **Deferrable Views: @defer (Angular 17+)** — route-level code splitting se aage declarative template-region lazy loading; directly Core Web Vitals target karta hai.
-12. **esbuild / Vite-based Application Builder (Angular 17+)** — CLI ka build pipeline materially change hua; troubleshooting aur `angular.json` configuration ko affect karta hai.
-13. **Hydration (Angular 16+) and Event Replay (Angular 17+)** — Angular Universal SSR mein old "destructive rehydration" flicker/wasted-work problem fix karta hai; agar achhe se discuss ho to production SSR experience ka strong evidence hai.
+8. **Zoneless Change Detection (Angular 18+)** — Zone.js ko remove karta hai, Signals se enabled; ek forward-looking lekin real topic hai (evolving/verify exact stability ki tarah flagged).
+9. **esbuild / Vite-based Application Builder (Angular 17+)** — CLI ka build pipeline materially change hua; troubleshooting aur `angular.json` configuration ko affect karta hai.
 
 **[version 19 upgrade] additions (this pass)** — in tagged inline call-outs mein specifically Angular 19-only features cover hui hain jo pehle kahin nahi thi, har ek exactly us jagah insert ki gayi jahan original v7 content unhe supersede karta hai:
 
-14. **Signal-based `input()` / `output()` / `model()` — stable in v19** (Component Communication section mein) — `@Input()`/`@Output()` + `EventEmitter` decorators ko replace karta hai; `model()` two-way binding ke liye `@Input`+`@Output` pair ko ek single declaration mein collapse karta hai. Official migration schematics included.
-15. **`linkedSignal()` aur `resource()` (Angular 19)** (Signals section mein) — derived/self-resetting state (`linkedSignal`) aur async data-fetching (`resource`, experimental) ke liye v7-era manual patterns (constructor recompute, hand-rolled RxJS loading/error state) ka Signals-native replacement.
-16. **Incremental Hydration, default Event Replay, aur Route-level Render Mode (Angular 19)** (SSR/Hydration section mein) — poori-app-ek-saath hydration model ko `@defer`-based per-section hydration se replace karta hai; per-route SSR/CSR/prerender mix karne deta hai jo v7 ke binary SSR-on-or-off model mein possible nahi tha.
+10. **Signal-based `input()` / `output()` / `model()` — stable in v19** (Component Communication section mein) — `@Input()`/`@Output()` + `EventEmitter` decorators ko replace karta hai; `model()` two-way binding ke liye `@Input`+`@Output` pair ko ek single declaration mein collapse karta hai. Official migration schematics included.
+11. **`linkedSignal()` aur `resource()` (Angular 19)** (Signals section mein) — derived/self-resetting state (`linkedSignal`) aur async data-fetching (`resource`, experimental) ke liye v7-era manual patterns (constructor recompute, hand-rolled RxJS loading/error state) ka Signals-native replacement.
 
 **Inline flagged contradictions (aapke review ke liye):**
-- **Token storage — RESOLVED.** `AuthInterceptor` example pehle directly `localStorage.getItem('token')` read karta tha, jo elsewhere aur BFF architecture section mein "tokens kabhi localStorage/sessionStorage mein store nahi hote" guidance ko contradict karta tha. Example ab ek `TokenService` inject karta hai, isliye storage posture ek implied default ke bajaye ek explicit decision hai, aur `localStorage`-vs-BFF trade-off dono jagah state kiya gaya hai (dekho [Angular Security](#angular-security)).
 - **`ng build --prod` vs `--configuration production`:** source notes different places mein `ng build --prod` (older CLI syntax) aur `ng build --configuration production` (current syntax) dono use karte hain. `--prod` current CLI versions mein deprecated/removed hai — going forward `--configuration production` (ya shorthand `-c production`) use karo; aapke notes ne dono use kiye the isliye context mein dono rakhe gaye, lekin `--prod` ko outdated flag kiya ja raha hai.
 - Koi aur substantive factual contradictions nahi mile — source mein zyadatar apparent duplication (e.g., do `HttpInterceptor` examples, do `ViewChild` explanations, repeated lifecycle-hook lists) straightforward repetition thi, jise conflicting flag karne ke bajaye de-duplicate kiya gaya.
-
-## Summary of [gaps] Additions (This Pass)
-
-Is pass ne ek formal gap-analysis review se identified teen sections add kiye, jo earlier **[new content]** pass se distinguish karne ke liye **[gaps]** tagged hain:
-
-1. **NgRx Entity Adapters, Facade Pattern, aur Selector Memoization** (State Management mein, SignalStore/NgRx Signals ke baad inserted) — original NgRx coverage surface-level Store/Actions/Reducers/Effects/Selectors building blocks par hi ruk gaya tha. Yeh teen real gaps close karta hai: `@ngrx/entity` ka `EntityAdapter` (normalized CRUD state + generated `selectAll`/`selectEntities` selectors, jo scale par O(1) lookups vs. array scans ke liye matter karta hai), facade pattern (components ko Store internals se decoupled rakhne ka NgRx-recommended tareeka, jo component unit tests ko bhi dramatically simpler banata hai), aur `createSelector` memoization ke peeche ki actual reference-equality mechanics — jisme ek single-slot cache ka real-world gotcha bhi included hai jo parameterized selectors se thrashed ho jaata hai ya unnecessary naye references banane wale reducers se defeated ho jaata hai.
-2. **Micro-Frontends / Module Federation for Angular** (Advanced mein, DI Hierarchical Injectors deep dive ke baad inserted) — ek lead-level system-design topic jo pehle entirely absent tha. Webpack Module Federation mechanics, `@angular-architects/module-federation` schematic jo Angular teams actually use karti hain, shared-singleton dependency negotiation risk, aur — jo framing interviewers actually chahte hain — kab yeh complexity justified hai (teams ke across independent deployment cadence) versus kab enforced library boundaries wala ek Nx monorepo same organizational problem ko kaafi zyada cheaply solve kar deta hai, covers karta hai.
-3. **Accessibility (a11y): ARIA, CDK a11y Module, Focus Management** (SSR, PWA & Cross-Cutting mein, Angular Security ke baad inserted) — kaafi enterprise projects par ek hard compliance requirement hone ke bawajood a11y ki prior guide mein zero coverage thi. Custom widgets par ARIA roles/states/roving-tabindex, Angular CDK ke `FocusTrap`/`LiveAnnouncer`/`FocusMonitor` primitives, aur modals/dynamic content ke liye full three-step focus-management sequence (trigger focus capture karo → focus trap aur move in karo → close par focus restore karo) jise zyadatar home-grown implementations galat karte hain, covers karta hai.
-
-Teeno ko is candidate ke hands-on Angular 4/7 experience ke relative forward-looking/conceptual mark kiya gaya hai jahan relevant ho (particularly Module Federation), version-sensitive content ke liye guide ke baaki hisse mein use ki gayi honest framing ke consistent.
 
 ## Quick "Most Frequently Asked" Cheat List
 
@@ -2428,20 +1771,18 @@ Agar time kam hai, yeh woh concepts hain jo almost har senior/lead Angular inter
 
 6. **Typed Reactive Forms** (v14) aur jo type-safety gap yeh close karta hai — v7 mein `FormGroup`/`FormControl` untyped the (`form.value` `any` type ka hota tha), isliye `form.get('emial')` (typo) silently `null` return karta tha compile error ke bajaye. v14 se `FormGroup`/`FormControl` generics ke saath properly typed hain, isliye typo'd control names ab compile-time par fail hote hain. **Interview mein poochne ka common tareeka:** "Typed forms se pehle kya problem thi aur kaise fix hui?" — answer: runtime `null`/`undefined` bugs jo silently through nikal jaate the, ab compiler catch karta hai. Dekho [[new content] Typed Reactive Forms](#new-content-typed-reactive-forms-angular-14).
 
-7. **`@defer` / deferrable views** (v17) aur **incremental hydration** (v19) — `@defer` template-region-level lazy loading enable karta hai (route-level se aage), triggers jaise `on viewport`/`on interaction`/`on idle` ke saath. Incremental hydration isi `@defer` syntax ko SSR ke saath combine karta hai — server-rendered sections tab tak inert/"grayscale" rehte hain jab tak unka trigger fire na ho, taaki poori app ek saath hydrate hone ke bajaye sirf zaroori parts pehle interactive hon. **Interview mein poochne ka common tareeka:** "Ek heavy, below-the-fold widget wale page ko kaise optimize karoge?" — answer: `@defer (hydrate on viewport)` exactly is use-case ke liye hai. Dekho [[new content] Deferrable Views: @defer](#new-content-deferrable-views-defer-angular-17) aur [[new content] Hydration aur Event Replay](#new-content-hydration-angular-16-aur-event-replay-angular-17).
-
-8. **Functional interceptors/guards** aur **`inject()` function** (v14–15) — class-based `HttpInterceptor` (+ `HTTP_INTERCEPTORS`/`multi: true` boilerplate) aur class-based `CanActivate` guards ko simple functions se replace karta hai (`HttpInterceptorFn` + `withInterceptors()`, `CanActivateFn`), jo `inject()` use karke dependencies grab karte hain constructor ke bina. Yeh standalone apps mein idiomatic DI style hai. **Interview mein poochne ka common tareeka:** "`inject()` kab fail hota hai?" — answer: jab ek injection context ke bahar call kiya jaaye (e.g., ek `setTimeout` callback ke andar) — runtime error throw hota hai; dependencies ko function ke top par pehle se capture karna hota hai ya `runInInjectionContext()` use karna padta hai. Dekho [[new content] The inject() Function](#new-content-the-inject-function-angular-14), [[new content] Functional Interceptors](#new-content-functional-interceptors-angular-15), aur [Route Guards](#route-guards).
+7. **Functional interceptors/guards** aur **`inject()` function** (v14–15) — class-based `HttpInterceptor` (+ `HTTP_INTERCEPTORS`/`multi: true` boilerplate) aur class-based `CanActivate` guards ko simple functions se replace karta hai (`HttpInterceptorFn` + `withInterceptors()`, `CanActivateFn`), jo `inject()` use karke dependencies grab karte hain constructor ke bina. Yeh standalone apps mein idiomatic DI style hai. **Interview mein poochne ka common tareeka:** "`inject()` kab fail hota hai?" — answer: jab ek injection context ke bahar call kiya jaaye (e.g., ek `setTimeout` callback ke andar) — runtime error throw hota hai; dependencies ko function ke top par pehle se capture karna hota hai ya `runInInjectionContext()` use karna padta hai. Dekho [[new content] The inject() Function](#new-content-the-inject-function-angular-14), [[new content] Functional Interceptors](#new-content-functional-interceptors-angular-15), aur [Route Guards](#route-guards).
 
 ---
 
 ## Practice App: One Project, Every Concept Above
 
-Neeche ek single, coherent Angular 19 practice project hai — ek suggested file tree ke saath — jisme upar wale saare 8 cheat-list topics (aur unke andar mention hui har sub-concept) real, runnable code ke through cover hoti hai. Har topic ka apna folder/component hai taaki aap ek waqt mein ek concept practice kar sako.
+Neeche ek single, coherent Angular 19 practice project hai — ek suggested file tree ke saath — jisme upar wale saare 7 cheat-list topics (aur unke andar mention hui har sub-concept) real, runnable code ke through cover hoti hai. Har topic ka apna folder/component hai taaki aap ek waqt mein ek concept practice kar sako.
 
 **Setup (once):**
 ```bash
 npm install -g @angular/cli@19
-ng new interview-practice-app --standalone --routing --style=scss --ssr
+ng new interview-practice-app --standalone --routing --style=scss
 cd interview-practice-app
 ```
 
@@ -2451,14 +1792,12 @@ src/
   main.ts
   app/
     app.config.ts
-    app.config.server.ts
     app.routes.ts
-    app.routes.server.ts
     app.ts                          # root standalone component
     core/
       auth.service.ts                # used by guards + interceptor
-      auth.interceptor.ts            # topic 8
-      auth.guard.ts                  # topic 8
+      auth.interceptor.ts            # topic 7
+      auth.guard.ts                  # topic 7
     practice/
       ivy-debug/ivy-debug.ts         # topic 1
       standalone-demo/standalone-demo.ts   # topic 2
@@ -2466,7 +1805,6 @@ src/
       control-flow-lab/control-flow-lab.ts # topic 4
       zoneless-counter/zoneless-counter.ts # topic 5
       typed-form/typed-form.ts       # topic 6
-      defer-hydration/defer-hydration.ts   # topic 7
 ```
 
 ### 1. Ivy vs View Engine — practice code
@@ -2810,82 +2148,7 @@ export class TypedFormComponent {
 import { inject } from '@angular/core';
 ```
 
-### 7. `@defer` / Deferrable Views + Incremental Hydration — practice code
-
-```typescript
-// src/app/practice/defer-hydration/defer-hydration.ts
-import { Component } from '@angular/core';
-
-@Component({
-  selector: 'app-defer-hydration',
-  standalone: true,
-  template: `
-    <h2>Above the fold — loads immediately</h2>
-
-    <!-- viewport trigger: loads when scrolled into view -->
-    @defer (on viewport; prefetch on idle) {
-      <heavy-recommendations-widget />
-    } @placeholder (minimum 200ms) {
-      <div class="skeleton">Recommendations loading soon…</div>
-    } @loading (after 100ms; minimum 1s) {
-      <div>Fetching recommendations…</div>
-    } @error {
-      <div>Could not load recommendations.</div>
-    }
-
-    <!-- interaction trigger: loads on click/keydown -->
-    @defer (on interaction(loadCommentsBtn)) {
-      <comments-section />
-    } @placeholder {
-      <button #loadCommentsBtn>Show comments</button>
-    }
-
-    <!-- idle + timer combined triggers -->
-    @defer (on idle; on timer(5s)) {
-      <chat-widget />
-    }
-  `,
-})
-export class DeferHydrationComponent {}
-```
-
-```typescript
-// src/app/app.config.ts — incremental hydration (v19)
-import { provideClientHydration, withIncrementalHydration } from '@angular/platform-browser';
-
-export const appConfig: ApplicationConfig = {
-  providers: [
-    provideClientHydration(withIncrementalHydration()), // [version 19 upgrade]
-  ],
-};
-```
-
-```html
-<!-- add 'hydrate' to any @defer trigger to control hydration, independent of rendering -->
-@defer (hydrate on viewport) {
-  <product-recommendations />
-} @placeholder {
-  <div class="skeleton"></div>
-}
-
-<!-- static content that should never hydrate -->
-@defer (hydrate never) {
-  <static-terms-of-service-block />
-}
-```
-
-```typescript
-// src/app/app.routes.server.ts — route-level render mode (v19)
-import { RenderMode, ServerRoute } from '@angular/ssr';
-
-export const serverRouteConfig: ServerRoute[] = [
-  { path: 'dashboard', renderMode: RenderMode.Client },       // pure CSR
-  { path: 'product/:id', renderMode: RenderMode.Server },      // SSR per request
-  { path: '**', renderMode: RenderMode.Prerender },            // static prerender
-];
-```
-
-### 8. Functional Interceptors/Guards + `inject()` — practice code
+### 7. Functional Interceptors/Guards + `inject()` — practice code
 
 ```typescript
 // src/app/core/auth.service.ts
@@ -2948,7 +2211,7 @@ import { authInterceptor } from './core/auth.interceptor';
 export const appConfig: ApplicationConfig = {
   providers: [
     provideHttpClient(withInterceptors([authInterceptor])),
-    // ...provideRouter, provideExperimentalZonelessChangeDetection, provideClientHydration, etc.
+    // ...provideRouter, provideExperimentalZonelessChangeDetection, etc.
   ],
 };
 ```
@@ -2964,12 +2227,975 @@ export const routes: Routes = [
     canActivate: [authGuard],
     loadComponent: () => import('./practice/signals-lab/signals-lab').then((m) => m.SignalsLabComponent),
   },
-  {
-    path: 'defer-demo',
-    loadComponent: () =>
-      import('./practice/defer-hydration/defer-hydration').then((m) => m.DeferHydrationComponent),
-  },
 ];
 ```
 
-**Running it:** wire each practice component into `app.routes.ts` behind its own path (`/ivy`, `/standalone`, `/signals`, `/control-flow`, `/zoneless`, `/form`, `/defer`), run `ng serve`, and click through each route while watching the console/Angular DevTools — that single run touches every concept listed in the cheat list above, end to end.
+**Running it:** wire each practice component into `app.routes.ts` behind its own path (`/ivy`, `/standalone`, `/signals`, `/control-flow`, `/zoneless`, `/form`), run `ng serve`, and click through each route while watching the console/Angular DevTools — that single run touches every concept listed in the cheat list above, end to end.
+
+---
+
+## Practice App (continued): Core Decorators, Data Binding, Structural APIs, Services & the Pipe Anti-Pattern Fix
+
+Yeh section upar wale practice app ko extend karta hai — is doc mein mention hui baaki saari cheezein cover karta hai jo pehle practice code mein nahi thi: saare core decorators, teeno data-binding types, `ng-container`/`ng-template`/`ng-content`, services, aur `inject()` ka ek standalone example, plus wo **pipe-filtering anti-pattern ka actual fix** (jo Pipes section mein discuss hua tha) code ke saath.
+
+**New files to add to the same project:**
+```
+src/app/
+  practice/
+    decorators-lab/
+      highlight.directive.ts        # @Directive, @HostBinding, @HostListener
+      reverse.pipe.ts                # @Pipe (pure)
+      product-filter.pipe.ts         # @Pipe (the "wrong way" — impure filtering)
+      decorators-lab.ts              # @Component using @Input/@Output/@ViewChild/@ContentChild
+    binding-lab/binding-lab.ts       # property/event/two-way binding + ng-container/ng-template/ng-content
+    legacy-ngmodule-demo/
+      legacy.module.ts               # @NgModule — kept only for interview comparison
+      legacy.component.ts
+  core/
+    data.service.ts                  # @Injectable + inject()
+    product-filter-fix.ts            # component-based & signal-based fix for the pipe anti-pattern
+```
+
+### `@Directive`, `@HostBinding`, `@HostListener` — practice code
+
+```typescript
+// src/app/practice/decorators-lab/highlight.directive.ts
+import { Directive, HostBinding, HostListener, input } from '@angular/core';
+
+@Directive({
+  selector: '[appHighlight]',
+  standalone: true,
+})
+export class HighlightDirective {
+  color = input('yellow', { alias: 'appHighlight' });
+
+  @HostBinding('style.backgroundColor') background = 'transparent';
+  @HostBinding('class.highlighted') isHighlighted = false;
+
+  @HostListener('mouseenter')
+  onMouseEnter() {
+    this.background = this.color();
+    this.isHighlighted = true;
+  }
+
+  @HostListener('mouseleave')
+  onMouseLeave() {
+    this.background = 'transparent';
+    this.isHighlighted = false;
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscape() {
+    console.log('Esc pressed anywhere in the document — @HostListener can bind to document/window too');
+  }
+}
+```
+
+### `@Pipe` — practice code (pure custom pipe + the "wrong way" impure filter pipe)
+
+```typescript
+// src/app/practice/decorators-lab/reverse.pipe.ts
+import { Pipe, PipeTransform } from '@angular/core';
+
+@Pipe({ name: 'reverse', standalone: true, pure: true }) // pure — default, preferred
+export class ReversePipe implements PipeTransform {
+  transform(value: string): string {
+    return value.split('').reverse().join('');
+  }
+}
+```
+
+```typescript
+// src/app/practice/decorators-lab/product-filter.pipe.ts
+// ⚠️ THE ANTI-PATTERN, kept here ONLY so you can see + explain why it's wrong in an interview.
+import { Pipe, PipeTransform } from '@angular/core';
+
+@Pipe({ name: 'productFilter', standalone: true, pure: false }) // impure — runs every CD cycle!
+export class ProductFilterPipe implements PipeTransform {
+  transform(products: { name: string }[], term: string) {
+    console.log('ProductFilterPipe recomputing...'); // watch this spam the console on every keystroke/tick
+    return products.filter((p) => p.name.toLowerCase().includes(term.toLowerCase()));
+  }
+}
+```
+```html
+<!-- the problem, live: -->
+<input [(ngModel)]="term" />
+<li *ngFor="let p of products | productFilter:term">{{ p.name }}</li>
+<!-- open devtools console: filtering re-runs on EVERY change detection tick, not just when 'term' changes -->
+```
+
+### `@NgModule` — practice code (kept only for legacy/interview comparison)
+
+```typescript
+// src/app/practice/legacy-ngmodule-demo/legacy.component.ts
+import { Component } from '@angular/core';
+
+@Component({ selector: 'app-legacy', template: `<p>I'm declared via NgModule, not standalone.</p>` })
+export class LegacyComponent {}
+```
+
+```typescript
+// src/app/practice/legacy-ngmodule-demo/legacy.module.ts
+import { NgModule } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { LegacyComponent } from './legacy.component';
+
+@NgModule({
+  declarations: [LegacyComponent],   // NgModule-only components MUST be non-standalone
+  imports: [CommonModule],
+  exports: [LegacyComponent],
+})
+export class LegacyModule {}
+```
+```typescript
+// consuming an NgModule from a standalone component (interop, for migration scenarios):
+@Component({
+  standalone: true,
+  imports: [LegacyModule], // standalone components CAN import NgModules
+  template: `<app-legacy />`,
+})
+export class HostComponent {}
+```
+
+### `@Injectable` + Services + `inject()` — practice code
+
+```typescript
+// src/app/core/data.service.ts
+import { Injectable, signal } from '@angular/core';
+
+@Injectable({ providedIn: 'root' }) // tree-shakable singleton, no NgModule providers array needed
+export class DataService {
+  private products = signal([
+    { id: 1, name: 'Keyboard' },
+    { id: 2, name: 'Mouse' },
+    { id: 3, name: 'Monitor' },
+  ]);
+
+  getProducts() {
+    return this.products.asReadonly();
+  }
+}
+```
+
+```typescript
+// inject() used as a field initializer — the idiomatic standalone-era style,
+// vs. constructor(private dataService: DataService) the old (still valid) way
+import { Component, inject } from '@angular/core';
+import { DataService } from '../../core/data.service';
+
+@Component({
+  selector: 'app-inject-demo',
+  standalone: true,
+  template: `<p>Products loaded: {{ products().length }}</p>`,
+})
+export class InjectDemoComponent {
+  private dataService = inject(DataService); // no constructor needed at all
+  products = this.dataService.getProducts();
+}
+```
+
+### `@Input`, `@Output`, `@ViewChild`, `@ContentChild` — practice code (decorator style, for contrast with the signal-based `input()`/`output()`/`viewChild()` shown earlier)
+
+```typescript
+// src/app/practice/decorators-lab/decorators-lab.ts
+import {
+  Component, Input, Output, EventEmitter,
+  ViewChild, ContentChild, ElementRef, TemplateRef, AfterViewInit, AfterContentInit,
+} from '@angular/core';
+
+@Component({
+  selector: 'app-child-card',
+  standalone: true,
+  template: `
+    <div #cardRoot class="card">
+      <h3>{{ title }}</h3>
+      <ng-content></ng-content>  <!-- see ng-content section below -->
+      <button (click)="dismiss()">Dismiss</button>
+    </div>
+  `,
+})
+export class ChildCardComponent implements AfterViewInit, AfterContentInit {
+  @Input() title = 'Untitled';                          // decorator-style input
+  @Output() dismissed = new EventEmitter<string>();      // decorator-style output
+
+  @ViewChild('cardRoot') cardRoot!: ElementRef<HTMLDivElement>;   // query inside THIS component's own template
+  @ContentChild(TemplateRef) projectedTemplate?: TemplateRef<unknown>; // query inside <ng-content>-projected content
+
+  ngAfterViewInit() {
+    console.log('View child element:', this.cardRoot.nativeElement);
+  }
+  ngAfterContentInit() {
+    console.log('Projected content template found?', !!this.projectedTemplate);
+  }
+
+  dismiss() {
+    this.dismissed.emit(this.title); // parent listens with (dismissed)="..."
+  }
+}
+```
+
+### Data Binding — property binding, event binding, two-way binding, plus `ng-container` / `ng-template` / `ng-content` — practice code
+
+```typescript
+// src/app/practice/binding-lab/binding-lab.ts
+import { Component, signal } from '@angular/core';
+import { ChildCardComponent } from '../decorators-lab/decorators-lab';
+import { FormsModule } from '@angular/forms';
+
+@Component({
+  selector: 'app-binding-lab',
+  standalone: true,
+  imports: [ChildCardComponent, FormsModule],
+  template: `
+    <!-- 1. PROPERTY BINDING: component/DOM property <- component class -->
+    <img [src]="logoUrl" [alt]="logoAlt" [class.disabled]="isDisabled" [style.opacity]="opacity" />
+
+    <!-- 2. EVENT BINDING: DOM event -> component class -->
+    <button (click)="increment()">Clicked {{ clickCount() }} times</button>
+
+    <!-- 3. TWO-WAY BINDING: banana-in-a-box, sugar for [value]+(valueChange) or ngModel -->
+    <input [(ngModel)]="username" placeholder="Two-way bound" />
+    <p>Hello, {{ username() }}</p>
+
+    <!-- custom two-way binding on a child component, using @Input()/@Output() convention name+nameChange -->
+    <app-child-card
+      [title]="cardTitle"
+      (dismissed)="onCardDismissed($event)">
+      <!-- ng-content: this projected markup renders wherever <ng-content> sits inside ChildCardComponent -->
+      <p>This paragraph is <b>projected</b> into the child via ng-content.</p>
+      <ng-template>
+        <p>This is a TemplateRef — only rendered if explicitly used via ngTemplateOutlet or a structural directive.</p>
+      </ng-template>
+    </app-child-card>
+
+    <!-- NG-CONTAINER: a grouping element that renders NOTHING to the DOM — useful to apply
+         a structural directive without adding an extra <div> wrapper -->
+    @if (showExtras()) {
+      <ng-container>
+        <p>Extra info line 1</p>
+        <p>Extra info line 2</p>
+      </ng-container>
+    }
+    <!-- pre-v17 equivalent for reference: <ng-container *ngIf="showExtras()">...</ng-container> -->
+
+    <!-- NG-TEMPLATE + ngTemplateOutlet: define a reusable chunk of markup, render it on demand -->
+    <ng-template #successTpl let-name="name">
+      <p>✅ Welcome, {{ name }}!</p>
+    </ng-template>
+    <ng-container *ngTemplateOutlet="successTpl; context: { name: username() }"></ng-container>
+  `,
+})
+export class BindingLabComponent {
+  logoUrl = '/assets/logo.png';
+  logoAlt = 'App logo';
+  isDisabled = false;
+  opacity = 1;
+
+  clickCount = signal(0);
+  increment() { this.clickCount.update((c) => c + 1); }
+
+  username = signal('');
+  cardTitle = 'A card built with @Input/@Output';
+  showExtras = signal(true);
+
+  onCardDismissed(title: string) {
+    console.log('Dismissed:', title);
+  }
+}
+```
+> Note: `[(ngModel)]` needs `FormsModule` imported (shown above); it's unrelated to the Typed Reactive Forms example from topic 6, which uses `ReactiveFormsModule` instead — good interview trivia in itself (template-driven vs. reactive forms module).
+
+### Fixing the Impure-Pipe Filtering Anti-Pattern — practice code (the actual "how to implement" fix)
+
+Doc mein jo trap discuss hua tha uska fix — dono correct approaches, side by side, using the same `DataService` products list:
+
+```typescript
+// src/app/core/product-filter-fix.ts
+import { Component, inject, signal, computed } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { DataService } from './data.service';
+
+@Component({
+  selector: 'app-product-filter-fix',
+  standalone: true,
+  imports: [FormsModule],
+  template: `
+    <h3>❌ Wrong way (recap): {{ '{{ products | productFilter:term }}' }} — impure pipe, recomputes every CD tick</h3>
+
+    <h3>✅ Fix option A — component-method filtering (recompute into a NEW array, on demand)</h3>
+    <input [(ngModel)]="termA" (ngModelChange)="onTermAChange()" />
+    <ul>
+      @for (p of filteredA(); track p.id) { <li>{{ p.name }}</li> }
+    </ul>
+
+    <h3>✅ Fix option B — Signals-based derived state (computed() recalculates ONLY when its dependencies change)</h3>
+    <input [(ngModel)]="termB" />
+    <ul>
+      @for (p of filteredB(); track p.id) { <li>{{ p.name }}</li> }
+    </ul>
+  `,
+})
+export class ProductFilterFixComponent {
+  private dataService = inject(DataService);
+  private allProducts = this.dataService.getProducts();
+
+  // --- Option A: plain component state + a method called only when the input actually changes ---
+  termA = '';
+  filteredA = signal(this.allProducts());
+  onTermAChange() {
+    // recompute explicitly, only on the (debounced, if you add that) input event — not on every CD cycle
+    const term = this.termA.toLowerCase();
+    this.filteredA.set(this.allProducts().filter((p) => p.name.toLowerCase().includes(term)));
+  }
+
+  // --- Option B: fully Signals-based — computed() automatically re-runs ONLY when termB or allProducts change ---
+  termB = signal('');
+  filteredB = computed(() =>
+    this.allProducts().filter((p) => p.name.toLowerCase().includes(this.termB().toLowerCase())),
+  );
+}
+```
+- **Option A** matches the doc's "filtering ko component mein karo" fix — explicit, on-demand recompute into a new array, triggered by an event rather than every change-detection pass.
+- **Option B** matches "instead RxJS/Signals-based derived state use karo" — `computed()` is inherently memoized and only reruns when `termB` or `allProducts` actually change, giving you the same laziness a pure pipe has, without pipe boilerplate.
+- **Interview answer, restated with this code in hand:** "I'd never filter/sort in a template pipe unless it's pure and the input is a new array reference on each real change — otherwise I lift the derived list into the component as a `computed()` signal (or a plain method triggered by the actual input event), so it only recomputes when the underlying data truly changes."
+
+## Practice App (continued 3): Lifecycle, Queries, Routing, Guards, Forms, HttpClient, Interceptors & RxJS
+
+Same project, more files. Yeh section doc mein baaki bache hue core topics cover karta hai — lifecycle hooks, both decorator-style aur Signal-style queries side-by-side, poora Routing/Guards/Lazy-loading, Template-driven vs Reactive forms, `HttpClient`, cookie-based auth interceptor, aur RxJS Subjects/operators including the four "map" family operators.
+
+```
+src/app/
+  practice/
+    lifecycle-lab/lifecycle-lab.component.ts
+    query-lab/
+      child-item.component.ts
+      query-lab.component.ts            # @ViewChild(ren)/@ContentChild(ren) + viewChild()/viewChildren()/contentChild()/contentChildren()
+    comms-lab/
+      cart.service.ts                    # Subject vs BehaviorSubject sibling-communication demo
+      sender.component.ts
+      receiver.component.ts
+  features/
+    products/
+      products.routes.ts                 # lazy-loaded feature routes
+      product-list.component.ts
+      product-detail.component.ts        # route params + query params
+  core/
+    guards/
+      auth.guard.legacy.ts               # class-based CanActivate
+      auth.guard.ts                      # functional CanActivateFn
+    forms/
+      signup-template.component.ts       # template-driven form
+      signup-reactive.component.ts       # reactive form: FormGroup/FormControl/FormBuilder/FormArray
+    http/
+      product-api.service.ts             # headers, params, payload
+      auth-cookie.interceptor.ts         # HttpOnly-cookie-aware interceptor
+    rxjs/
+      subjects-demo.component.ts
+      search-operators.component.ts      # switchMap vs mergeMap vs concatMap vs exhaustMap
+app.routes.ts
+```
+
+### Component Lifecycle Hooks — practice code
+
+```typescript
+// src/app/practice/lifecycle-lab/lifecycle-lab.component.ts
+import { Component, Input, OnChanges, OnInit, DoCheck, AfterContentInit,
+         AfterContentChecked, AfterViewInit, AfterViewChecked, OnDestroy,
+         SimpleChanges, ContentChild, ViewChild, ElementRef } from '@angular/core';
+
+@Component({
+  selector: 'app-lifecycle-lab',
+  standalone: true,
+  template: `
+    <div #box>Box</div>
+    <ng-content></ng-content>
+  `,
+})
+export class LifecycleLabComponent
+  implements OnChanges, OnInit, DoCheck, AfterContentInit, AfterContentChecked,
+             AfterViewInit, AfterViewChecked, OnDestroy {
+
+  @Input() label = '';
+  @ViewChild('box') box!: ElementRef;
+  @ContentChild('projected') projected?: ElementRef;
+
+  // 1. Fires BEFORE ngOnInit, and again every time a bound @Input reference changes.
+  //    NOT called if the component has zero @Input()s.
+  ngOnChanges(changes: SimpleChanges) {
+    console.log('1. ngOnChanges', changes);
+  }
+
+  // 2. Fires ONCE, after the first ngOnChanges, after Angular has set all inputs.
+  //    This is where you'd kick off an initial API call.
+  ngOnInit() {
+    console.log('2. ngOnInit');
+  }
+
+  // 3. Fires on EVERY change-detection run (very hot path — keep this cheap or empty).
+  //    Use for custom dirty-checking Angular's own binding comparison would miss
+  //    (e.g. mutating an object/array in place without a new reference).
+  ngDoCheck() {
+    console.log('3. ngDoCheck');
+  }
+
+  // 4. Fires ONCE, after Angular projects external content into this component via <ng-content>.
+  ngAfterContentInit() {
+    console.log('4. ngAfterContentInit — this.projected =', this.projected);
+  }
+
+  // 5. Fires after EVERY check of projected content (again, hot path).
+  ngAfterContentChecked() {
+    console.log('5. ngAfterContentChecked');
+  }
+
+  // 6. Fires ONCE, after this component's own view (and child views) have been fully initialized.
+  //    This is the earliest safe point to read @ViewChild refs.
+  ngAfterViewInit() {
+    console.log('6. ngAfterViewInit — this.box =', this.box.nativeElement);
+  }
+
+  // 7. Fires after EVERY check of this component's view and child views.
+  ngAfterViewChecked() {
+    console.log('7. ngAfterViewChecked');
+  }
+
+  // 8. Fires right before Angular destroys the component — unsubscribe, clear intervals/timeouts,
+  //    detach event listeners, complete Subjects here.
+  ngOnDestroy() {
+    console.log('8. ngOnDestroy');
+  }
+}
+```
+**Firing order (memorize this for interviews):** `constructor → ngOnChanges → ngOnInit → ngDoCheck → ngAfterContentInit → ngAfterContentChecked → ngAfterViewInit → ngAfterViewChecked → (ngDoCheck/ngAfterContentChecked/ngAfterViewChecked repeat every CD cycle) → ngOnDestroy`.
+- **[version 19 upgrade] Signals angle:** `effect()` partially overlaps with `ngOnChanges`/`ngDoCheck` for *reacting to input changes* — an `effect(() => console.log(this.someInput()))` re-runs automatically whenever a signal input changes, without you needing `ngOnChanges` + manual `SimpleChanges` inspection at all. Lifecycle hooks are still needed for DOM-timing concerns (`ngAfterViewInit` for `@ViewChild` access) that `effect()` doesn't replace.
+- **Interview trap:** "Can you read `@ViewChild` inside `ngOnInit`?" — No (reliably) — the view isn't initialized yet; you must wait for `ngAfterViewInit`. (Signal-based `viewChild()` — see next section — actually relaxes this, since it returns a Signal you can safely read anywhere; it's just `undefined` until the view exists.)
+
+### `@ViewChild`/`@ViewChildren` + `@ContentChild`/`@ContentChildren` — both decorator and Signal styles
+
+```typescript
+// src/app/practice/query-lab/child-item.component.ts
+import { Component, Input } from '@angular/core';
+
+@Component({
+  selector: 'app-child-item',
+  standalone: true,
+  template: `<li>{{ text }}</li>`,
+})
+export class ChildItemComponent {
+  @Input() text = '';
+  flash() { console.log(`flashing: ${this.text}`); }
+}
+```
+
+```typescript
+// src/app/practice/query-lab/query-lab.component.ts
+import { Component, AfterViewInit, ViewChild, ViewChildren, ContentChild, ContentChildren,
+         QueryList, ElementRef, viewChild, viewChildren, contentChild, contentChildren } from '@angular/core';
+import { ChildItemComponent } from './child-item.component';
+
+@Component({
+  selector: 'app-query-lab',
+  standalone: true,
+  imports: [ChildItemComponent],
+  template: `
+    <input #searchBox />
+    @for (item of items; track item) {
+      <app-child-item [text]="item" />
+    }
+    <ng-content></ng-content>
+  `,
+})
+export class QueryLabComponent implements AfterViewInit {
+
+  // ---------- Decorator-style (v7-style, still fully supported) ----------
+  @ViewChild('searchBox') searchBoxDecorator!: ElementRef<HTMLInputElement>;
+  @ViewChild(ChildItemComponent) firstChildDecorator!: ChildItemComponent;   // single match
+  @ViewChildren(ChildItemComponent) allChildrenDecorator!: QueryList<ChildItemComponent>; // live list
+
+  @ContentChild('projected') projectedDecorator?: ElementRef;               // single projected node
+  @ContentChildren('projectedItem') projectedItemsDecorator!: QueryList<ElementRef>; // all projected matches
+
+  items = ['Alpha', 'Beta', 'Gamma'];
+
+  ngAfterViewInit() {
+    // Decorator refs are only safe to read from here onward.
+    console.log(this.searchBoxDecorator.nativeElement);
+    console.log(this.allChildrenDecorator.length);
+    // QueryList emits `.changes` (an Observable) whenever the matched elements change (e.g. after *ngFor updates).
+    this.allChildrenDecorator.changes.subscribe(list => console.log('children changed', list));
+  }
+
+  // ---------- [version 19 upgrade] Signal-based equivalents ----------
+  // Available anywhere as functions — no ngAfterViewInit wait needed; they just resolve to
+  // `undefined` (or an empty array) until the view/content actually exists.
+  searchBoxSignal = viewChild<ElementRef<HTMLInputElement>>('searchBox');
+  firstChildSignal = viewChild(ChildItemComponent);
+  allChildrenSignal = viewChildren(ChildItemComponent);          // Signal<readonly ChildItemComponent[]>
+
+  projectedSignal = contentChild<ElementRef>('projected');
+  projectedItemsSignal = contentChildren<ElementRef>('projectedItem');
+
+  // required variant throws a clear error instead of silently being undefined if the target is missing:
+  requiredSearchBox = viewChild.required<ElementRef<HTMLInputElement>>('searchBox');
+
+  logSignalQueries() {
+    console.log(this.searchBoxSignal()?.nativeElement);   // call it like a function
+    console.log(this.allChildrenSignal().length);          // plain array, not QueryList — use signal effects/computed instead of .changes
+  }
+}
+```
+| | Decorator style | Signal style (v17.3+, stable v19) |
+|---|---|---|
+| Read timing | Only safe after `ngAfterViewInit`/`ngAfterContentInit` | Safe to call anywhere; just returns `undefined` early |
+| Reacting to changes | `QueryList.changes` Observable, manual `.subscribe()` | Wrap in `computed()`/`effect()` — reactivity is automatic |
+| Multiple matches | `@ViewChildren`/`@ContentChildren` → `QueryList<T>` | `viewChildren()`/`contentChildren()` → `Signal<readonly T[]>` |
+| Required-and-must-exist | Not built in — manual null checks | `viewChild.required(...)` throws if missing |
+
+### Input/Output/Subject Behaviour — service-mediated sibling communication
+
+```typescript
+// src/app/practice/comms-lab/cart.service.ts
+import { Injectable } from '@angular/core';
+import { Subject, BehaviorSubject } from 'rxjs';
+
+@Injectable({ providedIn: 'root' })
+export class CartService {
+  // Subject — NO current value; late subscribers get NOTHING until the next emission.
+  private itemAddedSource = new Subject<string>();
+  itemAdded$ = this.itemAddedSource.asObservable();
+
+  // BehaviorSubject — ALWAYS has a current value; late subscribers immediately get the last one.
+  private cartCountSource = new BehaviorSubject<number>(0);
+  cartCount$ = this.cartCountSource.asObservable();
+
+  addItem(name: string) {
+    this.itemAddedSource.next(name);                       // "toast" style, fire-and-forget event
+    this.cartCountSource.next(this.cartCountSource.value + 1); // running total, always readable
+  }
+}
+```
+```typescript
+// sender.component.ts (any component that calls addItem)
+constructor(private cart: CartService) {}
+add() { this.cart.addItem('Wireless Mouse'); }
+```
+```typescript
+// receiver.component.ts — a badge component mounted AFTER some items were already added
+constructor(private cart: CartService) {
+  this.cart.cartCount$.subscribe(count => console.log('badge shows:', count)); // gets CURRENT count immediately
+  this.cart.itemAdded$.subscribe(name => console.log('toast:', name));         // only sees FUTURE additions, misses past ones
+}
+```
+- **Interview angle:** "Why would a cart-count badge break if you used a plain `Subject` instead of `BehaviorSubject`?" — because a badge mounted after the count was already updated a few times would show `0`/stale until the *next* emission — `Subject` has no memory of past values, `BehaviorSubject` always replays its last one to new subscribers.
+
+### Routing and Navigation — route params, query params, navigation `state`
+
+```typescript
+// app.routes.ts
+import { Routes } from '@angular/router';
+
+export const routes: Routes = [
+  { path: 'products', loadChildren: () => import('./features/products/products.routes').then(m => m.PRODUCTS_ROUTES) },
+  { path: 'login', loadComponent: () => import('./features/auth/login.component').then(m => m.LoginComponent) },
+];
+```
+```typescript
+// features/products/products.routes.ts — lazy-loaded FEATURE routes (see next section for more on this)
+import { Routes } from '@angular/router';
+import { productDetailResolver } from './product-detail.resolver';
+import { authGuard } from '../../core/guards/auth.guard';
+
+export const PRODUCTS_ROUTES: Routes = [
+  { path: '', loadComponent: () => import('./product-list.component').then(m => m.ProductListComponent) },
+  {
+    path: ':id',                                              // route param
+    loadComponent: () => import('./product-detail.component').then(m => m.ProductDetailComponent),
+    canActivate: [authGuard],
+    resolve: { product: productDetailResolver },
+  },
+];
+```
+```typescript
+// features/products/product-detail.component.ts
+import { Component, OnInit, OnDestroy, inject, input } from '@angular/core';
+import { ActivatedRoute, Router } from '@angular/router';
+import { Subscription } from 'rxjs';
+
+@Component({ selector: 'app-product-detail', standalone: true, template: `Product: {{ id }}` })
+export class ProductDetailComponent implements OnInit, OnDestroy {
+  private route = inject(ActivatedRoute);
+  private router = inject(Router);
+  private sub?: Subscription;
+  id = '';
+
+  // v7-classic way — manual subscribe, MUST unsubscribe in ngOnDestroy or you leak.
+  ngOnInit() {
+    this.sub = this.route.paramMap.subscribe(params => {
+      this.id = params.get('id')!;                            // route param, e.g. /products/42
+    });
+
+    this.route.queryParamMap.subscribe(query => {
+      const sortBy = query.get('sortBy');                      // query param, e.g. ?sortBy=price
+      console.log('sortBy =', sortBy);
+    });
+
+    // reading navigation-time state (data NOT put in the URL — cleared on refresh)
+    const nav = this.router.getCurrentNavigation();             // only available DURING navigation (e.g. a guard/resolver)
+    const historyState = history.state;                          // available any time after navigation completes
+    console.log('nav state:', nav?.extras.state ?? historyState);
+  }
+
+  // [version 19 upgrade] — withComponentInputBinding() (v16+) lets you skip the subscribe entirely:
+  // id = input<string>();  // auto-bound from the route param named `id`, no ActivatedRoute needed
+
+  navigateWithState() {
+    this.router.navigate(['/checkout'], {
+      queryParams: { sortBy: 'price' },
+      state: { fromProductId: this.id },                        // arbitrary data, NOT visible in the URL
+    });
+  }
+
+  ngOnDestroy() {
+    this.sub?.unsubscribe();                                     // mandatory cleanup for the manual-subscribe style
+  }
+}
+```
+```html
+<!-- template-side routing -->
+<a routerLink="/products" routerLinkActive="active">Products</a>
+<a [routerLink]="['/products', product.id]" [queryParams]="{ sortBy: 'price' }">{{ product.name }}</a>
+<router-outlet></router-outlet>
+```
+- **Interview angle:** "`paramMap` vs `snapshot.paramMap`?" — `.subscribe()` reacts to param changes when the SAME component instance is reused across navigations (e.g. `/products/1` → `/products/2` without route re-creation); `.snapshot.paramMap` only reads the value once, at the moment of injection — fine when the component is guaranteed to be destroyed/recreated on every navigation, wrong otherwise (classic bug: navigating between sibling detail pages and the view not updating).
+
+### Route Guards — legacy way and new way
+
+```typescript
+// core/guards/auth.guard.legacy.ts — [v7-era] class-based
+import { Injectable } from '@angular/core';
+import { CanActivate, ActivatedRouteSnapshot, RouterStateSnapshot, Router } from '@angular/router';
+
+@Injectable({ providedIn: 'root' })
+export class AuthGuardLegacy implements CanActivate {
+  constructor(private auth: AuthService, private router: Router) {}   // constructor injection only
+
+  canActivate(route: ActivatedRouteSnapshot, state: RouterStateSnapshot): boolean {
+    if (this.auth.isLoggedIn()) return true;
+    this.router.navigate(['/login'], { queryParams: { returnUrl: state.url } });
+    return false;
+  }
+}
+// registered as: { path: 'dashboard', canActivate: [AuthGuardLegacy], component: DashboardComponent }
+```
+```typescript
+// core/guards/auth.guard.ts — [version 19 upgrade] functional guard, uses inject()
+import { inject } from '@angular/core';
+import { CanActivateFn, Router } from '@angular/router';
+import { AuthService } from '../auth.service';
+
+export const authGuard: CanActivateFn = (route, state) => {
+  const auth = inject(AuthService);      // inject() instead of a constructor — no class needed at all
+  const router = inject(Router);
+
+  if (auth.isLoggedIn()) return true;
+  router.navigate(['/login'], { queryParams: { returnUrl: state.url } });
+  return false;
+};
+// registered as: { path: 'dashboard', canActivate: [authGuard], loadComponent: ... }
+```
+```typescript
+// bonus: the other guard types, functional style — all commonly asked about
+export const canLeaveGuard: CanDeactivateFn<EditFormComponent> = (component) =>
+  component.isDirty() ? confirm('Discard unsaved changes?') : true;
+
+export const productDetailResolver: ResolveFn<Product> = (route) => {
+  const api = inject(ProductApiService);
+  return api.getById(route.paramMap.get('id')!);       // resolved data is available via `route.data.product` / (if bound) a component input
+};
+```
+- **Interview angle:** "Why did Angular move from class guards to function guards?" — a functional guard is a plain function, so no DI-token boilerplate, no `providedIn: 'root'` ceremony, and it composes naturally with `inject()` the same way standalone components do — one consistent DI style across the whole app instead of "classes for guards, functions for everything else."
+
+### Template-Driven vs Reactive Forms
+
+```typescript
+// core/forms/signup-template.component.ts — Template-driven
+import { Component } from '@angular/core';
+import { FormsModule, NgForm } from '@angular/forms';
+
+@Component({
+  selector: 'app-signup-template',
+  standalone: true,
+  imports: [FormsModule],
+  template: `
+    <form #signupForm="ngForm" (ngSubmit)="onSubmit(signupForm)">
+      <input name="email" [(ngModel)]="model.email" required email #email="ngModel" />
+      @if (email.invalid && email.touched) {
+        <span class="error">Enter a valid email</span>
+      }
+      <input name="password" [(ngModel)]="model.password" required minlength="8" />
+      <button [disabled]="signupForm.invalid">Sign up</button>
+    </form>
+  `,
+})
+export class SignupTemplateComponent {
+  model = { email: '', password: '' };
+  onSubmit(form: NgForm) { console.log(form.value, form.valid); }
+}
+```
+```typescript
+// core/forms/signup-reactive.component.ts — Reactive
+import { Component } from '@angular/core';
+import { ReactiveFormsModule, FormBuilder, Validators, FormArray, FormControl } from '@angular/forms';
+
+@Component({
+  selector: 'app-signup-reactive',
+  standalone: true,
+  imports: [ReactiveFormsModule],
+  template: `
+    <form [formGroup]="form" (ngSubmit)="onSubmit()">
+      <input formControlName="email" />
+      @if (form.get('email')?.invalid && form.get('email')?.touched) {
+        <span class="error">Enter a valid email</span>
+      }
+
+      <div formArrayName="phones">
+        @for (phone of phones.controls; track $index; let i = $index) {
+          <input [formControlName]="i" />
+        }
+      </div>
+      <button type="button" (click)="addPhone()">+ Add phone</button>
+
+      <button [disabled]="form.invalid">Sign up</button>
+    </form>
+  `,
+})
+export class SignupReactiveComponent {
+  private fb = inject(FormBuilder);          // inject() again — works in fields, not just constructors
+
+  form = this.fb.group({
+    email: ['', [Validators.required, Validators.email]],
+    password: ['', [Validators.required, Validators.minLength(8)]],
+    phones: this.fb.array([this.fb.control('', Validators.required)]),   // FormArray of FormControls
+  });
+
+  get phones() { return this.form.get('phones') as FormArray; }
+  addPhone() { this.phones.push(new FormControl('', Validators.required)); }
+
+  // custom validator example
+  static passwordsMatch(group: FormGroup) {
+    return group.get('password')?.value === group.get('confirm')?.value ? null : { mismatch: true };
+  }
+
+  onSubmit() { console.log(this.form.value, this.form.valid); }
+}
+```
+| | Template-driven | Reactive |
+|---|---|---|
+| Form model lives in | The template (`ngModel`, directives build it implicitly) | The component class (`FormGroup`/`FormControl`, explicit) |
+| Validation | Template-bound directives (`required`, `minlength`) | Explicit `Validators` array in the class — testable without the DOM |
+| Async/dynamic forms (`FormArray`) | Awkward | Natural fit |
+| Type safety | Weak (`ngModel` is essentially untyped) | **[version 19 upgrade]** Strongly typed since v14 (`FormGroup<{...}>`) |
+| Best for | Simple forms, quick prototypes | Complex, dynamic, or heavily-tested forms |
+- **Interview angle:** "Why prefer Reactive Forms for a large app?" — testability (assert on `form.value`/`form.valid` with zero DOM), type-safety since v14, and easier dynamic field manipulation via `FormArray`, none of which template-driven forms give you cleanly.
+
+### `HttpClient` — headers, params, payload
+
+```typescript
+// core/http/product-api.service.ts
+import { Injectable, inject } from '@angular/core';
+import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
+import { Observable } from 'rxjs';
+
+@Injectable({ providedIn: 'root' })
+export class ProductApiService {
+  private http = inject(HttpClient);
+  private baseUrl = '/api/products';
+
+  // GET with query params + custom headers
+  search(term: string, page: number): Observable<Product[]> {
+    const params = new HttpParams().set('q', term).set('page', page);
+    const headers = new HttpHeaders({ 'X-Client-Version': '19' });
+    return this.http.get<Product[]>(this.baseUrl, { params, headers });
+  }
+
+  // POST with a JSON payload
+  create(product: Partial<Product>): Observable<Product> {
+    return this.http.post<Product>(this.baseUrl, product, {
+      headers: new HttpHeaders({ 'Content-Type': 'application/json' }),
+    });
+  }
+
+  // PUT/PATCH payload + observing the full response (status, headers) instead of just the body
+  updateStock(id: string, stock: number) {
+    return this.http.patch<Product>(`${this.baseUrl}/${id}`, { stock }, { observe: 'response' });
+  }
+
+  delete(id: string) {
+    return this.http.delete<void>(`${this.baseUrl}/${id}`);
+  }
+}
+```
+- **Interview angle:** "How is `HttpParams`/`HttpHeaders` different from just passing a plain object?" — both are **immutable** — `params.set(...)` returns a NEW `HttpParams` instance rather than mutating in place, which matches Angular's general "immutable, new-reference" philosophy (same reason `OnPush`/pure-pipe change detection relies on new references).
+
+### `HttpInterceptor` with an HttpOnly cookie
+
+```typescript
+// core/http/auth-cookie.interceptor.ts — [version 19 upgrade] functional style
+import { HttpInterceptorFn } from '@angular/common/http';
+
+export const authCookieInterceptor: HttpInterceptorFn = (req, next) => {
+  // An HttpOnly cookie is NOT readable/settable from JS (that's the whole point — it protects
+  // the session/JWT from XSS token theft). You can't attach it manually; the browser sends it
+  // automatically PROVIDED the request opts into sending credentials cross-origin:
+  const authReq = req.clone({ withCredentials: true });
+
+  // If the backend uses the "double-submit" CSRF pattern alongside the HttpOnly session cookie,
+  // you DO manually attach a CSRF token read from a *non*-HttpOnly cookie/meta tag:
+  const csrfToken = document.cookie.match(/XSRF-TOKEN=([^;]+)/)?.[1];
+  const finalReq = csrfToken
+    ? authReq.clone({ setHeaders: { 'X-XSRF-TOKEN': csrfToken } })
+    : authReq;
+
+  return next(finalReq);
+};
+```
+```typescript
+// app.config.ts registration
+export const appConfig: ApplicationConfig = {
+  providers: [
+    provideHttpClient(withInterceptors([authCookieInterceptor])),
+  ],
+};
+```
+```typescript
+// [v7-era] the same thing, class-based — for interview contrast
+@Injectable()
+export class AuthCookieInterceptor implements HttpInterceptor {
+  intercept(req: HttpRequest<any>, next: HttpHandler) {
+    return next.handle(req.clone({ withCredentials: true }));
+  }
+}
+// registered via: { provide: HTTP_INTERCEPTORS, useClass: AuthCookieInterceptor, multi: true }
+```
+- **Interview angle:** "Why is an HttpOnly cookie safer than storing a JWT in `localStorage`?" — JS (and therefore an XSS payload) literally cannot read or exfiltrate an HttpOnly cookie's value; `localStorage` has no such protection. The trade-off is you need `withCredentials: true` on every cross-origin request and typically a separate CSRF-token header, since the browser auto-attaching the cookie is also what makes CSRF possible without that extra check.
+
+### RxJS — Observable vs Subject vs BehaviorSubject vs Multicasting, `pipe()` + operators
+
+```typescript
+// core/rxjs/subjects-demo.component.ts
+import { Component, OnInit } from '@angular/core';
+import { Observable, Subject, BehaviorSubject, ReplaySubject, interval, of } from 'rxjs';
+import { map, filter, tap, share, shareReplay, take } from 'rxjs/operators';
+
+@Component({ selector: 'app-subjects-demo', standalone: true, template: `` })
+export class SubjectsDemoComponent implements OnInit {
+
+  ngOnInit() {
+    // ---------- Observable ----------
+    // COLD by default: the producer logic runs SEPARATELY for every subscriber.
+    const cold$: Observable<number> = interval(1000);
+    cold$.subscribe(v => console.log('sub A', v));
+    cold$.subscribe(v => console.log('sub B', v));  // sub B's timer starts fresh from 0, independent of A
+
+    // ---------- Subject ----------
+    // HOT, multicasts to current subscribers, NO memory of past values, NOT itself an Observable
+    // (it's both an Observer AND an Observable — you can .next() into it manually).
+    const subject$ = new Subject<string>();
+    subject$.subscribe(v => console.log('early subscriber:', v));
+    subject$.next('first');                          // early subscriber sees this
+    subject$.subscribe(v => console.log('late subscriber:', v));
+    subject$.next('second');                          // BOTH subscribers see this; late subscriber missed 'first'
+
+    // ---------- BehaviorSubject ----------
+    // HOT + requires an initial value + ALWAYS replays its CURRENT value to new subscribers.
+    const behavior$ = new BehaviorSubject<string>('initial');
+    behavior$.next('updated');
+    behavior$.subscribe(v => console.log('late subscriber gets:', v));  // immediately logs 'updated'
+
+    // ---------- ReplaySubject ----------
+    // HOT + replays the last N values (not just the current one) to new subscribers.
+    const replay$ = new ReplaySubject<string>(2);
+    replay$.next('a'); replay$.next('b'); replay$.next('c');
+    replay$.subscribe(v => console.log('replay subscriber:', v));  // gets 'b' then 'c' — last 2
+
+    // ---------- Multicasting a cold Observable ----------
+    // share()/shareReplay() convert a cold Observable into a hot, multicast one — so an expensive
+    // source (e.g. an HTTP call) runs ONCE and is shared, instead of once per subscriber.
+    const shared$ = cold$.pipe(share());
+    const cachedHttp$ = of('expensive-api-result').pipe(shareReplay(1)); // cache the last emission for late subscribers too
+
+    // ---------- pipe() + common operators ----------
+    cold$.pipe(
+      map(v => v * 2),               // transform each emitted value
+      filter(v => v % 4 === 0),       // drop values that don't match
+      tap(v => console.log('side effect / logging:', v)),  // observe without transforming
+      take(5),                        // auto-unsubscribe after 5 emissions
+    ).subscribe(v => console.log('final:', v));
+  }
+}
+```
+| | Has initial/current value? | Replays past values to late subscribers? | Typical use |
+|---|---|---|---|
+| `Observable` (cold) | N/A | N/A (re-runs per subscriber) | HTTP calls, one-shot data fetches |
+| `Subject` | No | No — misses everything before subscribing | Fire-and-forget events (toasts, button clicks) |
+| `BehaviorSubject` | Yes, required | Replays the current value only | "Current state" (logged-in user, cart count) |
+| `ReplaySubject` | No | Replays last N values | Event history / undo logs |
+- **Interview angle:** "Multicast an Observable that's being HTTP-called by five components at once, without five network requests." — `shareReplay(1)`, exactly as shown above.
+
+### `mergeMap` vs `switchMap` vs `concatMap` vs `exhaustMap`
+
+```typescript
+// core/rxjs/search-operators.component.ts
+import { Component, inject } from '@angular/core';
+import { FormControl, ReactiveFormsModule } from '@angular/forms';
+import { HttpClient } from '@angular/common/http';
+import { debounceTime, distinctUntilChanged, switchMap, mergeMap, concatMap, exhaustMap } from 'rxjs/operators';
+
+@Component({
+  selector: 'app-search-operators',
+  standalone: true,
+  imports: [ReactiveFormsModule],
+  template: `<input [formControl]="searchControl" />`,
+})
+export class SearchOperatorsComponent {
+  private http = inject(HttpClient);
+  searchControl = new FormControl('');
+
+  demoSwitchMap = this.searchControl.valueChanges.pipe(
+    debounceTime(300),
+    distinctUntilChanged(),
+    // switchMap: CANCELS the previous inner Observable the moment a new value arrives.
+    // Perfect for search-as-you-type — only the LATEST keystroke's request result matters,
+    // any in-flight request for a stale search term is thrown away.
+    switchMap(term => this.http.get(`/api/search?q=${term}`)),
+  );
+
+  demoMergeMap = this.searchControl.valueChanges.pipe(
+    // mergeMap: runs ALL inner Observables CONCURRENTLY, in parallel, results arrive in whatever order they finish.
+    // Good for "fire N independent requests and handle each as it completes" (e.g. uploading multiple files at once).
+    mergeMap(term => this.http.get(`/api/search?q=${term}`)),
+  );
+
+  demoConcatMap = this.searchControl.valueChanges.pipe(
+    // concatMap: queues inner Observables and runs them ONE AT A TIME, strictly in order —
+    // the next one doesn't start until the current one completes. Use when ORDER matters
+    // (e.g. a sequence of save requests that must apply in the order the user made them).
+    concatMap(term => this.http.get(`/api/search?q=${term}`)),
+  );
+
+  demoExhaustMap = this.searchControl.valueChanges.pipe(
+    // exhaustMap: IGNORES new emissions while an inner Observable is still running — only
+    // starts a new one once the current one completes. Classic use: a "Submit" button —
+    // ignore repeated rapid clicks while the first submission is still in flight.
+    exhaustMap(term => this.http.get(`/api/search?q=${term}`)),
+  );
+}
+```
+| Operator | Concurrent inner Observables? | Cancels previous? | Ignores new while busy? | Typical use |
+|---|---|---|---|---|
+| `switchMap` | No (only latest survives) | **Yes** | No | Search-as-you-type, route param changes |
+| `mergeMap` | **Yes, all in parallel** | No | No | Parallel independent requests (bulk upload) |
+| `concatMap` | No (strictly sequential) | No | Queues instead | Order-sensitive sequential requests (ordered saves) |
+| `exhaustMap` | No | No | **Yes** | Prevent duplicate submits (login/submit buttons) |
+- **Interview angle (the single most-asked RxJS question):** "Which operator for a search box, and why?" — `switchMap`, because a stale in-flight request for an outdated search term should be cancelled, not race with the newest one and potentially overwrite the UI with old results.
