@@ -1,434 +1,406 @@
-# Low-Level Design (LLD) & Design Patterns in C#
-### Senior Engineers / Tech Leads ke liye Basic → Advanced Guide
+# LLD Design Patterns — Quick Revision (C#)
 
-> **Yeh guide kaise use karein**
-> Pehli baar top-to-bottom padho. Har pattern same structure follow karta hai taaki aap baad mein unhe jaldi compare kar sako:
-> **Intent → Problem → Structure → C# Example → Pros/Cons → When to use / avoid → Senior/Tech-Lead lens → Video & resources.**
-> "Tech-Lead lens" sections aapke role ke liye sabse important hain: yeh trade-offs, code-review signals, aur pattern kab over-engineering hota hai, is par focus karte hain.
+> Yeh quick-revision notes hain jo 5-part LLD course (Foundations → Creational → Structural → Behavioral → Modern C# & Next Steps) se derive kiye gaye hain — har part aur har pattern cover kiya gaya hai. Interview / PR review ke pehle 20 min mein poora brush-up ho jaaye, bina course kholna pade.
+
+**Golden thread:** Har pattern basically ek SOLID rule hai jo kisi specific situation pe apply hua hai. Padhte waqt hamesha poochho: *"Yeh kaunsa SOLID rule protect kar raha hai?"*
 
 ---
 
-## Table of Contents
+# PART 1 — Foundations (OOP + SOLID)
 
-1. [Foundations You Must Own First](#1-foundations)
-   - SOLID principles
-   - DRY, KISS, YAGNI, Composition over Inheritance
-   - GRASP (advanced)
-2. [Creational Patterns](#2-creational-patterns)
-   - Factory Method, Abstract Factory, Builder, Prototype, Singleton
-3. [Structural Patterns](#3-structural-patterns)
-   - Adapter, Bridge, Composite, Decorator, Facade, Flyweight, Proxy
-4. [Behavioral Patterns](#4-behavioral-patterns)
-   - Strategy, Observer, Command, State, Template Method, Chain of Responsibility, Mediator, Iterator, Visitor, Memento, Interpreter
-5. [Modern C# Idioms & When Patterns "Disappear"](#5-modern-csharp)
-6. [The Tech-Lead Playbook: Applying This in Reviews & Design](#6-tech-lead-playbook)
-7. [Curated Learning Path & Master Resources](#7-resources)
+> Sabse important lesson. Iske bina baaki patterns "magic spells" lagenge.
 
----
+## OOP refresher
 
-<a name="1-foundations"></a>
-## 1. Foundations Jo Aapko Pehle Aani Chahiye
+**Q: Class vs Object?**
+A: Class = blueprint. Object = us blueprint se bana real instance (`new Dog()`).
 
-Design patterns *solutions* hote hain. SOLID aur uske friends woh *forces* hain jo aapko kisi pattern ki taraf le jaate hain. Tech lead ke roop mein, aap apne zyadatar decisions ko inhi terms mein justify karoge, na ki kisi pattern ka naam lekar.
-
-### SOLID
-
-| Principle | One-liner | C# smell it fixes |
-|---|---|---|
-| **S**ingle Responsibility | Ek class ka sirf ek reason hona chahiye change karne ka | God classes, `Manager`/`Helper` jo sab kuch karte hain |
-| **O**pen/Closed | Extension ke liye open, modification ke liye closed | `switch` kisi type enum par jo har sprint mein badhta hai |
-| **L**iskov Substitution | Subtypes ko base contract ke through usable hona chahiye | Override mein `NotSupportedException` |
-| **I**nterface Segregation | Ek fat interface se better hai many small interfaces | Implementers jo unused methods par throw karte hain |
-| **D**ependency Inversion | Abstractions par depend karo, concretions par nahi | Business logic mein buried `new SqlConnection(...)` |
+**Q: Interface kya hai — course ka sabse important idea?**
+A: Ek **contract** / job description. Methods ki list jo class **promise** karti hai provide karegi — interface mein khud koi code nahi, sirf promises.
 
 ```csharp
-// ❌ Violates DIP + OCP: business logic bound to a concrete sink and grows via switch
-public class OrderService
+public interface INotifier { void Send(string message); }
+
+public class EmailNotifier : INotifier
+{ public void Send(string m) => Console.WriteLine($"Email: {m}"); }
+
+public class SmsNotifier : INotifier
+{ public void Send(string m) => Console.WriteLine($"SMS: {m}"); }
+
+INotifier n = new EmailNotifier(); // niche wala code kabhi nahi badalta
+n.Send("Your order shipped!");
+```
+
+> Yahi hai **"program to an interface, not an implementation."** Variable ka *type* contract hota hai (`INotifier`), specific class nahi. Yeh habit almost har pattern ke peeche hai.
+
+**Q: Inheritance vs Composition?**
+A: **Inheritance = "is-a"** (`Dog : Animal`). **Composition = "has-a"** (`Car` ke andar ek `Engine`).
+
+```csharp
+public class Car
 {
-    public void Place(Order o)
-    {
-        var email = new SmtpEmailSender();      // concrete dependency
-        email.Send(o.CustomerEmail, "Confirmed");
-    }
+    private readonly Engine _engine = new Engine(); // Car HAS-A Engine
+    public void StartCar() => _engine.Start();
 }
+```
 
-// ✅ Depend on an abstraction; new notification channels don't touch OrderService
-public interface INotifier { Task NotifyAsync(Order order); }
+**Q: Composition kyun prefer karte hain?**
+A: Inheritance rigid family trees banata hai — galat tree baad mein change karna painful. Composition LEGO jaise parts snap/rearrange karne deta hai. "Composition over inheritance."
 
+**Q: Dependency Injection (DI) kya hai?**
+A: Class khud apni zarurat ki cheez *banaye* iske bajaye tum use bahar se (usually constructor se) *hand in* karte ho.
+
+```csharp
+// WITH DI: OrderService ab kisi bhi INotifier ke saath kaam karta hai
 public class OrderService
 {
     private readonly INotifier _notifier;
-    public OrderService(INotifier notifier) => _notifier = notifier; // DI
-    public Task PlaceAsync(Order o) => _notifier.NotifyAsync(o);
+    public OrderService(INotifier notifier) => _notifier = notifier; // injected
+    public void Place() => _notifier.Send("Order placed");
+}
+
+var svc = new OrderService(new SmsNotifier()); // caller decides
+```
+
+Kyun matter karta hai: **Flexible** (Email ↔ SMS swap), **Testable** (fake inject karo), **Honest** (constructor batata hai kya chahiye — no hidden surprises).
+
+## SOLID — 5 rules
+
+| Letter | Rule | One-line |
+|---|---|---|
+| **S** | Single Responsibility | Ek class ka ek kaam → change karne ka ek hi reason |
+| **O** | Open/Closed | Extension ke liye open, modification ke liye closed |
+| **L** | Liskov Substitution | Subtype ko base ki jagah bina surprise ke chalna chahiye |
+| **I** | Interface Segregation | Chhote focused interfaces > ek fat interface |
+| **D** | Dependency Inversion | Abstractions pe depend karo, concrete classes pe nahi |
+
+**S — SRP:** Ek class = ek job. `Order` (logic), `OrderRepository` (save), `EmailService` (email) alag rakho — taaki har class sirf ek reason se change ho.
+
+**O — OCP:** Naya behavior = *naya code* add karo, working code edit mat karo. Smell = badhta hua `if`/`switch` chain. Fix = interface + har case apni class (yehi **Strategy** hai).
+
+```csharp
+public interface IShipping { decimal Cost(decimal weight); }
+public class Standard : IShipping { public decimal Cost(decimal w) => w * 1.5m; }
+public class Express  : IShipping { public decimal Cost(decimal w) => w * 3.0m; }
+// Overnight? bas ek NEW class add karo — kuch aur nahi badalta
+```
+
+**L — LSP:** Subtype base ke promises honor kare. Anti-example: `Penguin : Bird` jismein `Fly()` throw karta hai → jo bhi `Bird.Fly()` call karega crash. Fix: `Fly()` ko sab birds pe force mat karo (alag `IFlyingBird`).
+
+**I — ISP:** `IMachine { Print; Scan; Fax; }` galat — `SimplePrinter` ko Scan/Fax implement karna padta hai. Fix: `IPrinter`, `IScanner` alag.
+
+**D — DIP:** High-level logic concrete low-level detail pe depend na kare.
+
+```csharp
+public interface IDataSource { string[] GetRows(); }
+public class ReportGenerator
+{
+    private readonly IDataSource _source;
+    public ReportGenerator(IDataSource source) => _source = source; // SQL, file, mock...
 }
 ```
 
-### DRY, KISS, YAGNI, Composition over Inheritance
-- **DRY** – Don't Repeat Yourself, lekin *duplication galat abstraction se cheaper hota hai*. Extract sirf tab karo jab same reason se 3rd baar repetition ho.
-- **KISS** – Keep It Simple. Zyadatar CRUD ko kisi pattern ki zarurat nahi hoti.
-- **YAGNI** – "Just in case" extensibility points mat banao. Reviews mein enforce karne wali yeh #1 sabse important cheez hai.
-- **Composition over Inheritance** – Deep `is-a` hierarchies ke bajaye `has-a` (collaborators inject karo) prefer karo. C# mein multiple inheritance nahi hota; composition + interfaces hi idiom hai.
+> **DIP + interface habit + DI** — teeno ek hi core idea ke views hain: *important code ko specific, replaceable details se glued hone se bachao.*
 
-### GRASP (advanced — tech leads ke liye good)
-General Responsibility Assignment Software Patterns: *Information Expert, Creator, Controller, Low Coupling, High Cohesion, Polymorphism, Pure Fabrication, Indirection, Protected Variations.* Yeh aapko ek vocabulary dete hain ki *kyun* aap kisi class ko responsibility assign karte ho — design discussions mein invaluable hai.
+## "Keep it sane" rules (over-engineering se bachne ke liye)
 
-📺 **Foundations resources**
-- SOLID (C#): [Nick Chapsas – SOLID playlist](https://www.youtube.com/results?search_query=nick+chapsas+solid+principles)
-- SOLID deep dive: [Refactoring Guru – Design Principles](https://refactoring.guru/design-patterns)
-- GRASP: [search "GRASP principles explained"](https://www.youtube.com/results?search_query=GRASP+principles+explained)
+- **KISS** — Keep It Simple. Simplest cheez jo kaam kare usually right hoti hai.
+- **YAGNI** — You Aren't Gonna Need It. "Just in case" flexibility mat add karo; real need pe add karo. Over-engineering ki #1 wajah.
+- **DRY** — Don't Repeat Yourself. Shared code sirf tab extract karo jab actually repeat dikhe (rule of thumb: 3rd time). Bahut early extract = *wrong* abstraction, jo duplication se bhi worse.
 
 ---
 
-<a name="2-creational-patterns"></a>
-## 2. Creational Patterns
-*Control karta hai **how** objects create hote hain, construction ko use se decouple karta hai.*
+# PART 2 — Creational Patterns
 
----
+> Sab ka ek hi focus: **objects kaise create hote hain.** Scattered `new SomeClass()` code ko concrete classes se glue kar deta hai (DIP break). Yeh patterns cleaner creation dete hain.
 
-### 2.1 Factory Method
-- **Intent:** Ek object create karne ke liye interface define karo, lekin subclasses/implementations ko decide karne do ki kaunsi class instantiate karni hai.
-- **Problem:** Ek class ko objects create karne hain lekin concrete type hardcode nahi karna chahiye.
-- **Structure:** `Creator` ek factory method declare karta hai jo `Product` abstraction return karta hai; concrete creators isko override karte hain.
+## 2.1 Factory Method
+
+- **Intent:** `new` directly call karne ke bajaye ek *method* call karo jiska job hai object create + return karna. *Kaunsi class banani hai* ka decision ek jagah rehta hai.
+- **Analogy:** Pizza shop — tum kitchen mein ghuske assemble nahi karte, counter ko batate ho aur ordering system decide karta hai.
+- **When:** Multiple concrete types (pdf/excel/csv), aur creation logic ek jagah chahiye. **Avoid:** sirf ek concrete type ho (bas `new` use karo).
 
 ```csharp
-public interface IPaymentProcessor { Task<Receipt> ChargeAsync(decimal amount); }
+public interface IExporter { void Export(string data); }
+public class PdfExporter   : IExporter { public void Export(string d) => Console.WriteLine("PDF!"); }
+public class ExcelExporter : IExporter { public void Export(string d) => Console.WriteLine("Excel!"); }
 
-public abstract class PaymentGateway
+public class ExporterFactory
 {
-    // Factory Method
-    protected abstract IPaymentProcessor CreateProcessor();
-
-    public Task<Receipt> ProcessAsync(decimal amount)
-        => CreateProcessor().ChargeAsync(amount); // uses the product via abstraction
-}
-
-public class StripeGateway : PaymentGateway
-{
-    protected override IPaymentProcessor CreateProcessor() => new StripeProcessor();
-}
-```
-- **Pros:** Concrete coupling remove karta hai; OCP honor karta hai; creation logic centralize karta hai.
-- **Cons:** Class explosion; jab simple DI-registered factory delegate kaam kar jaata hai to often overkill hota hai.
-- **Use when:** Create karne wala type subclass/context par depend karta hai aur aap chahte ho ki subclasses isko extend karein.
-- **Avoid when:** `Func<T>` ya DI container already type resolve kar deta hai.
-- 🧭 **Tech-Lead lens:** Modern C# mein, 80% Factory Method use cases DI registration + `IServiceProvider`/keyed services (.NET 8+) mein collapse ho jaate hain. Classic pattern sirf tab use karo jab creation logic khud polymorphic ho.
-
-📺 [Christopher Okhravi – Factory Method](https://www.youtube.com/results?search_query=christopher+okhravi+factory+method+pattern) · [Refactoring Guru](https://refactoring.guru/design-patterns/factory-method/csharp/example)
-
----
-
-### 2.2 Abstract Factory
-- **Intent:** Concrete classes specify kiye bina related objects ki **families** produce karo.
-- **Problem:** Aapko objects ke consistent sets chahiye (e.g., ek whole UI theme, ya ek whole cloud provider ke clients).
-- **Structure:** Multiple create methods wala `IAbstractFactory`; concrete factories matching family produce karte hain.
-
-```csharp
-public interface ICloudFactory
-{
-    IBlobStore CreateBlobStore();
-    IQueue CreateQueue();
-}
-
-public class AzureFactory : ICloudFactory
-{
-    public IBlobStore CreateBlobStore() => new AzureBlob();
-    public IQueue     CreateQueue()     => new AzureServiceBusQueue();
-}
-
-public class AwsFactory : ICloudFactory
-{
-    public IBlobStore CreateBlobStore() => new S3Blob();
-    public IQueue     CreateQueue()     => new SqsQueue();
-}
-```
-- **Pros:** Compatible families guarantee karta hai; ek factory swap karke whole family swap kar sakte ho.
-- **Cons:** Family mein naya product add karne se har factory change hoti hai (us axis ke liye OCP violate karta hai).
-- **Use when:** Multi-provider / multi-platform families jinhe consistent rehna zaruri hai.
-- **Avoid when:** Aapke paas sirf ek family hai ya products unrelated hain.
-- 🧭 **Tech-Lead lens:** Provider abstractions (multi-cloud, DB dialects) ke liye great hai. Dhyan rakhna ki jab product set volatile ho to yeh maintenance tax ban sakta hai.
-
-📺 [Christopher Okhravi – Abstract Factory](https://www.youtube.com/results?search_query=christopher+okhravi+abstract+factory) · [Refactoring Guru](https://refactoring.guru/design-patterns/abstract-factory/csharp/example)
-
----
-
-### 2.3 Builder
-- **Intent:** Complex objects ko step by step construct karo; same process different representations bana sakta hai.
-- **Problem:** Bahut zyada (especially optional) parameters wale constructors — "telescoping constructors."
-- **Structure:** Ek `Builder` fluent methods ke through state accumulate karta hai aur `Build()` par final product return karta hai.
-
-```csharp
-public class HttpRequest
-{
-    public string Url { get; init; }
-    public string Method { get; init; } = "GET";
-    public IReadOnlyDictionary<string,string> Headers { get; init; }
-    public string? Body { get; init; }
-}
-
-public class HttpRequestBuilder
-{
-    private string _url = "";
-    private string _method = "GET";
-    private readonly Dictionary<string,string> _headers = new();
-    private string? _body;
-
-    public HttpRequestBuilder Url(string u)            { _url = u; return this; }
-    public HttpRequestBuilder Method(string m)         { _method = m; return this; }
-    public HttpRequestBuilder Header(string k, string v){ _headers[k] = v; return this; }
-    public HttpRequestBuilder Body(string b)           { _body = b; return this; }
-
-    public HttpRequest Build() => new()
+    public IExporter Create(string format) => format switch
     {
-        Url = _url, Method = _method, Headers = _headers, Body = _body
+        "pdf"   => new PdfExporter(),
+        "excel" => new ExcelExporter(),
+        _       => throw new ArgumentException($"Unknown format: {format}")
     };
 }
 
-// Usage
-var req = new HttpRequestBuilder()
-    .Url("https://api.example.com").Method("POST")
-    .Header("Authorization", "Bearer …").Body("{}")
-    .Build();
+public class ReportController
+{
+    private readonly ExporterFactory _factory;
+    public ReportController(ExporterFactory factory) => _factory = factory;
+    public void Download(string data, string format)
+        => _factory.Create(format).Export(data); // caller ko concrete classes ka pata nahi
+}
 ```
-- **Pros:** Readable construction; immutable products; `Build()` mein invariants validate karta hai.
-- **Cons:** Extra boilerplate; simple objects ke liye overkill hota hai.
-- **Use when:** Bahut optional params hain, step-wise construction chahiye, ya aapko validation ke saath immutability chahiye.
-- **Avoid when:** C# `init` + object initializers + `required` members already cleanly read ho rahe hain.
-- 🧭 **Tech-Lead lens:** C# 11+ mein, `required` members aur `with` expressions bahut se builders replace kar dete hain. Builder tab rakho jab construction mein *ordering rules ya validation* ho jo plain initializer enforce nahi kar sakta.
 
-📺 [Christopher Okhravi – Builder](https://www.youtube.com/results?search_query=christopher+okhravi+builder+pattern) · [Refactoring Guru](https://refactoring.guru/design-patterns/builder/csharp/example)
+> **Tech-lead note:** .NET mein DI container khud ek factory hai. `services.AddScoped<IExporter, PdfExporter>()`; .NET 8 **keyed services** se multiple impls key ("pdf"/"excel") se resolve kar sakte ho — built-in Factory Method. Hand-rolled factory sirf tab jab creation genuinely complex ho.
+> Note: "classic" Factory Method inheritance use karta hai (base class + `abstract Create()` jise subclasses override karti hain); upar wala factory-class version real C# mein zyada common/practical hai.
 
----
+## 2.2 Abstract Factory
 
-### 2.4 Prototype
-- **Intent:** Existing instance ko clone karke naye objects create karo.
-- **Problem:** Object creation expensive ya configuration-heavy hai; aapko preconfigured instance ki copies chahiye.
-- **Structure:** Ek `Clone()` method (shallow ya deep).
+- **Intent:** Ek factory jo related objects ki **whole family** create karta hai jo saath use hone ke liye bane hain.
+- **Analogy:** IKEA sets — "Scandinavian" set liya to chair+table+lamp sab match karte hain.
+- **When:** Consistent family guarantee chahiye. **Avoid:** sirf ek family ho, ya products related na hon. Naya product type (`ISlider`) add karna = *har* factory edit (yeh part OCP nahi).
 
 ```csharp
-public interface IPrototype<T> { T Clone(); }
+public interface IButton   { void Render(); }
+public interface ICheckbox { void Render(); }
 
-public class Document : IPrototype<Document>
+public class LightButton   : IButton   { public void Render() => Console.WriteLine("light button"); }
+public class LightCheckbox : ICheckbox { public void Render() => Console.WriteLine("light checkbox"); }
+public class DarkButton    : IButton   { public void Render() => Console.WriteLine("dark button"); }
+public class DarkCheckbox  : ICheckbox { public void Render() => Console.WriteLine("dark checkbox"); }
+
+public interface IThemeFactory { IButton CreateButton(); ICheckbox CreateCheckbox(); }
+
+public class LightThemeFactory : IThemeFactory
 {
-    public string Title { get; set; } = "";
-    public List<string> Sections { get; set; } = new();
+    public IButton   CreateButton()   => new LightButton();
+    public ICheckbox CreateCheckbox() => new LightCheckbox();
+}
+public class DarkThemeFactory : IThemeFactory
+{
+    public IButton   CreateButton()   => new DarkButton();
+    public ICheckbox CreateCheckbox() => new DarkCheckbox();
+}
 
-    public Document Clone() => new()
+IThemeFactory f = userPrefersDark ? new DarkThemeFactory() : new LightThemeFactory();
+f.CreateButton().Render();   // guaranteed same family
+f.CreateCheckbox().Render(); // dark button + light checkbox mix impossible
+```
+
+- **Factory Method vs Abstract Factory:** Factory Method = **ek** product; Abstract Factory = products ki **family**.
+- **Tech-lead note:** Provider abstraction (AWS vs Azure ke matching clients: blob + queue + secret). Multi-cloud ke liye great; product set often change ho to maintenance tax ban jaata hai.
+
+## 2.3 Builder
+
+- **Intent:** Complex object **step-by-step** readable named steps se banao, giant confusing constructor ke bajaye.
+- **Analogy:** Subway sandwich — "wheat bread… turkey… add cheese… no onions… toast it."
+- **Problem:** Telescoping constructor — `new Pizza("Large", true, false, true, true, false, "thin", 2)` — koi padh nahi sakta.
+- **When:** Object complex, ordering/validation rules ho. **Avoid:** simple object (plain constructor ya object initializer kam code).
+
+```csharp
+public class Pizza
+{
+    public string Size { get; set; } = "Medium";
+    public bool Cheese { get; set; }
+    public bool Mushrooms { get; set; }
+    public string Crust { get; set; } = "regular";
+}
+
+public class PizzaBuilder
+{
+    private readonly Pizza _pizza = new();
+    public PizzaBuilder Size(string s)   { _pizza.Size = s; return this; }
+    public PizzaBuilder AddCheese()      { _pizza.Cheese = true; return this; }
+    public PizzaBuilder AddMushrooms()   { _pizza.Mushrooms = true; return this; }
+    public PizzaBuilder Crust(string c)  { _pizza.Crust = c; return this; }
+    public Pizza Build() => _pizza;   // yahan validate bhi kar sakte ho
+}
+
+Pizza p = new PizzaBuilder().Size("Large").Crust("thin").AddCheese().AddMushrooms().Build();
+```
+
+- Har step `return this;` karta hai → yehi chaining ("**fluent interface**") deta hai. `Build()` finished object + validation spot.
+- **Tech-lead note:** Modern C# often builder ki zarurat hatata hai:
+```csharp
+var pizza = new Pizza { Size = "Large", Cheese = true, Crust = "thin" }; // object initializer
+```
+Real builder tab rakho jab construction mein ordering rules/validation ho jo initializer enforce na kar sake. `WebApplication.CreateBuilder(args)` yehi pattern hai.
+
+## 2.4 Prototype
+
+- **Intent:** Naya object **existing ek ko copy** karke banao, scratch se nahi.
+- **Analogy:** Filled-in form ko photocopy karke sirf few fields tweak karna.
+- **When:** Setup expensive/tedious ho, 100 almost-identical objects chahiye. **Avoid:** objects cheap hon, ya complex nested references jinhe copy karna hard.
+
+```csharp
+public class EmailTemplate
+{
+    public string Subject { get; set; } = "";
+    public string Body { get; set; } = "";
+    public List<string> Recipients { get; set; } = new();
+
+    public EmailTemplate Clone() => new()
     {
-        Title = Title,
-        Sections = new List<string>(Sections) // deep copy of the list
+        Subject = this.Subject,
+        Body = this.Body,
+        Recipients = new List<string>(this.Recipients) // list bhi copy karo!
     };
 }
+
+var welcome = new EmailTemplate { Subject = "Welcome!", Body = "Hello." };
+var forBob = welcome.Clone();
+forBob.Recipients.Add("bob@x.com"); // sirf difference tweak
 ```
-- **Pros:** Expensive init avoid karta hai; "template" objects ke liye convenient hai.
-- **Cons:** Deep vs shallow copy bugs; cycles wale object graphs clone karna hard hota hai.
-- **Use when:** Costly-to-build template se bahut se near-identical objects chahiye.
-- **Avoid when:** Objects build karna cheap hai, ya `record` `with` copying kaafi hai.
-- 🧭 **Tech-Lead lens:** C# `record` + `with` aapko compiler-generated (shallow) prototype deta hai. Deep vs shallow ke baare mein explicit raho — yeh shared-reference bugs ka classic source hai.
 
-📺 [Refactoring Guru – Prototype (C#)](https://refactoring.guru/design-patterns/prototype/csharp/example)
+> ⚠️ **Shallow vs Deep copy** (classic bug): `new List<string>(this.Recipients)` = deep (values copy). Agar `Recipients = this.Recipients` likha hota to dono same list share karte → Bob dono mein add ho jaata. Reference share = **shallow**, values copy = **deep**. Jaano kaunsa chahiye.
 
----
+- **Tech-lead note:** `record` + `with` built-in prototype hai (shallow):
+```csharp
+public record Point(int X, int Y);
+var b = a with { Y = 5 };  // clone-and-modify; nested refs abhi bhi shared
+```
 
-### 2.5 Singleton
-- **Intent:** Ensure karo ki class ka exactly ek instance ho, global access point ke saath.
-- **Problem:** Exactly ek shared resource (rare — usually ek config ya cache).
+## 2.5 Singleton
+
+- **Intent:** Guarantee karo poori app mein **exactly one instance**, single shared access point ke saath.
+- **Analogy:** Country ka President — ek time pe ek.
+- **When:** Kuch truly ek baar exist kare (single config). **Avoid (bahut downsides!):** global state (hidden dependency), test karna hard, DIP violate karta hai.
 
 ```csharp
-// Thread-safe, lazy. But prefer DI (see lens).
-public sealed class AppClock
+public sealed class AppConfig
 {
-    private static readonly Lazy<AppClock> _instance = new(() => new AppClock());
-    public static AppClock Instance => _instance.Value;
-    private AppClock() { }
-    public DateTime UtcNow => DateTime.UtcNow;
+    private static readonly Lazy<AppConfig> _instance = new(() => new AppConfig());
+    public static AppConfig Instance => _instance.Value;   // single access point
+    private AppConfig() { }   // private ctor → koi aur `new` nahi kar sakta
+    public string Environment { get; } = "Production";
 }
+
+string env = AppConfig.Instance.Environment;
 ```
-- **Pros:** Single instance, lazy init.
-- **Cons:** Global state, hidden dependencies, test/mock karna hard, parallel tests ke hostile.
-- **Use when:** Almost never hand se.
-- **Avoid when:** Aapke paas DI container hai — jo hai hi.
-- 🧭 **Tech-Lead lens:** **Yeh wahi pattern hai jise reviews mein challenge karna chahiye.** Iske bajaye `services.AddSingleton<T>()` register karo — aapko single-instance semantics *plus* testability aur explicit dependencies milte hain. Hand-rolled singletons usually ek design smell hote hain.
 
-📺 [Nick Chapsas – Singleton / why DI wins](https://www.youtube.com/results?search_query=nick+chapsas+singleton+dependency+injection) · [Refactoring Guru](https://refactoring.guru/design-patterns/singleton/csharp/example)
+- `private ctor` + `Lazy<T>` (lazy + thread-safe) + `sealed` (no inheritance = no 2nd instance).
+- **Tech-lead note — code review mein challenge karo:** Juniors overuse karte hain. .NET mein hand se rarely likho — DI se register karo:
+```csharp
+services.AddSingleton<IAppConfig, AppConfig>();
+```
+Same "one instance" guarantee + testability + honest visible dependencies.
+
+### Lesson 2 recap
+| Pattern | One line | Modern C# shortcut |
+|---|---|---|
+| Factory Method | Ek method decide kare kaunsi class | DI container / keyed services |
+| Abstract Factory | Matching *family* create karo | (providers ke liye still useful) |
+| Builder | Complex object step-by-step | object initializers + `required` |
+| Prototype | Object copy karke naya banao | `record` + `with` |
+| Singleton | Exactly one instance | `services.AddSingleton<T>()` |
 
 ---
 
-<a name="3-structural-patterns"></a>
-## 3. Structural Patterns
-*Objects ko larger structures mein compose karo while unhe flexible rakhte hue.*
+# PART 3 — Structural Patterns
 
----
+> Objects/classes ko bade structures mein **assemble** karna, sab flexible rakhte hue. Creational = LEGO bricks banana; Structural = unhe smart ways mein snap karna.
 
-### 3.1 Adapter
-- **Intent:** Ek interface ko doosre interface mein convert karo jo client expect karta hai.
-- **Problem:** Ek third-party/legacy class aapke interface se match nahi karti.
+## 3.1 Adapter
+
+- **Intent:** Wrapper jo ek interface ko doosre mein **translate** karta hai, taaki do incompatible cheezein saath chalein.
+- **Analogy:** Travel power plug adapter.
+- **When:** Third-party/legacy library use karni ho jise edit nahi kar sakte. **Avoid:** dono sides control karte ho (directly match karo).
 
 ```csharp
 public interface ILogger { void Log(string message); }
 
-// Third-party we can't change:
-public class SerilogSink { public void Write(LogLevel lvl, string msg) { /* … */ } }
+// Third-party — edit nahi kar sakte
+public class FancyLogLibrary { public void WriteEntry(int severity, string text) { } }
 
-// Adapter
-public class SerilogAdapter : ILogger
+public class FancyLogAdapter : ILogger   // aapka wanted interface
 {
-    private readonly SerilogSink _sink;
-    public SerilogAdapter(SerilogSink sink) => _sink = sink;
-    public void Log(string message) => _sink.Write(LogLevel.Information, message);
+    private readonly FancyLogLibrary _library;
+    public FancyLogAdapter(FancyLogLibrary library) => _library = library;
+    public void Log(string message) => _library.WriteEntry(1, message); // translate
 }
+
+ILogger logger = new FancyLogAdapter(new FancyLogLibrary());
+logger.Log("Hello");
 ```
-- **Pros:** Kisi bhi side ko touch kiye bina incompatible code integrate karta hai; 3rd-party churn ko isolate karta hai.
-- **Cons:** Extra indirection.
-- **Use when:** External/legacy APIs ko apne khud ke contract ke peeche wrap karna ho.
-- 🧭 **Tech-Lead lens:** Vendor lock-in ke against aapka primary defense. Boundary par adapters domain ko clean aur swappable rakhte hain.
 
-📺 [Christopher Okhravi – Adapter](https://www.youtube.com/results?search_query=christopher+okhravi+adapter+pattern) · [Refactoring Guru](https://refactoring.guru/design-patterns/adapter/csharp/example)
+- **Tech-lead note:** **Vendor lock-in** ke against main defense. Third-party SDKs ko system ke edges pe apne interfaces ke peeche daalo; core logic sirf *aapke* contracts pe depend kare.
 
----
+## 3.2 Decorator ⭐
 
-### 3.2 Bridge
-- **Intent:** Ek abstraction ko uske implementation se decouple karo taaki dono independently vary kar sakein.
-- **Problem:** Ek class hierarchy **two** independent dimensions ke along explode hoti hai (e.g., *Shape* × *Renderer*).
+- **Intent:** Object mein naya behavior add karo use **doosre object mein wrap** karke jo **same interface** share karta hai — original class touch kiye bina.
+- **Analogy:** Coffee add-ons — plain coffee → +milk → +caramel; result still coffee. Wrappers kisi bhi combo mein stack.
+- **When:** Features add/remove flexibly (caching, logging) SRP + OCP honor karte hue. **Avoid:** deep stacks debug karna hard, ordering bugs easy.
 
 ```csharp
-public interface IRenderer { void RenderCircle(float radius); }
-
-public abstract class Shape
-{
-    protected readonly IRenderer Renderer; // the "bridge"
-    protected Shape(IRenderer renderer) => Renderer = renderer;
-    public abstract void Draw();
-}
-
-public class Circle : Shape
-{
-    private readonly float _radius;
-    public Circle(IRenderer r, float radius) : base(r) => _radius = radius;
-    public override void Draw() => Renderer.RenderCircle(_radius);
-}
-// Now Shapes × Renderers combine freely without N×M subclasses.
-```
-- **Pros:** Combinatorial subclass explosion avoid karta hai; dono axes independently evolve hote hain.
-- **Cons:** Zyada upfront indirection; grasp karna harder hota hai.
-- **Use when:** Variation ke two orthogonal dimensions hon.
-- 🧭 **Tech-Lead lens:** Often Adapter ke saath confuse hota hai. Adapter = *ek existing mismatch fix karna*; Bridge = *upfront designed* karke do axes separate karna.
-
-📺 [Christopher Okhravi – Bridge](https://www.youtube.com/results?search_query=christopher+okhravi+bridge+pattern) · [Refactoring Guru](https://refactoring.guru/design-patterns/bridge/csharp/example)
-
----
-
-### 3.3 Composite
-- **Intent:** Individual objects aur objects ki compositions ko uniformly treat karo (tree structures).
-- **Problem:** Clients ko leaves aur containers ko differently handle karna padta hai.
-
-```csharp
-public interface IFileSystemNode { long GetSize(); }
-
-public class FileLeaf : IFileSystemNode
-{
-    private readonly long _size;
-    public FileLeaf(long size) => _size = size;
-    public long GetSize() => _size;
-}
-
-public class DirectoryNode : IFileSystemNode
-{
-    private readonly List<IFileSystemNode> _children = new();
-    public void Add(IFileSystemNode node) => _children.Add(node);
-    public long GetSize() => _children.Sum(c => c.GetSize()); // recursion
-}
-```
-- **Pros:** Uniform treatment; trees ke liye natural hai (menus, org charts, file systems, UI).
-- **Cons:** Over-generalize ho sakta hai; leaf vs composite ki type safety blurry ho jaati hai.
-- **Use when:** Recursive part-whole hierarchies.
-- 🧭 **Tech-Lead lens:** Tree par operations ke liye Visitor ke saath naturally pairs karta hai.
-
-📺 [Christopher Okhravi – Composite](https://www.youtube.com/results?search_query=christopher+okhravi+composite+pattern) · [Refactoring Guru](https://refactoring.guru/design-patterns/composite/csharp/example)
-
----
-
-### 3.4 Decorator
-- **Intent:** Object ko wrap karke usme dynamically responsibilities attach karo.
-- **Problem:** Aapko behavior (caching, logging, retry) add karna hai bina subclass explosion ke ya original edit kiye.
-
-```csharp
-public interface IProductRepository { Task<Product> GetAsync(int id); }
-
+public interface IProductRepository { Product Get(int id); }
 public class SqlProductRepository : IProductRepository
-{
-    public Task<Product> GetAsync(int id) => /* hit DB */ default!;
-}
+{ public Product Get(int id) { Console.WriteLine("DB..."); return new Product(); } }
 
-// Decorator adds caching, same interface
 public class CachingProductRepository : IProductRepository
 {
     private readonly IProductRepository _inner;
-    private readonly IMemoryCache _cache;
-    public CachingProductRepository(IProductRepository inner, IMemoryCache cache)
-        => (_inner, _cache) = (inner, cache);
-
-    public async Task<Product> GetAsync(int id)
-        => (await _cache.GetOrCreateAsync($"prod:{id}", _ => _inner.GetAsync(id)))!;
-}
-// Stack them: retry → caching → logging → sql
-```
-- **Pros:** Open/Closed; runtime par behaviors compose karta hai; har concern isolated hota hai.
-- **Cons:** Bahut se small wrappers; deep stacks debug karna; order matter karta hai.
-- **Use when:** Same contract par layered cross-cutting concerns.
-- 🧭 **Tech-Lead lens:** Real C# ke *most useful* patterns mein se ek. Note: ASP.NET Core middleware aur `HttpClient` ke liye `DelegatingHandler` Decorator/Chain hi hain, disguise mein. Reviews mein decorator ki *ordering* scrutinize karo.
-
-📺 [Christopher Okhravi – Decorator](https://www.youtube.com/results?search_query=christopher+okhravi+decorator+pattern) · [Nick Chapsas – Decorators in .NET](https://www.youtube.com/results?search_query=nick+chapsas+decorator+pattern) · [Refactoring Guru](https://refactoring.guru/design-patterns/decorator/csharp/example)
-
----
-
-### 3.5 Facade
-- **Intent:** Complex subsystem ke upar ek simplified interface provide karo.
-- **Problem:** Clients bahut si collaborating classes ke details mein drown ho jaate hain.
-
-```csharp
-public class OrderCheckoutFacade
-{
-    private readonly IInventory _inventory;
-    private readonly IPaymentGateway _payment;
-    private readonly IShipping _shipping;
-    // ctor injection …
-
-    public async Task<Result> CheckoutAsync(Cart cart)
+    private readonly Dictionary<int, Product> _cache = new();
+    public CachingProductRepository(IProductRepository inner) => _inner = inner;
+    public Product Get(int id)
     {
-        if (!await _inventory.ReserveAsync(cart)) return Result.Fail("Out of stock");
-        var receipt = await _payment.ChargeAsync(cart.Total);
-        await _shipping.ScheduleAsync(cart, receipt);
-        return Result.Ok();
+        if (_cache.TryGetValue(id, out var c)) return c;
+        var p = _inner.Get(id); _cache[id] = p; return p;
     }
 }
+
+public class LoggingProductRepository : IProductRepository
+{
+    private readonly IProductRepository _inner;
+    public LoggingProductRepository(IProductRepository inner) => _inner = inner;
+    public Product Get(int id)
+    {
+        Console.WriteLine($"Getting {id}");
+        var r = _inner.Get(id);
+        Console.WriteLine($"Got {id}");
+        return r;
+    }
+}
+
+// Stack like coffee add-ons:
+IProductRepository repo =
+    new LoggingProductRepository(
+        new CachingProductRepository(
+            new SqlProductRepository()));
 ```
-- **Pros:** Simple entry point; subsystem ke saath coupling reduce karta hai.
-- **Cons:** Agar logic accumulate ho jaaye to god-object ban sakta hai.
-- **Use when:** Small API ke peeche complex subsystem ko tame karna ho.
-- 🧭 **Tech-Lead lens:** Application/service layer classes often Facades hi hoti hain. Dhyan rakhna ki woh *orchestrate* karein, business rules *implement* na karein.
 
-📺 [Christopher Okhravi – Facade](https://www.youtube.com/results?search_query=christopher+okhravi+facade+pattern) · [Refactoring Guru](https://refactoring.guru/design-patterns/facade/csharp/example)
+- Har wrapper same interface implement karta hai → endlessly stackable. **Ordering matters:** logging-outside-caching har call log karta hai; caching-outside-logging sirf misses log karega.
+- **Tech-lead note — day-to-day C# ka sabse useful pattern:** ASP.NET Core middleware, `HttpClient` `DelegatingHandler`s, aur **Scrutor** (`services.Decorate<IProductRepository, CachingProductRepository>();`). Reviews mein wrapper **ordering** scrutinize karo.
 
----
+## 3.3 Facade
 
-### 3.6 Flyweight
-- **Intent:** Memory bachane ke liye bahut se objects mein common state share karo.
-- **Problem:** Duplicated intrinsic state wale millions objects.
-- **Structure:** *intrinsic* (shared) state ko *extrinsic* (per-instance) state se split karo; shared part ko cache karo.
-- **Use when:** Huge object counts (game particles, glyphs, map tiles).
-- **Avoid when:** Object counts modest hain — premature optimization.
-- 🧭 **Tech-Lead lens:** Typical business apps mein rare hota hai. C# string interning, `ArrayPool<T>`, aur cached immutable value objects hi practical incarnations hain.
-
-📺 [Refactoring Guru – Flyweight (C#)](https://refactoring.guru/design-patterns/flyweight/csharp/example)
-
----
-
-### 3.7 Proxy
-- **Intent:** Ek placeholder jo doosre object ke access ko control karta hai (lazy, remote, protection, virtual).
-- **Problem:** Aapko access intercept karna hai — lazy loading, access control, remoting, caching.
+- **Intent:** Single simple class jo complicated subsystem ko ek easy method ke peeche hide kare.
+- **Analogy:** Restaurant waiter — "I'll have the steak," kitchen/grill/plating tumse baat nahi karte.
+- **When:** Callers ko simplify karna. **Avoid:** facade "god object" ban jaaye — coordinator rakho, business logic dumping ground nahi.
 
 ```csharp
-public interface IReportService { byte[] Generate(int id); }
+public class CheckoutFacade
+{
+    private readonly InventoryService _inventory;
+    private readonly PaymentService _payment;
+    private readonly ShippingService _shipping;
+    public CheckoutFacade(InventoryService inv, PaymentService pay, ShippingService ship)
+        => (_inventory, _payment, _shipping) = (inv, pay, ship);
+
+    public bool Checkout(Cart cart)   // ek simple front door
+    {
+        if (!_inventory.Reserve(cart)) return false;
+        var receipt = _payment.Charge(cart.Total);
+        _shipping.Schedule(cart, receipt);
+        return true;
+    }
+}
+// caller: bool ok = checkout.Checkout(cart);
+```
+
+- **Tech-lead note:** Most apps ki "service"/"application" layer basically facades ka set hai. Rule: facade **orchestrate** kare (order mein call), deep business logic khud **implement** na kare.
+
+## 3.4 Proxy
+
+- **Intent:** Stand-in object jo real object jaisa dikhta hai lekin uske **access ko control** karta hai (security, lazy-loading, caching).
+- **Analogy:** Celebrity ka personal assistant — pehle check karta hai, phir message forward karta hai.
+
+```csharp
+public interface IReportService { string Generate(int reportId); }
+public class RealReportService : IReportService
+{ public string Generate(int id) => $"Report #{id} data..."; }
 
 public class ReportServiceProxy : IReportService
 {
@@ -437,88 +409,162 @@ public class ReportServiceProxy : IReportService
     public ReportServiceProxy(IReportService real, IUserContext user)
         => (_real, _user) = (real, user);
 
-    public byte[] Generate(int id)
+    public string Generate(int id)
     {
         if (!_user.HasPermission("reports.read"))
-            throw new UnauthorizedAccessException();
-        return _real.Generate(id); // control access before delegating
+            throw new UnauthorizedAccessException();  // access control...
+        return _real.Generate(id);                     // ...then delegate
     }
 }
 ```
-- **Pros:** Transparently control add karta hai (same interface).
-- **Cons:** Decorator jaisa lagta hai; overuse hone par responsibility blur ho jaati hai.
-- **Use when:** Lazy init, access control, remoting, virtual proxies.
-- 🧭 **Tech-Lead lens:** EF Core lazy-loading proxies aur Castle DynamicProxy (jo bahut si mocking/AOP libs use karti hain) yehi pattern hain. Decorator *behavior add* karta hai; Proxy *access control* karta hai — same shape, different intent.
 
-📺 [Christopher Okhravi – Proxy](https://www.youtube.com/results?search_query=christopher+okhravi+proxy+pattern) · [Refactoring Guru](https://refactoring.guru/design-patterns/proxy/csharp/example)
+- **🔁 Proxy vs Decorator (same shape!):** Difference **intent** mein — Decorator *behavior/features add* karta hai; Proxy *access control* karta hai.
+- **Tech-lead note:** EF Core lazy-loading proxies aur mocking libraries (Moq, NSubstitute) ke dynamic proxies yehi pattern hain.
+
+## 3.5 Composite
+
+- **Intent:** Objects ke **tree** (whole + parts) ko single object jaise treat karo.
+- **Analogy:** Folders — folder mein files *aur* sub-folders; "size?" recursively add ho jaata hai.
+
+```csharp
+public interface IFileSystemItem { long GetSizeBytes(); }
+
+public class FileItem : IFileSystemItem   // leaf
+{
+    private readonly long _size;
+    public FileItem(long size) => _size = size;
+    public long GetSizeBytes() => _size;
+}
+
+public class FolderItem : IFileSystemItem  // composite
+{
+    private readonly List<IFileSystemItem> _children = new();
+    public void Add(IFileSystemItem item) => _children.Add(item);
+    public long GetSizeBytes() => _children.Sum(c => c.GetSizeBytes()); // recursion
+}
+```
+
+- Key line `_children.Sum(c => c.GetSizeBytes())` — child file ho ya folder, dono `IFileSystemItem`; logic ek baar likha, kisi bhi depth pe chalta hai.
+- **When:** Tree structures (menus, org charts, UI, file systems). **Avoid:** data really tree na ho.
+- **Tech-lead note:** **Visitor** pattern ke saath naturally pairs (same tree pe many operations).
+
+## 3.6 Bridge
+
+- **Intent:** Jab design **do independent dimensions** ke along vary kare, unhe do separate hierarchies mein split karo taaki multiply hoke mess na banein.
+- **Analogy:** TV aur remote — har TV brand ke liye alag remote nahi banate; standard contract se baat karte hain.
+- **Problem:** Shapes (Circle, Square) × renderers (vector, raster) = `VectorCircle`, `RasterCircle`, ... class explosion.
+
+```csharp
+public interface IRenderer { void DrawCircle(float radius); }
+public class VectorRenderer : IRenderer { public void DrawCircle(float r) => Console.WriteLine($"Vector r={r}"); }
+public class RasterRenderer : IRenderer { public void DrawCircle(float r) => Console.WriteLine($"Pixels r={r}"); }
+
+public abstract class Shape
+{
+    protected readonly IRenderer Renderer;  // "bridge" to other dimension
+    protected Shape(IRenderer renderer) => Renderer = renderer;
+    public abstract void Draw();
+}
+
+public class Circle : Shape
+{
+    private readonly float _radius;
+    public Circle(IRenderer renderer, float radius) : base(renderer) => _radius = radius;
+    public override void Draw() => Renderer.DrawCircle(_radius);
+}
+
+new Circle(new VectorRenderer(), 5).Draw();
+new Circle(new RasterRenderer(), 5).Draw();
+// naya Shape YA naya Renderer = ek new class, per-combination nahi
+```
+
+- **🔁 Bridge vs Adapter:** Adapter mismatch ko *after the fact* fix karta hai (already existing cheezein); Bridge *designed up front* hota hai do dimensions separate rakhne ke liye.
+- **Avoid:** really sirf ek dimension vary kare (needless indirection).
+
+## 3.7 Flyweight (rare — skim)
+
+- **Intent:** *Huge* number of similar objects ke common parts **share** karo memory bachane ke liye.
+- **Analogy:** Book ke letters — "e" ki definition ek baar, positions many.
+- **Idea:** State split — **Intrinsic** (shared, unchanging: tree ka texture/model) vs **Extrinsic** (per-object unique: x/y position). Intrinsic ek copy share, extrinsic per-object. 1M trees = model ek baar.
+- **When:** Sirf genuinely millions of objects + real memory problem. Otherwise premature optimization — skip.
+- **Tech-lead note:** Everyday C# mein string interning, cached immutable value objects, `ArrayPool<T>`.
+
+### Lesson 3 recap
+| Pattern | Ek line | Aap already use karte ho |
+|---|---|---|
+| Adapter | Interface translate karo | Kisi bhi third-party SDK ko wrap |
+| **Decorator** ⭐ | Wrapping se features add | ASP.NET middleware, HttpClient handlers |
+| Facade | Complexity pe simple front door | Service/application layer |
+| Proxy | Stand-in jo access control kare | EF Core lazy loading, mocking libs |
+| Composite | Tree ko single object jaise | File systems, menus, UI trees |
+| Bridge | Do independent dimensions separate | (up front design) |
+| Flyweight | Objects ke across data share | String interning, `ArrayPool<T>` |
+
+> **Confusing trio:** Adapter (*mismatch fix*), Decorator (*behavior add*), Proxy (*access control*) — teeno wrap karte hain, difference **kyun** mein.
 
 ---
 
-<a name="4-behavioral-patterns"></a>
-## 4. Behavioral Patterns
-*Objects ke beech algorithms, responsibilities, aur communication manage karo.*
+# PART 4 — Behavioral Patterns
 
----
+> Objects kaise behave karte hain aur ek dusre se baat karte hain. Sabse bada + useful group. **Core four master karo: Strategy, Observer, Command.**
 
-### 4.1 Strategy ⭐ (pehle yeh seekho)
-- **Intent:** Interchangeable algorithms ki ek family define karo; runtime par ek select karo.
-- **Problem:** Ek kaam karne ke multiple ways hain, dynamically chosen; aap bade `switch`/`if` chains khatam karna chahte ho.
+## 4.1 Strategy ⭐
+
+- **Intent:** Har algorithm apni class mein (ek interface share), aur **runtime par swap** karo ki kaunsa use karna hai.
+- **Analogy:** Airport jaana — drive/taxi/train; goal same, strategy choose.
+- **Strategy = "OCP, packaged."** Yeh Lesson 1 ke OCP example wala exact idea hai.
 
 ```csharp
 public interface IShippingStrategy { decimal Calculate(Order order); }
-
-public class StandardShipping : IShippingStrategy
-{ public decimal Calculate(Order o) => o.Weight * 1.5m; }
-
-public class ExpressShipping : IShippingStrategy
-{ public decimal Calculate(Order o) => o.Weight * 3.0m + 10; }
+public class StandardShipping : IShippingStrategy { public decimal Calculate(Order o) => o.Weight * 1.5m; }
+public class ExpressShipping  : IShippingStrategy { public decimal Calculate(Order o) => o.Weight * 3.0m + 10; }
 
 public class ShippingCalculator
 {
     private readonly IShippingStrategy _strategy;
-    public ShippingCalculator(IShippingStrategy strategy) => _strategy = strategy;
-    public decimal GetCost(Order o) => _strategy.Calculate(o);
+    public ShippingCalculator(IShippingStrategy strategy) => _strategy = strategy; // injected
+    public decimal GetCost(Order order) => _strategy.Calculate(order);
 }
+
+var calc = new ShippingCalculator(new ExpressShipping());
+// "drone shipping" = ek new class, koi existing code nahi badalta
 ```
-- **Pros:** OCP; isolation mein testable; conditionals remove karta hai.
-- **Cons:** Zyada types; client ko pata hona chahiye kaunsi strategy pick karni hai.
-- **Use when:** Interchangeable algorithms/policies.
-- 🧭 **Tech-Lead lens:** Workhorse pattern hai. C# mein, `Func<Order,decimal>` ek lightweight Strategy hai. Key se strategies resolve karne ke liye keyed DI (.NET 8) ke saath combine karo.
 
-📺 [Christopher Okhravi – Strategy](https://www.youtube.com/results?search_query=christopher+okhravi+strategy+pattern) · [Refactoring Guru](https://refactoring.guru/design-patterns/strategy/csharp/example)
+- **Avoid:** hamesha ek hi algorithm ho, ya differences one-liner (simple `if` theek).
+- **Tech-lead note:** C# mein strategy ek **delegate** (`Func<Order, decimal>`) jitna lightweight ho sakta hai. .NET 8 **keyed DI** se strategies key se resolve. Workhorse pattern.
 
----
+## 4.2 Observer ⭐
 
-### 4.2 Observer
-- **Intent:** One-to-many dependency; jab subject change hota hai, observers ko notify kiya jaata hai.
-- **Problem:** Objects ko bina tight coupling ke doosre object ke state changes par react karna padta hai.
+- **Intent:** Jab object change ho, woh automatically **interested objects ki list ko notify** kare — bina jaane woh kaun hain.
+- **Analogy:** YouTube channel — creator "publish" karta hai, sab subscribers ping. Kabhi bhi join/leave.
+- **Idiomatic C#:** `event` language mein built-in hai.
 
 ```csharp
-// Idiomatic C#: events
 public class Stock
 {
-    public event Action<decimal>? PriceChanged;
+    public event Action<decimal>? PriceChanged;   // built-in subscriber list
     private decimal _price;
     public decimal Price
     {
         get => _price;
-        set { _price = value; PriceChanged?.Invoke(value); }
+        set { _price = value; PriceChanged?.Invoke(value); }  // sabko notify
     }
 }
-// Subscribers: stock.PriceChanged += p => Console.WriteLine($"New price {p}");
+
+var stock = new Stock();
+stock.PriceChanged += p => Console.WriteLine($"UI update: {p}");
+stock.PriceChanged += p => Console.WriteLine($"Log: {p}");
+stock.Price = 99.5m;  // DONO subscribers fire
 ```
-- **Pros:** Loose coupling; dynamic subscriptions.
-- **Cons:** Un-unsubscribed handlers se memory leaks; ordering/reentrancy surprises.
-- **Use when:** Event-driven notifications.
-- 🧭 **Tech-Lead lens:** C# `event`/`Action`, `IObservable<T>`/Rx, aur `INotifyPropertyChanged` sab Observer hi hain. **Long-lived objects mein leaked subscriptions** (lapsed listeners) par dhyan rakhna — ek common production bug hai.
 
-📺 [Christopher Okhravi – Observer](https://www.youtube.com/results?search_query=christopher+okhravi+observer+pattern) · [Refactoring Guru](https://refactoring.guru/design-patterns/observer/csharp/example)
+- `+=` subscribe, `-=` unsubscribe. `?.Invoke` = "sirf agar koi subscriber ho." Publisher ko pata nahi kaun sun raha — total decoupling.
+- **Avoid / ⚠️:** **Memory leaks** — long-lived object subscribe kare aur kabhi `-=` na kare to GC nahi hoga. Genuine production bug. Subscriber order/re-entrancy bhi surprise.
+- **Tech-lead note:** `event`/`Action`, `IObservable<T>` (Rx), `INotifyPropertyChanged` sab Observer hain. Reviews mein **missing `-=` unsubscribes** hunt karo.
 
----
+## 4.3 Command ⭐
 
-### 4.3 Command
-- **Intent:** Ek request ko object ke roop mein encapsulate karo (params, undo, queue, log).
-- **Problem:** Aapko operations parameterize, queue, log, ya undo karne hain.
+- **Intent:** Action (+ uska data) ko apni **object** mein wrap karo — store, queue, pass, log, ya undo karne ke liye.
+- **Analogy:** Restaurant order ticket — ek *thing* jise queue/hand/log/cancel kar sakte ho.
 
 ```csharp
 public interface ICommand { void Execute(); void Undo(); }
@@ -531,75 +577,79 @@ public class AddTextCommand : ICommand
     public void Execute() => _doc.Append(_text);
     public void Undo()    => _doc.RemoveLast(_text.Length);
 }
-// Invoker keeps a history stack for undo/redo.
+
+public class Editor
+{
+    private readonly Stack<ICommand> _history = new();
+    public void Run(ICommand command) { command.Execute(); _history.Push(command); }
+    public void Undo() { if (_history.Count > 0) _history.Pop().Undo(); }
+}
 ```
-- **Pros:** Undo/redo, queuing, logging, macro commands; sender ko receiver se decouple karta hai.
-- **Cons:** Bahut si small classes.
-- **Use when:** Undo/redo, task queues, transactional actions, CQRS commands.
-- 🧭 **Tech-Lead lens:** **MediatR** requests/handlers hi Command pattern hain aur .NET CQRS mein ubiquitous hain. Isko deeply samjho — aap bahut sa review karoge.
 
-📺 [Christopher Okhravi – Command](https://www.youtube.com/results?search_query=christopher+okhravi+command+pattern) · [Refactoring Guru](https://refactoring.guru/design-patterns/command/csharp/example)
+- Har command khud jaanta hai do + undo + apna data carry karta hai. `Editor` ko command ka content pata nahi — sirf `Execute()` + stack. Objects hone se queue/log bhi ho sakte hain.
+- **Avoid:** in abilities mein se kuch na chahiye (tab extra classes fizool).
+- **Tech-lead note:** **MediatR** = Command pattern (Request + Handler). .NET mein **CQRS** ka backbone.
 
----
+## 4.4 Template Method
 
-### 4.4 State
-- **Intent:** Jab object ka internal state change ho to uska behavior alter karo — yeh *appears* hota hai jaise class change ho rahi ho.
-- **Problem:** Behavior state par depend karta hai aur aapke paas sprawling `switch(state)` blocks hain.
-
-```csharp
-public interface IOrderState { IOrderState Next(); string Status { get; } }
-
-public class PendingState : IOrderState
-{ public string Status => "Pending"; public IOrderState Next() => new PaidState(); }
-
-public class PaidState : IOrderState
-{ public string Status => "Paid"; public IOrderState Next() => new ShippedState(); }
-
-public class ShippedState : IOrderState
-{ public string Status => "Shipped"; public IOrderState Next() => this; }
-```
-- **Pros:** State conditionals remove karta hai; har state ke rules localized hote hain.
-- **Cons:** Har state ke liye class; transitions scattered ho sakte hain.
-- **Use when:** State-specific behavior wale well-defined state machines.
-- 🧭 **Tech-Lead lens:** Complex workflows ke liye hand-rolling ke bajaye ek real state-machine lib (e.g., **Stateless**) consider karo. State (behavior changes) ko Strategy (algorithm choice) se distinguish karo — same shape, different intent.
-
-📺 [Christopher Okhravi – State](https://www.youtube.com/results?search_query=christopher+okhravi+state+pattern) · [Refactoring Guru](https://refactoring.guru/design-patterns/state/csharp/example)
-
----
-
-### 4.5 Template Method
-- **Intent:** Base class mein algorithm ka skeleton define karo, steps ko subclasses ko defer karo.
-- **Problem:** Kai algorithms structure share karte hain lekin specific steps mein differ karte hain.
+- **Intent:** Base class process ka **fixed skeleton** define kare, specific steps subclasses ke liye blanks chhode.
+- **Analogy:** Hot drinks recipe — boil → add ingredient → pour → condiments; tea/coffee sirf specific steps fill.
 
 ```csharp
 public abstract class DataImporter
 {
-    // Template method — fixed skeleton
-    public void Import(string path)
+    public void Import(string path)   // template method — NOT virtual, order locked
     {
-        var raw = Read(path);
-        var records = Parse(raw);
+        var raw     = ReadFile(path);
+        var records = Parse(raw);       // varies
         Validate(records);
         Save(records);
     }
-    protected abstract string Read(string path);
-    protected abstract IEnumerable<Record> Parse(string raw);
-    protected virtual void Validate(IEnumerable<Record> r) { } // hook
-    protected abstract void Save(IEnumerable<Record> records);
+    protected string ReadFile(string path) => "raw data";       // shared
+    protected abstract List<string> Parse(string raw);           // subclass MUST fill
+    protected virtual void Validate(List<string> records) { }    // optional hook
+    protected void Save(List<string> records) => Console.WriteLine($"Saved {records.Count}");
+}
+
+public class CsvImporter : DataImporter
+{
+    protected override List<string> Parse(string raw) => raw.Split(',').ToList();
 }
 ```
-- **Pros:** Skeleton reuse hota hai; invariant order enforce karta hai.
-- **Cons:** Inheritance-bound hai; rigid ho sakta hai.
-- **Use when:** Fixed process, variable steps.
-- 🧭 **Tech-Lead lens:** Jab otherwise multiple inheritance ya runtime step swapping ki zarurat ho to Strategy/composition prefer karo. Template Method aapko class hierarchy mein lock kar deta hai.
 
-📺 [Christopher Okhravi – Template Method](https://www.youtube.com/results?search_query=christopher+okhravi+template+method+pattern) · [Refactoring Guru](https://refactoring.guru/design-patterns/template-method/csharp/example)
+- `Import` order fix karta hai (never changes). `abstract Parse` = must fill; `virtual Validate` = optional hook. Subclasses reorder nahi kar sakte.
+- **Avoid:** inheritance rigid hai — runtime pe steps swap chahiye to **Strategy** (composition) prefer karo.
+- **Tech-lead note:** Template Method (inheritance) vs Strategy (composition) similar problem. "Composition over inheritance" — Strategy le lo jab tak skeleton genuinely stable/simple na ho.
 
----
+## 4.5 State
 
-### 4.6 Chain of Responsibility
-- **Intent:** Ek request ko handlers ki chain ke along pass karo jab tak koi ek usko handle na kare.
-- **Problem:** Multiple potential handlers hain; aap nahi chahte ki sender kisi specific handler se coupled ho.
+- **Intent:** Object apna **behavior** change kare jab uska internal **state** change ho — jaise different class mein switch ho gaya.
+- **Analogy:** Traffic light — Red apne rules + jaanta hai next Green; Green apne rules + next Yellow.
+- **Problem:** `switch(status)` blocks har method (Ship/Cancel/Refund) mein scatter.
+
+```csharp
+public interface IOrderState { string Name { get; } IOrderState Next(); }
+
+public class PendingState : IOrderState { public string Name => "Pending"; public IOrderState Next() => new PaidState(); }
+public class PaidState    : IOrderState { public string Name => "Paid";    public IOrderState Next() => new ShippedState(); }
+public class ShippedState : IOrderState { public string Name => "Shipped"; public IOrderState Next() => this; } // terminal
+
+public class Order
+{
+    private IOrderState _state = new PendingState();
+    public string Status => _state.Name;
+    public void Advance() => _state = _state.Next();
+}
+```
+
+- Har state apne rules + transition own karti hai; `Order` delegate karta hai. Scattered `if (Status == ...)` gayab.
+- **🔁 State vs Strategy:** Strategy — *aap* bahar se algorithm pick karte ho, strategies ek dusre ko nahi jaanti. State — object khud internally switch karta hai, aur states aksar next state jaanti hain.
+- **Avoid:** sirf 2 simple states (boolean theek). Complex machines: **Stateless** library.
+
+## 4.6 Chain of Responsibility
+
+- **Intent:** Request ko handlers ki **line** se pass karo; har handler ya handle kare ya next ko pass kare.
+- **Analogy:** Customer support tiers — Tier 1 → 2 → 3 escalate.
 
 ```csharp
 public abstract class Handler
@@ -613,161 +663,234 @@ public class AuthHandler : Handler
 {
     public override void Handle(Request r)
     {
-        if (!r.IsAuthenticated) throw new UnauthorizedAccessException();
+        if (!r.IsAuthenticated) { Console.WriteLine("Rejected: not auth"); return; }
         Next?.Handle(r);
     }
 }
-// authHandler.SetNext(validationHandler).SetNext(loggingHandler);
+public class ValidationHandler : Handler
+{
+    public override void Handle(Request r)
+    {
+        if (string.IsNullOrEmpty(r.Body)) { Console.WriteLine("Rejected: empty"); return; }
+        Next?.Handle(r);
+    }
+}
+
+var auth = new AuthHandler();
+auth.SetNext(new ValidationHandler());  // auth → validation
+auth.Handle(myRequest);
 ```
-- **Pros:** Sender/receiver decouple karta hai; handlers freely add/reorder kar sakte ho.
-- **Cons:** Request unhandled ja sakta hai; trace karna harder hota hai.
-- **Use when:** Pipelines, validation chains, middleware.
-- 🧭 **Tech-Lead lens:** **ASP.NET Core middleware** aur `HttpClient` ke `DelegatingHandler`s Chain of Responsibility hi hain. Aap already isko daily use karte ho.
 
-📺 [Christopher Okhravi – Chain of Responsibility](https://www.youtube.com/results?search_query=christopher+okhravi+chain+of+responsibility) · [Refactoring Guru](https://refactoring.guru/design-patterns/chain-of-responsibility/csharp/example)
+- Har handler apna bit + `Next?.Handle(r)` — jab tak stop na kare. Handlers add/remove/reorder easily.
+- **Avoid:** request end tak unhandled reh sakti hai; long chains trace karna hard.
+- **Tech-lead note:** **ASP.NET Core middleware** aur `HttpClient` `DelegatingHandler` pipeline exactly yeh.
 
----
+## 4.7 Mediator
 
-### 4.7 Mediator
-- **Intent:** Objects ke beech communication centralize karo taaki woh ek doosre ko directly refer na karein.
-- **Problem:** Many-to-many coupling (direct references ka "spaghetti").
-- **Use when:** Complex UI/component interactions, request→handler decoupling.
-- 🧭 **Tech-Lead lens:** **MediatR** (in-process) canonical .NET example hai — yeh Mediator + Command hai. Over-use se bacho: trivial calls ko mediator ke through route karna benefit ke bina indirection add karta hai. Design reviews mein yeh trade-off discuss karo.
-
-📺 [Christopher Okhravi – Mediator](https://www.youtube.com/results?search_query=christopher+okhravi+mediator+pattern) · [Refactoring Guru](https://refactoring.guru/design-patterns/mediator/csharp/example)
-
----
-
-### 4.8 Iterator
-- **Intent:** Underlying representation expose kiye bina elements ko sequentially access karo.
-- 🧭 **Tech-Lead lens:** C# aapko yeh free mein deta hai: `IEnumerable<T>`/`IEnumerator<T>` aur `yield return`. Aap rarely isko hand se implement karte ho — lekin yeh jaanna ki `yield` ek lazy state machine produce karta hai, senior-level knowledge hai.
+- **Intent:** Objects directly (tangled web) baat karne ke bajaye ek central **hub** se baat karein.
+- **Analogy:** Air traffic control — planes directly radio nahi karte, control tower coordinate karta hai.
 
 ```csharp
-public IEnumerable<int> Fibonacci()
+public interface IDialogMediator { void Notify(object sender, string ev); }
+
+public class RegistrationDialog : IDialogMediator
 {
-    int a = 0, b = 1;
-    while (true) { yield return a; (a, b) = (b, a + b); } // lazy iterator
+    public Button SubmitButton { get; set; } = new();
+    public Checkbox AgreeTerms { get; set; } = new();
+    public void Notify(object sender, string ev)
+    {
+        if (sender == AgreeTerms && ev == "toggled")
+            SubmitButton.Enabled = AgreeTerms.Checked;  // ek jagah coordination
+    }
+}
+// components sirf mediator.Notify(this, "toggled") call karte hain
+```
+
+- **Avoid:** mediator "god object" ban sakta hai. Trivial calls route mat karo.
+- **Tech-lead note:** **MediatR** (Mediator + Command). Controllers ko handlers se decouple karta hai — teams over-apply karti hain, simple ops mein indirection. Review mein trade-off weigh karo.
+
+## 4.8 Iterator (C# free mein deta hai)
+
+- **Intent:** Collection ke items ek-ek step karo **bina jaane collection internally kaise store karta hai.**
+- **Analogy:** TV remote ka "next channel."
+- **C# reality:** `foreach`, `IEnumerable<T>`, `yield return` — hand se almost never likhte.
+
+```csharp
+public IEnumerable<int> FirstThreeEvens()
+{
+    yield return 0;   // ek time par ek item, beech mein pause
+    yield return 2;
+    yield return 4;
+}
+foreach (var n in FirstThreeEvens()) Console.WriteLine(n);
+```
+
+- `yield return` hidden state machine banata hai; items lazily produce. LINQ isi pe built.
+- **Tech-lead note:** `IEnumerable<T>` **lazy** hai (enumerate na karo to kuch nahi chalta); **do baar enumerate = kaam do baar.** Reviews mein dhyan se dekho.
+
+## 4.9 Visitor
+
+- **Intent:** Objects ke group mein **new operations** add karo **unki classes modify kiye bina.**
+- **Analogy:** Tax auditor jo different businesses visit karta hai; agle month safety inspector bhejo bina businesses change kiye.
+- **Trick:** *Double dispatch* — har element ka `Accept(visitor)` jo visitor ko back call karta hai.
+
+```csharp
+public interface IShapeVisitor { void Visit(Circle c); void Visit(Square s); }
+public interface IShape { void Accept(IShapeVisitor visitor); }
+
+public class Circle : IShape
+{
+    public float Radius = 5;
+    public void Accept(IShapeVisitor v) => v.Visit(this);   // matching Visit
+}
+
+public class AreaCalculator : IShapeVisitor  // naya operation = naya visitor; shapes never change
+{
+    public void Visit(Circle c) => Console.WriteLine(3.14f * c.Radius * c.Radius);
+    public void Visit(Square s) => Console.WriteLine("square area...");
 }
 ```
-📺 [Refactoring Guru – Iterator (C#)](https://refactoring.guru/design-patterns/iterator/csharp/example)
 
----
-
-### 4.9 Visitor
-- **Intent:** Object structure ki classes modify kiye bina usme operations add karo (double dispatch).
-- **Problem:** Aapko ek stable class hierarchy ke upar bahut se unrelated operations chahiye.
-- **Pros:** Element classes touch kiye bina naye operations.
-- **Cons:** Naya *element* type add karne se har visitor change karna padta hai; verbose hota hai.
-- **Use when:** Stable element hierarchy, frequently added operations (compilers/ASTs).
-- 🧭 **Tech-Lead lens:** Powerful hai lekin heavy hai. Modern C# mein, sealed type hierarchy ke upar **pattern matching / switch expressions** often Visitor ko far less code se replace kar dete hain.
-
+- **Fayda:** element classes touch kiye bina new operations. **Nuksan:** reverse painful — nayi *shape* add = *har* visitor update. Verbose bhi.
+- **Tech-lead note — modern C# aksar replace karta hai:** sealed hierarchy pe pattern matching:
 ```csharp
-// Modern C# alternative to Visitor
-decimal Area(Shape s) => s switch
+decimal Area(IShape shape) => shape switch
 {
-    Circle c    => MathF.PI * c.Radius * c.Radius,
-    Rectangle r => r.Width * r.Height,
-    _           => throw new ArgumentOutOfRangeException()
+    Circle c => 3.14m * (decimal)(c.Radius * c.Radius),
+    Square s => 0m,
+    _        => throw new ArgumentException("Unknown shape")
 };
 ```
-📺 [Christopher Okhravi – Visitor](https://www.youtube.com/results?search_query=christopher+okhravi+visitor+pattern) · [Refactoring Guru](https://refactoring.guru/design-patterns/visitor/csharp/example)
+Classic Visitor mainly complex stable structures (compiler ASTs) ke liye.
+
+## 4.10 Memento
+
+- **Intent:** Object ki current state capture karo taaki **baad mein restore** kar sako — private internals expose kiye bina.
+- **Analogy:** Video game save point.
+
+```csharp
+public record EditorSnapshot(string Content);   // immutable snapshot (memento)
+
+public class TextEditor
+{
+    public string Content { get; private set; } = "";
+    public void Type(string text) => Content += text;
+    public EditorSnapshot Save() => new(Content);
+    public void Restore(EditorSnapshot s) => Content = s.Content;
+}
+```
+
+- **When:** Undo/redo, checkpoints, "cancel changes." Aksar **Command** (4.3) ke saath paired.
+- **Tech-lead note:** `record` types mementos cheap banate hain (immutable). Yaad rakho `record` copies shallow — nested mutable objects still shared.
+
+## 4.11 Interpreter (rare — sirf aware raho)
+
+- **Intent:** Chhota "language" (grammar) define karo + usme likhi sentences evaluate karo.
+- **Honest advice:** Hand se almost never banate. Mini-language/expression parse karna ho to library use karo (**ANTLR**, **Sprache**, **Superpower**) ya C# `Expression` trees. Bas naam recognize karo.
+
+### Lesson 4 recap
+| Pattern | One line | Real C# |
+|---|---|---|
+| **Strategy** ⭐ | Runtime pe algorithm swap | `Func<>`, keyed DI |
+| **Observer** ⭐ | Ek change → bahut ko notify | `event`, `IObservable<T>`, Rx |
+| **Command** ⭐ | Action ko object mein | MediatR, CQRS, undo/redo |
+| Template Method | Fixed skeleton, fill-in steps | Base-class workflows |
+| State | State ke saath behavior change | Stateless library |
+| Chain of Responsibility | Request ko line se pass | ASP.NET middleware |
+| Mediator | Central hub, no direct talk | MediatR |
+| Iterator | Collection step karo | `foreach`, `yield`, LINQ |
+| Visitor | Classes edit bina new operations | Often replaced by pattern matching |
+| Memento | State save & restore | `record` snapshots + Command |
+| Interpreter | Mini-language evaluate | Parser library instead |
+
+> **Same shape, different intent:** Strategy (aap choose) vs State (object khud switch); Command (action-as-object) vs Strategy (algorithm-as-object).
 
 ---
 
-### 4.10 Memento
-- **Intent:** Encapsulation violate kiye bina object ka internal state capture aur restore karo.
-- **Use when:** Undo/redo, snapshots, checkpoints.
-- 🧭 **Tech-Lead lens:** Undo ke liye often Command ke saath paired hota hai. C# `record` snapshots mementos ko cheap aur immutable bana dete hain.
+# PART 5 — Modern C#, Tech-Lead Lens aur Aage Kya
 
-📺 [Refactoring Guru – Memento (C#)](https://refactoring.guru/design-patterns/memento/csharp/example)
+## Part A — Patterns jo modern C# free mein deta hai
 
----
+> **Rule:** agar framework already clearly kehta hai, framework use karo. Manual pattern tab jab genuinely clarity/capability add kare. Built-in ke hote hue textbook pattern = review mein red flag.
 
-### 4.11 Interpreter (rare)
-- **Intent:** Ek grammar define karo aur usme sentences interpret karo.
-- 🧭 **Tech-Lead lens:** Almost never hand se build karna — parser lib (ANTLR, Sprache, Superpower) ya `Expression` trees use karo. Jaan lo ki yeh exist karta hai; iske liye reach mat karo.
-
-📺 [Refactoring Guru – Interpreter](https://refactoring.guru/design-patterns/interpreter)
-
----
-
-<a name="5-modern-csharp"></a>
-## 5. Modern C# Idioms & Jab Patterns "Disappear" Ho Jaate Hain
-
-Ek senior/tech-lead differentiator: yeh jaanna ki language ab aapko kaunse GoF patterns free mein de deti hai.
-
-| Classic pattern | Modern C# / .NET replacement |
+| Classic pattern | Modern C#/.NET mein iski jagah |
 |---|---|
-| Singleton | `services.AddSingleton<T>()` (DI lifetime) |
-| Factory / Abstract Factory | DI container, `Func<T>`, keyed services (.NET 8), `IServiceProvider` |
-| Strategy | `Func<>` delegates, keyed DI |
-| Observer | `event` / `Action`, `IObservable<T>` (Rx), `INotifyPropertyChanged`, channels |
-| Command + Mediator | **MediatR** requests/handlers |
-| Chain of Responsibility | ASP.NET Core middleware, `DelegatingHandler` |
-| Decorator | DI decoration (Scrutor `.Decorate<T>()`), middleware |
-| Iterator | `IEnumerable<T>` + `yield return`, LINQ |
-| Prototype / Memento | `record` + `with` expressions |
-| Visitor | `switch` expressions + pattern matching over sealed hierarchies |
-| Builder | `required` members, object initializers, `with` |
+| **Singleton** | `services.AddSingleton<IThing, Thing>();` |
+| **Factory / Abstract Factory** | DI container, `Func<T>`, keyed services (.NET 8+) |
+| **Strategy** | `Func<>` delegate, ya keyed DI |
+| **Observer** | `event`/`Action`, `IObservable<T>` (Rx), `INotifyPropertyChanged`, channels |
+| **Command + Mediator** | **MediatR** (requests + handlers) |
+| **Chain of Responsibility** | ASP.NET Core middleware; `DelegatingHandler`s |
+| **Decorator** | **Scrutor** (`.Decorate<T>()`); middleware |
+| **Iterator** | `IEnumerable<T>` + `yield return`; LINQ |
+| **Prototype / Memento** | `record` + `with` |
+| **Visitor** | Sealed hierarchy pe `switch` + pattern matching |
+| **Builder** | Object initializers + `required`; `with` |
 
-**Reviews ke liye rule of thumb:** Agar language ya framework already intent ko idiomatically express kar rahi hai, to usko prefer karo. Textbook pattern ke liye reach karo sirf tab jab woh genuine clarity ya capability add kare.
+```csharp
+// records — immutable data + built-in copy (Prototype/Memento free)
+public record Person(string Name, int Age);
+var b = a with { Age = 37 };        // copy-and-change; 'a' untouched
 
-📺 [Nick Chapsas channel (modern C#/.NET)](https://www.youtube.com/@nickchapsas) · [Amichai Mantinband (patterns & clean arch in C#)](https://www.youtube.com/@amantinband)
+// required members — safe construction without Builder
+public class Config { public required string ApiKey { get; init; } }
+var c = new Config { ApiKey = "abc" };
 
----
+// pattern matching — replaces many Visitor/Strategy switches
+string Describe(object o) => o switch
+{
+    int n when n < 0 => "negative number",
+    int          => "number",
+    string s     => $"text of length {s.Length}",
+    null         => "nothing",
+    _            => "something else"
+};
 
-<a name="6-tech-lead-playbook"></a>
-## 6. The Tech-Lead Playbook: Reviews & Design Mein Isko Apply Karna
+// DI — container jo quietly Factory + Singleton karta hai
+services.AddSingleton<IClock, SystemClock>();      // one shared instance
+services.AddScoped<IOrderRepo, SqlOrderRepo>();    // one per web request
+services.AddTransient<IEmailSender, SmtpSender>(); // fresh har baar
+```
 
-Patterns jaanne se aage, aapka role hai unke use ko **govern** karna. Actively karne wali cheezein:
+## Part B — Tech-Lead lens
 
-1. **Force ka naam lo, pattern ka nahi.** "Yeh OCP violate karta hai kyunki har naya payment type is switch ko edit karta hai" "yahan Strategy use karo" se better lands karta hai.
-2. **Over-engineering (YAGNI) ke against guard karo.** Sabse common junior mistake yeh hai ki patterns preemptively apply kar diye jaate hain. Poocho: *"Yeh abstraction kaunsa concrete change cheaper banata hai — aur kya woh change likely hai?"*
-3. **Confusable pairs par dhyan do** (frequent interview & review topics):
-   - Strategy vs State (algorithm choice vs behavior-by-state)
-   - Adapter vs Bridge (fix mismatch vs designed-in two axes)
-   - Decorator vs Proxy (add behavior vs control access)
-   - Factory Method vs Abstract Factory (one product vs a family)
-4. **Composition + DI prefer karo.** Zyadatar "kaunsa pattern?" debates "ek abstraction inject karo" mein dissolve ho jaate hain.
-5. **Pattern-shaped tech debt track karo:** leaked Observer subscriptions, god-object Facades, mediator-for-everything, decorator ordering bugs.
-6. **LLD ko architecture se connect karo:** yeh patterns Clean/Hexagonal architecture, DDD tactical patterns (Repository, Unit of Work, Aggregate), aur CQRS ke neeche ke building blocks hain. LLD fluency hi aapki HLD ko credible banati hai.
+1. **Pattern names ke bajaye *forces* ki baat karo.** ❌ "Yahan Strategy use karo." ✅ "Har naya payment type isi `switch` ko edit karta hai, existing break hone ka risk — kya har type apni class bana sakte hain?" Problem ko naam do, pattern khud follow karega.
+2. **Over-engineering se ladho (#1 job).** Har abstraction pe poochho: *"Yeh kaunsa concrete, likely change cheaper banata hai — aur woh change aa raha hai?"* Agar "just in case" → **YAGNI violation**. Best code = simplest code jo real problem solve kare.
+3. **"Same shape, different intent" pairs clear rakho:**
 
-### Tech lead ke liye jaanne layak adjacent patterns (GoF nahi)
-- **Repository & Unit of Work** (data access abstraction — lekin EF Core ko needlessly wrap mat karo)
-- **Options pattern** (`IOptions<T>` config)
-- **Result / Either** (exceptions ke bina error handling)
-- **Specification pattern** (composable query/business rules)
-- **Null Object** (null checks avoid karna)
-- **CQRS + Mediator** (read/write separation)
+| Pair | Farak |
+|---|---|
+| Strategy vs State | Strategy: *aap* algorithm pick. State: object khud switch + next state jaanta |
+| Adapter vs Bridge | Adapter: existing mismatch fix. Bridge: up-front do dimensions separate |
+| Decorator vs Proxy | Decorator: behavior *add*. Proxy: access *control* |
+| Factory Method vs Abstract Factory | Ek product vs matching *family* |
+| Command vs Strategy | Command: *action* (undo/queue). Strategy: *algorithm* |
 
----
+4. **Pattern-shaped tech debt flag karo:** Leaked Observer subscriptions (`+=` bina `-=` → leak); God-object Facades/Mediators; hand-rolled Singletons (DI hone chahiye); Decorator/middleware ordering bugs; speculative Abstract Factories / single-impl interfaces "for flexibility."
+5. **LLD ko architecture se connect karo:** Clean/Hexagonal = DIP system scale par (boundaries pe Adapters); DDD tactical (Repository, Aggregate, Value Object) inhi pe build; CQRS = app layer pe Command + Mediator.
 
-<a name="7-resources"></a>
-## 7. Curated Learning Path & Master Resources
+## Part C — GoF se aage: enterprise patterns
 
-### Suggested order (basic → advanced)
-1. SOLID + composition over inheritance
-2. Strategy → Observer → Decorator → Factory Method (the "daily four")
-3. Command → State → Template Method → Chain of Responsibility
-4. Adapter → Facade → Proxy → Composite
-5. Abstract Factory → Builder → Bridge → Visitor
-6. Modern C# replacements (Section 5) + adjacent tech-lead patterns (Section 6)
-7. Rare/heavy: Flyweight, Interpreter, Memento, Prototype
+| Pattern | Kya karta hai | Dhyan |
+|---|---|---|
+| **Repository** | Data access ko interface (`IOrderRepository`) ke peeche abstract | EF Core ko bina wajah thin repo mein wrap mat karo — EF already repository/unit-of-work hai |
+| **Unit of Work** | Multiple changes ek commit/transaction mein group | EF Core `DbContext` already ek hai |
+| **Options pattern** | `IOptions<T>` se strongly-typed config | Settings read karne ka standard .NET way |
+| **Result / Either** | Exception ke bajaye success-or-error ko value return | Expected failures (validation) ke liye; truly exceptional cases ke liye exceptions |
+| **Specification** | Business rule / query filter reusable combinable object | Complex reused query logic |
+| **Null Object** | `null` ke bajaye "do-nothing" impl (e.g. `NullLogger`) | Null-checks hata deta hai |
+| **CQRS** | Read model ko write model se separate | Powerful but complex — simple CRUD pe mat lagao |
 
-### Master video resources
-- 🎥 **Christopher Okhravi – Design Patterns playlist** (best conceptual explanations, ~1 video/pattern): [playlist search](https://www.youtube.com/results?search_query=christopher+okhravi+design+patterns+playlist)
-- 🎥 **Nick Chapsas** – modern, C#-specific, patterns kab obsolete hain uspar opinionated: [channel](https://www.youtube.com/@nickchapsas)
-- 🎥 **Amichai Mantinband** – real .NET mein patterns + clean architecture: [channel](https://www.youtube.com/@amantinband)
-- 🎥 **Derek Banas – Design Patterns** (fast overview series): [search](https://www.youtube.com/results?search_query=derek+banas+design+patterns)
+## Part D — Roadmap
 
-### Master written resources
-- 📖 **Refactoring Guru** (har pattern ke *liye* C# examples hain): https://refactoring.guru/design-patterns/csharp
-- 📖 **DoFactory – .NET Design Patterns** (C# reference): https://www.dofactory.com/net/design-patterns
-- 📖 *Head First Design Patterns* (concepts) + *Design Patterns* (GoF, the original)
-- 📖 *Dependency Injection Principles, Practices, and Patterns* — Seemann & van Deursen ("DI replaces patterns" mindset ke liye essential)
+1. **Foundations cement karo:** Lesson 1 dobara jab tak interfaces + composition + DI natural na lagein. Ek line: *"interfaces par depend karo, jo chahiye woh inject karo."*
+2. **"Core four" haath se banao (memory se, no copy-paste):** Strategy (payment/shipping), Observer (`event`), Decorator (caching + logging), Factory Method. Yeh ~80% real use cover karte hain.
+3. **Wild mein recognize karo:** middleware (CoR), `HttpClient` handlers (Decorator/Chain), MediatR (Command/Mediator), DI registration (Factory/Singleton).
+4. **Tech-lead muscle:** Har review mein 2 questions — *"Isse nahi change karte to kaunsa SOLID violate hoga?"* (add justify) aur *"Kya yeh abstraction apna keep earn kar rahi hai ya YAGNI?"* (remove justify).
+5. **Architecture tak level up:** Clean Architecture, DDD, CQRS — same principles, larger scale.
 
-> **Video links par Note:** Maine YouTube *search* links use kiye hain (jo always current results par resolve hote hain) aur stable site links, individual video URLs hard-code karne ke bajaye jo time ke saath rot ho jaate hain. Named creator se top result pick karo.
+## Master resources
+- **Video:** Christopher Okhravi (clearest conceptual), Nick Chapsas (modern C#, kab patterns obsolete), Amichai Mantinband (patterns + clean arch), Derek Banas (fast overview).
+- **Written:** Refactoring Guru (`refactoring.guru/design-patterns/csharp`), DoFactory (.NET), *Head First Design Patterns* (friendliest), *Dependency Injection Principles, Practices, and Patterns* (Seemann & van Deursen — "DI replaces half the patterns" click karti hai).
 
----
-
-*Guide ek Senior Engineer / Tech Lead ke liye generated hai, C# focus ke saath. Suggested next step: "daily four" (Strategy, Observer, Decorator, Factory Method) pick karo, har ek ko ek scratch project mein once implement karo, phir Section 5 dobara padho yeh dekhne ke liye ki modern .NET mein same kaam idiomatically kaise karoge.*
+> **Final takeaway:** Aap 23 classic patterns, modern C# unhe kaise reshape karta hai, aur — sabse important — **kab unhe use NAHI karna** samajhte ho. Yehi judgment senior engineer ko list-memorizer se alag karta hai. Ab "core four" haath se banao. 🚀
