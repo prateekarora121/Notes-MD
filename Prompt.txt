@@ -1,0 +1,43 @@
+build this practice project as one real project: a small "Product Dashboard" app with a working nav shell, one shared Product model, one merged app.routes.ts, and every concept wired into an actual visible screen
+
+verify again if it covers all below topics
+
+@Component, @Directive, @Pipe, @NgModule, @Injectable, @Input, @Output, @HostBinding, @HostListener, @ViewChild, @ContentChild
+Data Binding
+Property binding
+Event binding
+Two-way binding
+@if / @for / @switch
+ng-container
+ng-template
+ng-content
+services
+The inject()
+
+how to implement it with pipe
+Fix yeh hai ki filtering ko component mein karo (on demand ek naye array mein recompute karke) ya instead RxJS/Signals-based derived state use karo
+
+all Component Lifecycle Hooks
+
+@ViewChild / @ViewChildren
+@ContentChild / @ContentChildren and Signal-based queries do it in both ways
+
+input ,output ,subject behaviour,Route params, query params, ya router navigation state
+all about Routing and Navigation,query param,this.route.paramMap.subscribe(...)
+
+Lazy loading feature modules
+all Route Guards lagacy way and new way
+
+Template-driven/Reactive form(from group,form control, form builder validations,form array)
+
+http client with all headers,params, payload 
+
+HttpInterceptor with HttpOnly cookie
+
+RxJS and exaples differentiating use of Observables ,Subjects, BehaviorSubject, Multicasting
+pipe() and filters(map etc)
+
+mergeMap
+switchMap
+concatMap
+exhaustMap

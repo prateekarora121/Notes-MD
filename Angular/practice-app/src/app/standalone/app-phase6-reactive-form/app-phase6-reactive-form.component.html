@@ -1,0 +1,23 @@
+<p>app-phase6-reactive-form works!</p>
+<form [formGroup]="userForm" (ngSubmit)="submitForm()">
+    <input type="text" formControlName="name" placeholder="Name">
+    @if (userForm.controls.name?.invalid && userForm.get('name')?.touched) {
+        <p>Name is required.</p>
+    }
+    <input type="text" formControlName="email" placeholder="Email">
+    <input type="password" formControlName="password" placeholder="Password">
+    <input type="number" formControlName="age" placeholder="Age">
+<button   type="submit">Submit</button>    
+</form>
+
+<p>app-phase6-reactive-form works!</p>
+<form [formGroup]="userForm2" (ngSubmit)="submitForm()">
+    <input type="text" formControlName="name" placeholder="Name">
+    @if (userForm2.controls.name?.invalid && userForm2.get('name')?.touched) {
+        <p>Name is required.</p>
+    }
+    <input type="text" formControlName="email" placeholder="Email">
+    <input type="password" formControlName="password" placeholder="Password">
+    <input type="number" formControlName="age" placeholder="Age">
+<button   type="submit">Submit</button>    
+</form> 

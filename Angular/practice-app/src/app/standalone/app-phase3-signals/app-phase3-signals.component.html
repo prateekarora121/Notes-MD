@@ -1,0 +1,11 @@
+<p>Count: {{ count() }}</p>
+<p>Math: {{ math() }}</p>
+<p>Sum: {{ sum() }}</p>
+<input type="text" [(ngModel)]="searchTerm" placeholder="Search products...">   
+<button (click)="removefirstProduct()">Remove First Product</button>
+<br>
+<select [(ngModel)]="selectedId">
+    @for ( product of products();track product.id) {
+        <option [value]="product.id">{{product.name}}</option>
+    }
+</select>

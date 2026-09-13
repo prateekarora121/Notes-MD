@@ -1,0 +1,32 @@
+<p>app-phase4-new-syntax works!</p>
+ 
+
+
+@if (status() === 'loading') {
+    <p>Loading...</p>
+}
+@else if (status() === 'success') {
+    <p>Success!</p>
+} @else if (status() === 'error') {
+    <p>Error!</p>
+}
+
+
+<ul>
+ @for (item of items(); track item.id) {
+        <li> {{item.name}},{{item.id}}</li>
+    }
+    @empty {
+        <li>No items available.</li>
+    }
+</ul>
+
+@switch (role()){
+@case ('admin'){ <p>Admin content</p> }
+@case ('user'){ <p>User content</p> }
+@case('guest'){ <p>Guest content</p> }
+
+}
+
+<button (click)="ClearItems()">Clear Items</button> 
+<button (click)="changeStatus()">Change Status</button>
