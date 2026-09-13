@@ -1775,37 +1775,9 @@ Agar time kam hai, yeh woh concepts hain jo almost har senior/lead Angular inter
 
 ---
 
-## Practice App: One Project, Every Concept Above
+## Practice Code: Every Cheat-List Topic, One Snippet at a Time
 
-Neeche ek single, coherent Angular 19 practice project hai — ek suggested file tree ke saath — jisme upar wale saare 7 cheat-list topics (aur unke andar mention hui har sub-concept) real, runnable code ke through cover hoti hai. Har topic ka apna folder/component hai taaki aap ek waqt mein ek concept practice kar sako.
-
-**Setup (once):**
-```bash
-npm install -g @angular/cli@19
-ng new interview-practice-app --standalone --routing --style=scss
-cd interview-practice-app
-```
-
-**Suggested file tree:**
-```
-src/
-  main.ts
-  app/
-    app.config.ts
-    app.routes.ts
-    app.ts                          # root standalone component
-    core/
-      auth.service.ts                # used by guards + interceptor
-      auth.interceptor.ts            # topic 7
-      auth.guard.ts                  # topic 7
-    practice/
-      ivy-debug/ivy-debug.ts         # topic 1
-      standalone-demo/standalone-demo.ts   # topic 2
-      signals-lab/signals-lab.ts     # topic 3
-      control-flow-lab/control-flow-lab.ts # topic 4
-      zoneless-counter/zoneless-counter.ts # topic 5
-      typed-form/typed-form.ts       # topic 6
-```
+Neeche har cheat-list topic ke liye ek focused, self-contained code snippet hai — koi single "poora app banao" scaffold nahi, bas har concept ka apna chhota, drop-into-any-component-ready example, seedha us explanation ke saath jo batata hai kya ho raha hai aur interview mein isse kaise frame karein.
 
 ### 1. Ivy vs View Engine — practice code
 
@@ -2217,44 +2189,19 @@ export const appConfig: ApplicationConfig = {
 ```
 
 ```typescript
-// src/app/app.routes.ts — functional guard wired into a lazy route
-import { Routes } from '@angular/router';
-import { authGuard } from './core/auth.guard';
-
-export const routes: Routes = [
-  {
-    path: 'dashboard',
-    canActivate: [authGuard],
-    loadComponent: () => import('./practice/signals-lab/signals-lab').then((m) => m.SignalsLabComponent),
-  },
-];
+// how a route would use this guard, in isolation — one route entry, not a whole app's routes.ts
+{
+  path: 'dashboard',
+  canActivate: [authGuard],
+  loadComponent: () => import('./signals-lab').then((m) => m.SignalsLabComponent),
+}
 ```
-
-**Running it:** wire each practice component into `app.routes.ts` behind its own path (`/ivy`, `/standalone`, `/signals`, `/control-flow`, `/zoneless`, `/form`), run `ng serve`, and click through each route while watching the console/Angular DevTools — that single run touches every concept listed in the cheat list above, end to end.
 
 ---
 
-## Practice App (continued): Core Decorators, Data Binding, Structural APIs, Services & the Pipe Anti-Pattern Fix
+## Practice Code: Core Decorators, Data Binding, Structural APIs, Services & the Pipe Anti-Pattern Fix
 
-Yeh section upar wale practice app ko extend karta hai — is doc mein mention hui baaki saari cheezein cover karta hai jo pehle practice code mein nahi thi: saare core decorators, teeno data-binding types, `ng-container`/`ng-template`/`ng-content`, services, aur `inject()` ka ek standalone example, plus wo **pipe-filtering anti-pattern ka actual fix** (jo Pipes section mein discuss hua tha) code ke saath.
-
-**New files to add to the same project:**
-```
-src/app/
-  practice/
-    decorators-lab/
-      highlight.directive.ts        # @Directive, @HostBinding, @HostListener
-      reverse.pipe.ts                # @Pipe (pure)
-      product-filter.pipe.ts         # @Pipe (the "wrong way" — impure filtering)
-      decorators-lab.ts              # @Component using @Input/@Output/@ViewChild/@ContentChild
-    binding-lab/binding-lab.ts       # property/event/two-way binding + ng-container/ng-template/ng-content
-    legacy-ngmodule-demo/
-      legacy.module.ts               # @NgModule — kept only for interview comparison
-      legacy.component.ts
-  core/
-    data.service.ts                  # @Injectable + inject()
-    product-filter-fix.ts            # component-based & signal-based fix for the pipe anti-pattern
-```
+Is section mein baaki saari cheezein cover hoti hain jo upar cheat-list ke practice snippets mein nahi thi: saare core decorators, teeno data-binding types, `ng-container`/`ng-template`/`ng-content`, services, aur `inject()` ka ek standalone example, plus wo **pipe-filtering anti-pattern ka actual fix** (jo Pipes section mein discuss hua tha) code ke saath. Har snippet independent hai — koi bhi ek file uthake apne kisi component mein drop kar sakte ho.
 
 ### `@Directive`, `@HostBinding`, `@HostListener` — practice code
 
@@ -2560,41 +2507,9 @@ export class ProductFilterFixComponent {
 - **Option B** matches "instead RxJS/Signals-based derived state use karo" — `computed()` is inherently memoized and only reruns when `termB` or `allProducts` actually change, giving you the same laziness a pure pipe has, without pipe boilerplate.
 - **Interview answer, restated with this code in hand:** "I'd never filter/sort in a template pipe unless it's pure and the input is a new array reference on each real change — otherwise I lift the derived list into the component as a `computed()` signal (or a plain method triggered by the actual input event), so it only recomputes when the underlying data truly changes."
 
-## Practice App (continued 3): Lifecycle, Queries, Routing, Guards, Forms, HttpClient, Interceptors & RxJS
+## Practice Code: Lifecycle, Queries, Routing, Guards, Forms, HttpClient, Interceptors & RxJS
 
-Same project, more files. Yeh section doc mein baaki bache hue core topics cover karta hai — lifecycle hooks, both decorator-style aur Signal-style queries side-by-side, poora Routing/Guards/Lazy-loading, Template-driven vs Reactive forms, `HttpClient`, cookie-based auth interceptor, aur RxJS Subjects/operators including the four "map" family operators.
-
-```
-src/app/
-  practice/
-    lifecycle-lab/lifecycle-lab.component.ts
-    query-lab/
-      child-item.component.ts
-      query-lab.component.ts            # @ViewChild(ren)/@ContentChild(ren) + viewChild()/viewChildren()/contentChild()/contentChildren()
-    comms-lab/
-      cart.service.ts                    # Subject vs BehaviorSubject sibling-communication demo
-      sender.component.ts
-      receiver.component.ts
-  features/
-    products/
-      products.routes.ts                 # lazy-loaded feature routes
-      product-list.component.ts
-      product-detail.component.ts        # route params + query params
-  core/
-    guards/
-      auth.guard.legacy.ts               # class-based CanActivate
-      auth.guard.ts                      # functional CanActivateFn
-    forms/
-      signup-template.component.ts       # template-driven form
-      signup-reactive.component.ts       # reactive form: FormGroup/FormControl/FormBuilder/FormArray
-    http/
-      product-api.service.ts             # headers, params, payload
-      auth-cookie.interceptor.ts         # HttpOnly-cookie-aware interceptor
-    rxjs/
-      subjects-demo.component.ts
-      search-operators.component.ts      # switchMap vs mergeMap vs concatMap vs exhaustMap
-app.routes.ts
-```
+Yeh section doc mein baaki bache hue core topics cover karta hai — lifecycle hooks, both decorator-style aur Signal-style queries side-by-side, poora Routing/Guards/Lazy-loading, Template-driven vs Reactive forms, `HttpClient`, cookie-based auth interceptor, aur RxJS Subjects/operators including the four "map" family operators. Har topic apne aap mein complete hai — file-name comments sirf ek sensible naming suggestion hain, ek pooray project ka mandatory structure nahi.
 
 ### Component Lifecycle Hooks — practice code
 
