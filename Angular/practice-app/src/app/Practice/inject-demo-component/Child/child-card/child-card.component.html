@@ -1,0 +1,6 @@
+<p>child-card works!</p>
+<div #childCard class="card">
+      <h3>{{ title }}</h3>
+      <ng-content></ng-content>  <!-- see ng-content section below -->
+      <button (click)="notifyParent()">Dismiss</button>
+    </div>

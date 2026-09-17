@@ -1,0 +1,7 @@
+<p>inject-demo-component works!</p>
+<p>Products loaded: {{ products().length }}</p>
+
+<app-child-card [title]="'Product Card'" 
+(dismissed)="onchildDismissed()">
+Test 1234
+</app-child-card>

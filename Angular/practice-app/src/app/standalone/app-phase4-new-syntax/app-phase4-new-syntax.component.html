@@ -14,7 +14,7 @@
 
 <ul>
  @for (item of items(); track item.id) {
-        <li> {{item.name}},{{item.id}}</li>
+        <li >  {{item.name | reversePipe}} {{item .id}}</li>
     }
     @empty {
         <li>No items available.</li>
@@ -27,6 +27,6 @@
 @case('guest'){ <p>Guest content</p> }
 
 }
-
+<div appHighlightDirective> test Directive</div>
 <button (click)="ClearItems()">Clear Items</button> 
 <button (click)="changeStatus()">Change Status</button>

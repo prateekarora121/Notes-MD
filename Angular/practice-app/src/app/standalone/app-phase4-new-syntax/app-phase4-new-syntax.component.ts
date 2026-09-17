@@ -1,10 +1,14 @@
 import { Component, signal } from '@angular/core';
+import { HighlightDirectiveDirective } from '../../directive/highlight-directive.directive';
+import { ReversePipePipe } from '../../pipes/reverse-pipe.pipe';
+
 type Status = 'loading'| 'success'| 'error';
 type Role = 'admin' | 'user' | 'guest';
 
 @Component({
   selector: 'app-app-phase4-new-syntax',
-  imports: [],
+  standalone: true,
+  imports: [HighlightDirectiveDirective, ReversePipePipe],
   templateUrl: './app-phase4-new-syntax.component.html',
   styleUrl: './app-phase4-new-syntax.component.css'
 })
