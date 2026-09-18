@@ -1,102 +1,65 @@
-# TypeScript Interview Guide (Senior / Lead Level)
+# TypeScript + Angular Interview Guide (Senior Full-Stack, 10+ YOE)
 
-> Personal notes se consolidate kiya gaya hai + senior .NET full-stack / Angular interviews (2026) ke liye gaps fill kiye gaye hain.
-> **[new content]** se marked sections aur headings consolidation ke dauran add kiye gaye the, taaki un topics ko cover kiya ja sake jo source notes mein missing the ya senior-level bar ke liye bohot halke tarike se treat kiye gaye the. Baaki sab kuch original notes se reorganize/expand kiya gaya hai — koi bhi original technically-correct content delete nahi kiya gaya hai.
-
-## Table of Contents
-
-1. [Core Concepts](#core-concepts)
-   - [What is TypeScript and Why Use It](#what-is-typescript-and-why-use-it)
-   - [Toolchain Basics](#toolchain-basics)
-   - [Primitive & Special Types](#primitive--special-types)
-   - [any vs unknown vs never vs void](#any-vs-unknown-vs-never-vs-void-new-content)
-   - [Type Inference vs Type Annotation](#type-inference-vs-type-annotation)
-   - [Type Assertions](#type-assertions)
-   - [Type Aliases vs Interfaces](#type-aliases-vs-interfaces)
-   - [Optional & Readonly Properties](#optional--readonly-properties)
-   - [Function & Method Overloading](#function--method-overloading)
-2. [Intermediate](#intermediate)
-   - [Functions: Regular vs Arrow, Default & Rest Params](#functions-regular-vs-arrow-default--rest-params)
-   - [Union, Intersection & Literal Types](#union-intersection--literal-types)
-   - [Tuples](#tuples)
-   - [[gaps] ReadonlyArray\<T\> / readonly T[] as Defensive API Design](#gaps-readonlyarrayt--readonly-t-as-defensive-api-design)
-   - [Enums, and Why Senior Devs Avoid Them](#enums-and-why-senior-devs-avoid-them-new-content)
-   - [Structural Typing vs Nominal Typing](#structural-typing-vs-nominal-typing-new-content)
-   - [[gaps] Branded/Nominal Typing — Full Worked Example](#gaps-brandednominal-typing--full-worked-example)
-   - [Type Narrowing & Type Guards](#type-narrowing--type-guards)
-   - [Discriminated Unions & Exhaustiveness Checking](#discriminated-unions--exhaustiveness-checking)
-   - [Optional Chaining & Nullish Coalescing](#optional-chaining--nullish-coalescing)
-   - [strictNullChecks and the strict Family of Flags](#strictnullchecks-and-the-strict-family-of-flags-new-content)
-3. [Advanced (Generics & the Type System)](#advanced-generics--the-type-system)
-   - [Generics & Generic Constraints](#generics--generic-constraints)
-   - [Generic Variance (Covariance/Contravariance)](#generic-variance-covariancecontravariance-new-content)
-   - [keyof, typeof, and Indexed Access Types](#keyof-typeof-and-indexed-access-types)
-   - [Mapped Types](#mapped-types)
-   - [Conditional Types & infer](#conditional-types--infer)
-   - [Template Literal Types](#template-literal-types)
-   - [[gaps] Recursive Type Alias Depth Limits (TS2589)](#gaps-recursive-type-alias-depth-limits-ts2589)
-   - [Utility Types Deep Dive](#utility-types-deep-dive)
-   - [as const and satisfies](#as-const-and-satisfies)
-   - [Ambient Declarations, Triple-Slash Directives, Module Augmentation & Declaration Merging](#ambient-declarations-triple-slash-directives-module-augmentation--declaration-merging)
-   - [Decorators & Metadata (Angular Relevance)](#decorators--metadata-angular-relevance-new-content)
-   - [Module Resolution: ESM vs CommonJS](#module-resolution-esm-vs-commonjs-new-content)
-4. [Object-Oriented Programming in TypeScript](#object-oriented-programming-in-typescript)
-   - [Access Modifiers](#access-modifiers)
-   - [Inheritance, Overriding, super](#inheritance-overriding-super)
-   - [Abstract Classes vs Interfaces](#abstract-classes-vs-interfaces)
-   - [Multiple Interface Implementation & Interface Extension](#multiple-interface-implementation--interface-extension)
-   - [Mixins](#mixins)
-   - [Private Constructors & Singletons](#private-constructors--singletons)
-   - [Index Signatures](#index-signatures)
-   - [The this Type & Polymorphism](#the-this-type--polymorphism)
-   - [Parameter Properties Shorthand](#parameter-properties-shorthand-new-content)
-5. [Error Handling](#error-handling)
-   - [try/catch/finally & Custom Errors](#trycatchfinally--custom-errors)
-   - [Typed Catch Clauses (unknown in catch)](#typed-catch-clauses-unknown-in-catch-new-content)
-6. [Performance](#performance)
-   - [[new content] Compiler Performance & Type-Checking Cost](#new-content-compiler-performance--type-checking-cost)
-   - [[new content] Runtime Performance: Erasure, Enums, and Bundle Size](#new-content-runtime-performance-erasure-enums-and-bundle-size)
-7. [Best Practices](#best-practices)
-8. [Common Pitfalls](#common-pitfalls)
-9. [Sample Interview Q&A](#sample-interview-qa)
-10. [Summary of Additions](#summary-of-additions)
-11. [Summary of [gaps] Additions (This Pass)](#summary-of-gaps-additions-this-pass)
+> Rewritten for interview prep. Every topic follows the same pattern: **plain-English explanation → code example → common mistakes → interview Q&A (including tricky follow-ups) → one-line revision summary.**
+> Examples are drawn from a **Dealer Management Dashboard** (Angular 19) — entities like `Vehicle`, `Dealer`, `SalesOrder`, `Inventory` — so the patterns map directly onto real work, not toy examples.
 
 ---
 
-## Core Concepts
+## How to use this guide
 
-### TypeScript Kya Hai Aur Ise Kyun Use Karein
+- Skim the **Quick Revision Sheet** (last section) the night before an interview.
+- Read a topic top to bottom the first time; on repeat passes, only read the **Interview Q&A** and **Common Mistakes** boxes.
+- Anything marked 🎯 is a question that has come up repeatedly in real TypeScript/Angular interviews at the senior level.
 
-TypeScript basically JavaScript ka ek strongly, statically typed superset hai jo Microsoft ne develop kiya hai, aur yeh plain JavaScript mein compile ("transpile") ho jaata hai. Yeh JS semantics ke upar ek structural type system add karta hai, bina runtime behavior ko change kiye — types compile time par erase ho jaate hain.
+---
 
-Commonly cite kiye jaane wale advantages (aur senior level par jinko "why" ke saath defend karna zaroori hai):
+## Table of Contents
 
-- **Static typing** → bugs ki ek poori class (galat property names, galat argument shapes, null/undefined ka misuse) ko production ke bajaye compile time par hi catch kar leta hai.
-- **OOP features** → classes, interfaces, generics, access modifiers — enterprise codebases ke liye useful hain, halaanki TS ka type system structural hai, classical OOP jaisa nominal typing nahi (neeche dekhein).
-- **Scalability** → types ke bina 500-file wale Angular app ko refactor karna ek nightmare hai; TS rename/extract-method refactors ko mechanically safe bana deta hai (compiler har break ko flag karta hai).
-- **DX** → IntelliSense, inline documentation, "go to definition," safe auto-refactors.
-- **Self-documenting APIs** → function signatures implementation padhe bina hi contract communicate kar dete hain.
+1. [Part 1 — Core TypeScript Fundamentals](#part-1--core-typescript-fundamentals)
+2. [Part 2 — Intermediate Type System](#part-2--intermediate-type-system)
+3. [Part 3 — Advanced Types & Generics](#part-3--advanced-types--generics)
+4. [Part 4 — Object-Oriented TypeScript](#part-4--object-oriented-typescript)
+5. [Part 5 — Error Handling](#part-5--error-handling)
+6. [Part 6 — Performance](#part-6--performance)
+7. [Part 7 — Best Practices Cheat Sheet](#part-7--best-practices-cheat-sheet)
+8. [Part 8 — Common Pitfalls](#part-8--common-pitfalls)
+9. [Part 9 — Rapid-Fire Interview Q&A](#part-9--rapid-fire-interview-qa)
+10. [Quick Revision Sheet](#quick-revision-sheet)
 
-Senior-level nuance jo interviewers probe karte hain: TypeScript ka type system kaafi jagah **design se hi unsound** hai (jaise, `any`, type assertions, `noUncheckedIndexedAccess` ke bina array index access, bivariant method parameters) — yeh JS ke saath compatible rehne ke liye ek pragmatic trade-off hai. Yeh batane ke liye ready raho ki *kahan* yeh unsound hai aur ise kaise tighten karein.
+---
 
-### Toolchain Basics
+## Part 1 — Core TypeScript Fundamentals
 
-- Install: `npm install -g typescript`
-- Version check karo: `tsc -v`
-- Ek file compile karo: `tsc filename.ts` → `filename.js` emit hoti hai
-- `tsconfig.json` — central compiler configuration file hai. Example:
+### 1.1 What is TypeScript, and why use it?
 
-```json
-{
-  "compilerOptions": {
-    "target": "ES6",
-    "strict": true
-  }
-}
+**Simple explanation:** TypeScript is a typed superset of JavaScript built by Microsoft. It compiles ("transpiles") down to plain JavaScript — types exist only at compile time and are completely erased at runtime.
+
+**Why teams use it:**
+- **Catches a whole class of bugs at compile time** — wrong property names, wrong argument shapes, null/undefined misuse — instead of in production.
+- **Makes large refactors safe.** Renaming a field in a 500-file Angular app is mechanically safe because the compiler flags every broken usage.
+- **Better developer experience** — IntelliSense, "go to definition," inline docs.
+- **Self-documenting APIs** — a function signature tells you the contract without reading the implementation.
+
+**Senior-level nuance (interviewers probe this):** TypeScript's type system is *deliberately unsound* in several places — `any`, type assertions, array index access without `noUncheckedIndexedAccess`, bivariant method parameters. This is a pragmatic trade-off to stay compatible with JavaScript. Be ready to name *where* it's unsound and how to tighten it (see `strict` flags, §2.10).
+
+🎯 **Q: Does TypeScript make your code faster at runtime?**
+A: No — types are 100% erased. The only runtime cost comes from constructs that emit real JS: non-`const` enums, decorators + `reflect-metadata`, namespaces. Plain interfaces/types cost nothing.
+
+### 1.2 Toolchain basics
+
+```bash
+npm install -g typescript
+tsc -v                # check version
+tsc filename.ts        # compiles to filename.js
 ```
 
-**[new content] Real projects mein `tsconfig.json`.** Production Angular/Node codebases mein aapko typically `target`/`strict` se kaafi zyada dekhne ko milta hai:
+A minimal `tsconfig.json`:
+
+```json
+{ "compilerOptions": { "target": "ES6", "strict": true } }
+```
+
+A **realistic** config for an Angular 19 project (this is what you'll actually be asked to defend in an interview):
 
 ```json
 {
@@ -111,506 +74,412 @@ Senior-level nuance jo interviewers probe karte hain: TypeScript ka type system 
     "esModuleInterop": true,
     "skipLibCheck": true,
     "isolatedModules": true,
-    "forceConsistentCasingInFileNames": true,
-    "declaration": true,
-    "sourceMap": true
+    "forceConsistentCasingInFileNames": true
   }
 }
 ```
 
-Senior level ka interviewer expect karta hai ki aapko pata ho ki har strict flag *kyun* matter karta hai, sirf yeh nahi ki `strict: true` exist karta hai — neeche [strictNullChecks and the strict Family of Flags](#strictnullchecks-and-the-strict-family-of-flags-new-content) dekhein.
+An interviewer at senior level expects you to explain *why* each flag matters, not just that `strict: true` exists — see §2.10.
 
-### Primitive & Special Types
+### 1.3 Primitive & special types
 
-Primitives: `string`, `number`, `boolean`, `null`, `undefined`, `bigint`, `symbol`.
+- **Primitives:** `string`, `number`, `boolean`, `null`, `undefined`, `bigint`, `symbol`.
+- **Special types:** `any`, `unknown`, `void`, `never`.
 
-Special types: `any` (type checking disable kar deta hai), `unknown` (`any` ka type-safe counterpart), `void` (function kuch return nahi karta), `never` (function kabhi return nahi karta / ek value jo exist hi nahi kar sakti).
+### 1.4 `any` vs `unknown` vs `void` vs `never` 🎯
 
-### any vs unknown vs never vs void [new content]
+This four-way comparison is one of the most common TypeScript interview questions.
 
-Original notes ne sirf `any` vs `unknown` ko ek two-row table mein compare kiya tha. Yeh senior TS interview ka ek sabse common question hai aur iska full four-way comparison milna chahiye, kyunki candidates se aksar `void` aur `never` ko bhi same mental model mein place karne ko kaha jaata hai.
-
-| Type | Meaning | Doosre types mein **assign** ho sakta hai? | Doosre types **se** assign ho sakta hai? | Typical use |
+| Type | Meaning | Assignable **to** other types? | Assignable **from** other types? | Typical use |
 |---|---|---|---|---|
-| `any` | "Type checker ko band kar do" | Haan, kisi bhi type mein | Haan, kisi bhi type se | Legacy JS interop, last resort |
-| `unknown` | "Kuch bhi ho sakta hai, use karne se pehle prove karo" | Nahi (narrowing/assertion ke bina) | Haan, kisi bhi type se | External/untrusted input (API responses, `JSON.parse`, catch blocks) |
-| `void` | "Koi meaningful return value nahi" | Sirf `void`/`any`/`undefined` mein (loosely) | N/A (return position) | Callback/function return type |
-| `never` | "Yeh code path unreachable hai / koi bhi value yeh type satisfy nahi kar sakti" | Har jagah assignable hai (bottom type) | Iske andar kuch bhi assignable nahi hai except `never` khud | Exhaustiveness checks, aise functions jo hamesha throw karte hain / infinite loop karte hain |
+| `any` | "Turn off type checking" | Yes, to anything | Yes, from anything | Legacy JS interop, last resort |
+| `unknown` | "Could be anything — prove it before using it" | No (without narrowing/assertion) | Yes, from anything | External/untrusted input: API responses, `JSON.parse`, catch blocks |
+| `void` | "No meaningful return value" | Only to `void`/`any`/`undefined` | N/A (return position) | Callback / function return type |
+| `never` | "This path is unreachable / no value can satisfy this" | Assignable everywhere (bottom type) | Nothing except `never` itself | Exhaustiveness checks, functions that always throw |
 
-```mermaid
-flowchart TD
-    A["Top type: unknown<br/>(safe superset of all types)"] --> B["any<br/>(escape hatch, bypasses checker)"]
-    A --> C["string | number | boolean | object ... <br/>(all concrete types)"]
-    C --> D["never<br/>(bottom type — subtype of everything, no values)"]
-    B -.->|"implicitly compatible both ways"| D
+**Key gotcha:** `any` is both a top type *and* a bottom type at once — this is what makes it dangerous, and why `unknown` was introduced in TS 3.0 as the type-safe alternative.
+
+**Dealer Dashboard example:**
+
+```typescript
+async function fetchVehicleById(id: string): Promise<unknown> {
+  const res = await fetch(`/api/vehicles/${id}`);
+  return res.json(); // we genuinely don't know the shape yet
+}
+
+function isVehicle(v: unknown): v is Vehicle {
+  return typeof v === 'object' && v !== null && 'vin' in v && 'model' in v;
+}
+
+const raw = await fetchVehicleById('123');
+if (isVehicle(raw)) {
+  console.log(raw.model); // safe — narrowed to Vehicle
+}
 ```
 
-Key gotcha: `any` ek saath top type aur bottom type dono hai (yeh jaan-boojh kar type theory ko todta hai) — isi wajah se yeh dangerous hai aur TS 3.0 mein `unknown` ko type-safe alternative ke tor par introduce kiya gaya tha. Follow-up expect karo: *"`unknown` kyun exist karta hai jab humare paas already `any` hai?"* — jawab: `unknown` kisi bhi operation se pehle narrowing force karta hai, jisse soundness maintain rehti hai aur phir bhi program ke boundary (I/O boundaries) par "mujhe abhi is type ka pata nahi" allow ho jaata hai.
+**Common mistake:** treating `any` as "the fix for the red squiggly line" instead of reaching for `unknown` + narrowing. This silently reintroduces the exact bug class TypeScript exists to prevent.
 
-### Type Inference vs Type Annotation
+🎯 **Follow-up: Why does `unknown` exist when we already have `any`?**
+A: `unknown` forces you to narrow (via `typeof`, a type guard, or a schema validator like `zod`) before doing anything with the value, which keeps the type system sound while still letting you say "I don't know this type yet" at I/O boundaries.
 
-Inference: `let message = "Hello";` → TS `string` infer kar leta hai.
-Annotation: `let age: number = 25;` → type explicitly likha gaya hai.
+### 1.5 Type inference vs type annotation
 
-Senior nuance: local variables ke liye inference prefer karo (kam noise, same safety hoti hai) aur **module boundaries** par — function parameters, exported function return types, public class members — explicit annotations prefer karo, kyunki boundary par inference implementation change hone par silently type widen/narrow kar sakta hai, jisse consumers bina kisi visible signal ke break ho jaate hain.
+```typescript
+let message = "Hello";      // inferred as string
+let age: number = 25;       // explicitly annotated
+```
 
-### Type Assertions
+**Senior rule of thumb:** prefer inference for local variables (less noise, same safety), but prefer explicit annotations at **module boundaries** — function parameters, exported return types, public class members. At a boundary, inference can silently widen or narrow when the implementation changes, breaking consumers with no visible signal.
+
+### 1.6 Type assertions
 
 ```typescript
 let someValue: any = "Hello";
 let strLength: number = (someValue as string).length;
 ```
 
-Assertions (`as`) compiler ko batate hain "trust me," aur zero runtime validation karte hain. `as unknown as T` ke through double assertion TS ke assertion-compatibility check ko bhi sidestep kar deta hai — ek common code-smell red flag jo interviewers sunte hi pakad lete hain. Jab bhi data ek runtime boundary cross kare (HTTP response, `localStorage`, third-party lib), assertions ke bajaye type guards ya validation libraries (`zod`, `io-ts`) prefer karo.
+Assertions (`as`) tell the compiler "trust me" and do **zero runtime validation**. A double assertion, `as unknown as T`, sidesteps even TS's assertion-compatibility check — a red flag interviewers catch instantly. Whenever data crosses a runtime boundary (HTTP response, `localStorage`, third-party library), prefer type guards or a validation library (`zod`, `io-ts`) over assertions.
 
-### Type Aliases vs Interfaces
+### 1.7 Type aliases vs interfaces 🎯
 
-| Feature | Interface | Type Alias |
+| Feature | `interface` | `type` |
 |---|---|---|
-| Extending | `extends` keyword, multiple inheritance support karta hai | Intersection (`&`) ke through hota hai, `extends` se nahi |
-| Declaration merging | Haan — multiple `interface X {}` blocks merge ho jaate hain | Nahi |
-| Object shapes | Haan | Haan |
-| Unions/primitives/tuples | Nahi | Haan — `type T = string \| number` |
-| Mapped/conditional types | Nahi | Haan |
-| Performance (large unions) | Generally check karna faster hota hai (verify karo) | TS team guidance ke mutabik huge unions ke liye slower ho sakta hai (current version ke against verify karo) |
+| Extending | `extends`, supports multiple inheritance | Via intersection (`&`), not `extends` |
+| Declaration merging | Yes — multiple `interface X {}` blocks merge | No |
+| Object shapes | Yes | Yes |
+| Unions / tuples / primitives | No | Yes — `type T = string \| number` |
+| Mapped / conditional types | No | Yes |
 
-**Original notes ki ek imprecision correct kar rahe hain:** notes kehte hain ki type aliases "not extendable" hain — yeh *directionally* sahi hai (koi `extends` keyword nahi hai) lekin misleading hai, kyunki aap type aliases ko intersections (`type C = A & B`) ke through compose karke equivalent, kabhi-kabhi zyada flexible, composition bana sakte ho. Practical senior jawab: `interface` use karo un public object/class contracts ke liye jinke extend ya merge hone ki expectation ho (jaise, Angular component `@Input` bags, DTOs); `type` use karo unions, tuples, function signatures, aur mapped/conditional type utilities ke liye. Dono ek-doosre ke saath structurally compatible hain — ek `interface` `type` alias ko extend kar sakta hai aur vice versa (jaisa original Q76 — interface extending a class — aur Q69 mein dikhaya gaya hai).
+**Practical default:** use `interface` for object/class contracts that might be extended or merged (public DTOs, Angular `@Input` bags). Use `type` for unions, function signatures, and type-level utilities. They're structurally compatible with each other — an `interface` can extend a `type` alias and vice versa.
 
-### Optional & Readonly Properties
+> Note: type aliases are sometimes described as "not extendable." That's only true of the `extends` keyword — they compose fine through intersections (`type C = A & B`), so it's an oversimplification, not a hard limitation.
+
+### 1.8 Optional & readonly properties
 
 ```typescript
-interface Employee {
+interface Dealer {
   name: string;
-  age?: number;       // optional
+  region?: string;          // optional
 }
 
-interface Car {
-  readonly model: string;   // cannot be reassigned after creation
+interface Vehicle {
+  readonly vin: string;     // cannot be reassigned after creation
 }
 ```
 
-Gotcha: `readonly` shallow hota hai — object property par `readonly` sirf property ko *rebind* hone se rokta hai, uske andar jo nested object/array point ho raha hai use mutate hone se nahi rokta. Agar deep immutability chahiye to `Readonly<T>` / `DeepReadonly` (custom recursive mapped type) use karo, ya scale par real immutable data structures ke liye Immutable.js / immer jaisi library use karo.
+**Gotcha:** `readonly` is **shallow**. It stops the property itself from being *rebound*, but not the nested object/array it points to from being mutated. For deep immutability use `Readonly<T>` recursively, or a library like Immer for real update patterns.
 
-### Function & Method Overloading
+### 1.9 Function & method overloading
 
 ```typescript
-function add(a: number, b: number): number;
-function add(a: string, b: string): string;
-function add(a: any, b: any) {
-  return a + b;
+function toDisplayPrice(amount: number): string;
+function toDisplayPrice(amount: string): string;
+function toDisplayPrice(amount: any): string {
+  return `$${amount}`;
 }
-console.log(add(1, 2));               // 3
-console.log(add("Hello, ", "World!")); // Hello, World!
 ```
 
-TS overloads purely ek compile-time construct hain — neeche ek hi real JS function hota hai (yeh "implementation signature" hoti hai, jo callers ko visible bhi nahi hoti). Yeh C# se fundamentally different hai, jahan overloads genuinely distinct methods hote hain jo compile time par CLR/runtime binder dwara resolve hote hain — .NET background dekhte hue yeh mention karne ke liye ek good bridge point hai: TS mein aap ek single implementation ke liye *call-site shapes* describe kar rahe ho, multiple methods create nahi kar rahe.
+TS overloads are purely a **compile-time construct** — underneath there is one real JS function (the "implementation signature," which callers never see). This differs fundamentally from C#, where overloads are genuinely distinct methods resolved by the CLR at compile time. In TS, you're describing multiple *call-site shapes* for a single implementation, not creating multiple methods.
 
 ---
 
-## Intermediate
+## Part 2 — Intermediate Type System
 
-### Functions: Regular vs Arrow, Default & Rest Params
+### 2.1 Regular functions vs arrow functions
 
-| Feature | Regular Function | Arrow Function |
+| Feature | Regular function | Arrow function |
 |---|---|---|
-| `this` binding | Dynamic (caller par depend karta hai) | Lexical (enclosing scope se inherit hota hai) |
-| `arguments` object | Available hai | Available nahi hai |
-| Use in classes | Un methods ke liye preferred jinhe aap override karna chahte ho | Callbacks ke liye achha hai jinhe captured `this` chahiye (jaise event handlers) |
-| Hoisting | Function declarations hoist hoti hain | Arrow functions (`const` ke tor par) hoist nahi hoti |
-| `new`-able | Haan | Nahi |
+| `this` binding | Dynamic (depends on caller) | Lexical (inherited from enclosing scope) |
+| `arguments` object | Available | Not available |
+| Use in classes | Preferred for methods you intend to override | Good for callbacks that need captured `this` (event handlers) |
+| `new`-able | Yes | No |
+
+**Angular-relevant gotcha:** an arrow-function class property (`onSave = () => {...}`) correctly binds `this` for template event bindings, but creates **a new function per instance**, which has a real memory cost at scale and breaks `@HostListener`-style decorator binding that expects a real prototype method.
 
 ```typescript
-function regular() { console.log(this); }
-const arrow = () => console.log(this);
-```
-
-Default & rest parameters:
-
-```typescript
-function greet(name: string = "Guest") {
-  console.log(`Hello, ${name}`);
+function sum(...amounts: number[]) {
+  return amounts.reduce((acc, n) => acc + n, 0);
 }
-greet(); // Hello, Guest
-
-function sum(...numbers: number[]) {
-  return numbers.reduce((acc, num) => acc + num, 0);
-}
-console.log(sum(1, 2, 3)); // 6
 ```
 
-Angular-relevant gotcha: arrow-function class properties (`onClick = () => {...}`) template event bindings ke liye `this` ko correctly bind karte hain lekin **har instance ke liye ek naya function** create karte hain (scale par memory/perf cost, aur `@HostListener`/decorator-based method binding ko todta hai jisko ek real prototype method chahiye hoti hai).
-
-### Union, Intersection & Literal Types
+### 2.2 Union, intersection & literal types
 
 ```typescript
-let value: string | number;
-value = "hello";
-value = 42;
+let status: 'pending' | 'approved' | 'rejected';
 
-interface A { a: number; }
-interface B { b: string; }
-type C = A & B;
-const obj: C = { a: 1, b: "text" };
-
-type Direction = "North" | "South" | "East" | "West";
-let move: Direction = "North";
+interface HasVin { vin: string; }
+interface HasPrice { price: number; }
+type SellableVehicle = HasVin & HasPrice;
 ```
 
-Gotcha: same key ke liye conflicting property types wale do types ko intersect karna (jaise `{ a: string } & { a: number }`) us property ko `never` mein collapse kar deta hai, error nahi deta — ek classic "gotcha" question.
+**Gotcha:** intersecting two types that have conflicting property types for the same key (e.g. `{ a: string } & { a: number }`) collapses that property to `never` — it does **not** produce an error. Classic interview trap.
 
-### Tuples
+### 2.3 Tuples
 
 ```typescript
-let person: [string, number] = ["Alice", 25];
-
-let numbers: readonly [number, number] = [10, 20];
-// numbers[0] = 30; // Error
+let coordinate: [number, number] = [28.6, 77.2];
+let readonlyPair: readonly [number, number] = [10, 20];
 ```
 
-**[new content] Labeled tuples & variadic tuples.** Modern TS labeled tuple elements support karta hai (pure documentation, koi runtime effect nahi) aur generic function typing ke liye variadic tuples:
+**Labeled & variadic tuples** (modern TS):
 
 ```typescript
-type Point = [x: number, y: number];
+type Point = [x: number, y: number]; // labels are documentation only, no runtime effect
 
-// Variadic tuple — used heavily in typed `bind`/`curry` utility libraries
 type Concat<T extends unknown[], U extends unknown[]> = [...T, ...U];
-type Result = Concat<[1, 2], [3, 4]>; // [1, 2, 3, 4]
+type Combined = Concat<[1, 2], [3, 4]>; // [1, 2, 3, 4]
 ```
 
-### [gaps] ReadonlyArray\<T\> / readonly T[] as Defensive API Design
+### 2.4 `readonly T[]` / `ReadonlyArray<T>` as defensive API design
 
-Existing notes mein cover nahi kiya gaya — yeh ek small, concrete pattern hai jo senior code review discussions mein baar-baar aata hai ("aap kaise communicate karte ho ki function jo aapko pass kiya gaya hai use mutate nahi karega?").
-
-**Problem yeh hai:** ek plain `T[]` parameter type kuch nahi batata ki function aapke diye hue array ko mutate karega ya nahi. Callers ko implementation padhna padta hai (ya docs par trust karna padta hai) yeh jaanne ke liye ki ek live, shared array reference pass karna safe hai ya nahi:
+**The problem:** a plain `T[]` parameter doesn't tell callers whether the function will mutate their array.
 
 ```typescript
-function printTotal(prices: number[]): number {
-  prices.sort((a, b) => a - b); // legal, but mutates the CALLER's array — a real bug class
+function sortedTotal(prices: number[]): number {
+  prices.sort((a, b) => a - b); // legal — but mutates the CALLER's array
   return prices.reduce((sum, p) => sum + p, 0);
 }
 
 const cart = [30, 10, 20];
-printTotal(cart);
-console.log(cart); // [10, 20, 30] — surprised? the caller's array was silently reordered
+sortedTotal(cart);
+console.log(cart); // [10, 20, 30] — surprise mutation
 ```
 
-**Fix yeh hai — `T[]` ke bajaye `readonly T[]` (equivalently `ReadonlyArray<T>`) accept karo:**
+**The fix:**
 
 ```typescript
-function printTotal(prices: readonly number[]): number {
-  // prices.sort(...);   // Compile error: Property 'sort' does not exist on type
-                          // 'readonly number[]' — mutating methods are removed from the type entirely.
-  // prices.push(5);     // Compile error, same reason.
-  return [...prices].sort((a, b) => a - b).reduce((sum, p) => sum + p, 0); // copy first, mutate the copy
+function sortedTotal(prices: readonly number[]): number {
+  // prices.sort(...);  // compile error — mutating methods removed from the type
+  return [...prices].sort((a, b) => a - b).reduce((sum, p) => sum + p, 0);
 }
 ```
 
-`readonly T[]`/`ReadonlyArray<T>` same type ke do equivalent spellings hain (`ReadonlyArray<T>` generic-interface form hai; `readonly T[]` shorthand syntax hai) — yeh type simply type ke member list se har mutating array method (`push`, `pop`, `splice`, `sort`, `reverse`, `fill`, `copyWithin`, index-assignment via `arr[0] = x`) ko **omit** kar deta hai. Yeh koi runtime-enforced immutability wrapper nahi hai (yahan koi `Object.freeze` involved nahi hai) — yeh sirf ek **compile-time-only contract** hai: compiler simply aapko `readonly T[]` type wali kisi cheez par mutating method call nahi karne dega, aur ek regular mutable `T[]` freely `readonly T[]`-typed parameter mein assign ho jaata hai (lekin bina cast/copy ke opposite direction mein nahi), jo exactly wahi direction hai jo aapko ek defensive parameter type ke liye chahiye.
+- `readonly T[]` and `ReadonlyArray<T>` are the same type, two spellings.
+- This is a **compile-time-only contract** — no `Object.freeze` involved. A mutable `T[]` is freely assignable *into* a `readonly T[]` parameter, never the reverse.
+- Pairs naturally with `OnPush`/immutable-state patterns in Angular: a function typed to accept `readonly T[]` is guaranteed not to be the source of an accidental in-place mutation that breaks reference-equality change detection.
+- **Boundary case:** it's shallow, exactly like `Readonly<T>` — `readonly Point[]` stops `push`/`arr[0] = ...` but not `arr[0].x = 5` unless `Point` itself is readonly.
+
+### 2.5 Enums — and why senior devs avoid them
 
 ```typescript
-const mutable: number[] = [1, 2, 3];
-const ro: readonly number[] = mutable;   // OK — a mutable array satisfies the readonly contract
-// mutable = ro;                          // Compile error — readonly array is not assignable back to T[]
+enum OrderStatus { Pending, Approved, Rejected }
 ```
 
-**Yeh ek senior-level API design signal kyun hai, sirf syntax fact nahi:**
-- Yeh intent ko **signature mein hi** document karta hai, compiler dwara enforced, us comment ki jagah jise koi padhta ya trust nahi karta. Yeh wahi instinct hai jo Angular/NgRx/React mein immutable update patterns prefer karne ke peeche hota hai — "main isse mutate nahi karunga" ko ek convention ki jagah type-level guarantee ke tor par communicate karo.
-- Yeh `OnPush`/immutable-state patterns ka generally ek achha complement hai: ek function jo `readonly T[]` accept karne ke liye typed hai, guaranteed hai (compile time par) ki wahi accidental in-place mutation ka source nahi banega jo app mein kahin reference-equality change detection ko silently defeat kar de.
-- Interviewers kabhi-kabhi boundary case probe karte hain: `readonly T[]` **shallow** hota hai, exactly `Readonly<T>` on objects ki tarah — `readonly Point[]` `arr.push(...)`/`arr[0] = ...` ko prevent karta hai, lekin `arr[0].x = 5` ko prevent **nahi** karta agar `Point` khud readonly nahi hai. Deep immutability ke liye `ReadonlyArray<Readonly<Point>>` (ya ek recursive `DeepReadonly<T>` utility) chahiye hoga agar yeh matter karta hai.
-- `Array.prototype.map`/`filter`/`slice`/`reduce` still `readonly T[]` par callable hain kyunki yeh source array ko mutate nahi karte — sirf genuinely mutating methods exclude hote hain, isliye yeh pattern legitimate read-only/derive-a-new-array usage ko bilkul bhi limit nahi karta.
+**Problems senior interviewers expect you to raise:**
+- Enums generate real runtime JS objects (reverse-mapping objects), adding to bundle size.
+- `const enum` avoids this by inlining values at compile time — but it's **incompatible with `isolatedModules`**, which modern bundlers (esbuild, swc, Vite, and Angular's esbuild-based builder since v17) require.
+- They don't tree-shake as cleanly as literal unions.
 
-### Enums, Aur Senior Devs Inhe Kyun Avoid Karte Hain [new content]
-
-Original notes enums (`enum Color { Red, Green, Blue }`) ko introduce karte hain unke well-known downsides discuss kiye bina — ek common senior-level gap.
+**Modern replacement — literal union + optional `satisfies`-checked value map:**
 
 ```typescript
-enum Color { Red, Green, Blue }
-let c: Color = Color.Green;
+type OrderStatus = 'pending' | 'approved' | 'rejected';
+
+const OrderStatusValues = {
+  Pending: 'pending',
+  Approved: 'approved',
+  Rejected: 'rejected',
+} as const satisfies Record<string, OrderStatus>;
 ```
 
-Problems jo senior interviewers expect karte hain ki aap raise karo:
+This gives exhaustiveness checking, zero runtime cost, and full compatibility with esbuild-based Angular builds.
 
-- Numeric enums **arbitrary numbers ke against type-safe nahi hain** — `let c: Color = 99` compile ho jaata hai jab tak aap `--strict` ke saath `const enum` use na karo... actually koi bhi `number` numeric enum type mein assignable hai, jo purpose ko hi defeat kar deta hai.
-- Enums real runtime JS objects generate karte hain (reverse-mapping objects), jo bundle size mein add hote hain, jab tak `const enum` declare na kiya jaaye (jo compile time par values inline kar deta hai — lekin `const enum` `isolatedModules` ke under unsupported hai, jo modern bundlers jaise esbuild/swc/Vite ke liye required hai, aur ESM-only builds ke liye poori tarah banned hai — current Angular/Vite-based tooling mein ek real gotcha).
-- Yeh literal unions jitna cleanly tree-shake nahi hote.
+### 2.6 Structural typing vs nominal typing 🎯
 
-**Modern idiomatic replacement:** literal union types (+ optionally value list ke liye ek `satisfies`-checked object map):
+The single most common "coming from a nominally-typed language" conceptual question.
+
+- **C#/Java are nominally typed** — two classes with identical members are still incompatible unless one explicitly implements/extends the other. Type identity is based on the *declared name*.
+- **TypeScript is structurally typed** (duck typing, enforced at compile time) — two types are compatible if their *shapes* match, regardless of name or declared relationship.
 
 ```typescript
-type Color = "red" | "green" | "blue";
+interface DealerLocation { lat: number; lng: number; }
+class MapPin { lat = 0; lng = 0; }
 
-const ColorValues = {
-  Red: "red",
-  Green: "green",
-  Blue: "blue",
-} as const satisfies Record<string, Color>;
+function plot(p: DealerLocation) { console.log(p.lat, p.lng); }
+
+plot(new MapPin());        // OK — same shape
+plot({ lat: 1, lng: 2 });  // OK — structurally matches
 ```
 
-Yeh exhaustiveness checking, zero runtime cost, aur full type safety deta hai — zyada tar senior TS style guides (Angular ke recent versions ke internal conventions included) ab naye code ke liye enums ke bajaye literal unions recommend karte hain.
+**Practical consequences worth mentioning:**
+- **Excess property checks** fire only on **object literals** assigned directly, not on variables:
+  ```typescript
+  plot({ lat: 1, lng: 2, extra: true }); // error: 'extra' does not exist
+  const p = { lat: 1, lng: 2, extra: true };
+  plot(p); // compiles fine — checked structurally, not as a fresh literal
+  ```
+- `private`/`protected` members participate in a *nominal-ish* check — two classes with identically-named private members from different declarations are **not** considered structurally compatible.
+- `unique symbol` and **branded/tagged types** are TypeScript's idiomatic way to simulate nominal typing when you need to stop two structurally-identical types from being mixed up.
 
-### Structural Typing vs Nominal Typing [new content]
+### 2.7 Branded (nominal) types — full worked example
 
-Yeh arguably *the* most-asked "C#/Java se aa rahe ho" conceptual question hai aur source notes mein bilkul absent tha.
-
-- **C#/Java nominally typed hain**: identical members wali do classes bhi incompatible rehti hain jab tak koi ek explicitly doosre ko implement/extend na kare. Type identity *declared name* par based hoti hai.
-- **TypeScript structurally typed hai** (duck typing, compile time par enforced): do types compatible hote hain agar unki *shapes* match karti hain, chahe naam ya declared relationship kuch bhi ho.
+**The problem:** `DealerId` and `VehicleId` are both plain `string` at the type level, so TypeScript happily lets you pass one where the other is expected:
 
 ```typescript
-interface Point2D { x: number; y: number; }
-class Vector { x = 0; y = 0; }
+type DealerId = string;
+type VehicleId = string;
 
-function log(p: Point2D) { console.log(p.x, p.y); }
+function getDealer(id: DealerId) { /* ... */ }
 
-log(new Vector());          // OK — Vector has the same shape as Point2D
-log({ x: 1, y: 2 });         // OK — plain object literal matches structurally
+const vehicleId: VehicleId = 'veh_123';
+getDealer(vehicleId); // compiles — silently wrong
 ```
 
-```mermaid
-flowchart LR
-    subgraph Nominal["Nominal typing (C#, Java)"]
-        N1["class Dog : Animal"] -->|"compatible only via declared hierarchy"| N2["Animal reference"]
-        N3["class Robot { bark() {} }"] -.->|"incompatible — no declared relationship"| N2
-    end
-    subgraph Structural["Structural typing (TypeScript)"]
-        S1["{ bark(): void } shape"] -->|"compatible — shape matches"| S2["Animal-like reference"]
-        S3["class Robot { bark() {} }"] -->|"compatible — shape matches"| S2
-    end
-```
-
-Mention karne layak practical consequences:
-
-- Excess property checks sirf **object literals** par fire hoti hain jo directly assign ho rahe hain, variables par nahi — `log({x:1,y:2,z:3})` error deta hai ("z does not exist"), lekin `const p = {x:1,y:2,z:3}; log(p);` fine compile ho jaata hai, kyunki `p` structurally check hota hai (assignability), stricter literal-freshness check se nahi. Frequently-asked gotcha.
-- TS mein private/protected members ek nominal-ish check mein **participate karte hain** (do classes jinke *different* class declarations se identically-named private members hain, structurally compatible NAHI mane jaate) — pure structural typing se ek deliberate exception.
-- `unique symbol` aur branded/"tagged" types (`type UserId = string & { __brand: "UserId" }`) TS mein nominal typing ko *simulate* karne ka idiomatic tareeka hain jab aapko do structurally-identical types (jaise, `UserId` vs `OrderId`, dono underneath `string`) ke accidental mixing ko prevent karna ho.
-
-### [gaps] Branded/Nominal Typing — Full Worked Example
-
-Upar wala section branded-type one-liner introduce karta hai lekin ek usable pattern se short reh jaata hai. Yeh ready rakhna zaroori hai as a complete, senior-level jawab, kyunki "mujhe dikhao ki aap yeh actually kaise use karoge" natural follow-up hai jab candidate branded types ka naam le leta hai.
-
-**Problem yeh hai:** `UserId` aur `OrderId` type level par dono plain `string` hain. Structural typing ka matlab hai TypeScript aapko khushi-khushi ek dono ko doosre ki jagah pass karne deta hai — yeh bug compile hone se kuch nahi rokta:
+**The fix — a branded type plus a constructor function:**
 
 ```typescript
-type UserId = string;
-type OrderId = string;
+type DealerId = string & { readonly __brand: 'DealerId' };
+type VehicleId = string & { readonly __brand: 'VehicleId' };
 
-function getUser(id: UserId) { /* ... */ }
-
-const orderId: OrderId = "ord_123";
-getUser(orderId); // compiles! — silently wrong, no error, no warning
-```
-
-**Fix yeh hai — ek branded (tagged) type plus ek constructor function:**
-
-```typescript
-// The brand is a phantom property that never exists at runtime — it exists
-// purely to make the type checker treat this string as "not just any string."
-type UserId = string & { readonly __brand: 'UserId' };
-type OrderId = string & { readonly __brand: 'OrderId' };
-
-// Constructor functions are the ONLY sanctioned way to produce a branded value.
-// This is where you'd put real validation (format checks, UUID validation, etc.)
-function toUserId(raw: string): UserId {
-  if (!raw) throw new Error('UserId cannot be empty');
-  return raw as UserId; // the one, deliberate, encapsulated assertion in the codebase
+// The constructor function is the ONLY sanctioned way to produce a branded value.
+// Real validation lives here.
+function toDealerId(raw: string): DealerId {
+  if (!raw) throw new Error('DealerId cannot be empty');
+  return raw as DealerId; // the one deliberate, encapsulated assertion
 }
 
-function toOrderId(raw: string): OrderId {
-  if (!raw) throw new Error('OrderId cannot be empty');
-  return raw as OrderId;
+function getDealer(id: DealerId): void {
+  console.log('Fetching dealer', id);
 }
 
-function getUser(id: UserId): void {
-  console.log('Fetching user', id);
-}
-
-const userId = toUserId('usr_123');
-const orderId = toOrderId('ord_456');
-
-getUser(userId);   // OK
-getUser(orderId);  // Compile error: Argument of type 'OrderId' is not assignable to parameter of type 'UserId'.
-                    // Type '{ __brand: "OrderId"; }' is not assignable to type '{ __brand: "UserId"; }'.
-getUser('usr_789'); // Compile error too — a raw string isn't a UserId; must go through toUserId()
+const dealerId = toDealerId('dlr_001');
+getDealer(dealerId); // OK
+// getDealer(toVehicleId('veh_123')); // compile error — caught!
 ```
 
-**Yeh kaam kyun karta hai:** intersection `string & { readonly __brand: 'UserId' }` ek property (`__brand`) add karta hai jo koi bhi real string literal ya `string`-typed value actually hold nahi karta, isliye `UserId` type ki value produce karne ka *sirf* tareeka ek explicit assertion hai — jise aap deliberately har branded type ke ek constructor function tak confine kar dete ho. Codebase ka baaki har part `UserId` sirf `toUserId()` call karke hi obtain kar sakta hai, isliye brand effectively "proof yeh value correctly validate/construct hui thi" ban jaata hai, sirf "proof yeh right primitive hai" nahi. `__brand` property runtime par **erase ho jaati hai** (types compilation ke baad exist nahi karte) — iski bundle size ya runtime performance mein koi cost nahi hai, yeh ek pure compile-time-only safety net hai.
+### 2.8 Type narrowing & type guards
 
-**Senior interview ke liye yeh kyun matter karta hai:** yeh "TypeScript mein primitive obsession bugs kaise prevent karein" ka practical jawab hai — jahan `ProductId` expected hai wahan `CustomerId` pass karna, ya jahan dollars expected hain wahan cents mein value pass karna, real production bug classes hain jinhe plain `string`/`number` types catch nahi kar sakte, lekin branded types kar sakte hain, entirely compile time par zero runtime cost ke saath. Yeh .NET background se ek achha bridge bhi hai: yeh TypeScript ka structural-typing workaround hai us cheez ke liye jo C# ka nominal type system (distinct `UserId`/`OrderId` value types ya structs) aapko free mein deta hai — TS ko branding specifically *isliye* chahiye hoti hai *kyunki* yeh structurally typed hai.
-
-**Ek common variant jo mention karne layak hai:** brand key ke liye string literal ke bajaye `unique symbol` use karna do unrelated brands ke accidental collision ko avoid karta hai jo alag-alag modules mein same literal tag name use kar rahe hain:
-
-```typescript
-declare const userIdBrand: unique symbol;
-type UserId = string & { readonly [userIdBrand]: void };
-```
-
-Yeh bade codebases mein jahan alag-alag teams ne kaafi branded types authored kiye hain, thoda zyada robust hai, iski cost yeh hai ki yeh plain string literal brand se thoda kam readable/discoverable hai — dono hi ek acceptable senior-level jawab hain.
-
-### Type Narrowing & Type Guards
-
-```typescript
-function isString(value: any): value is string {
-  return typeof value === "string";
-}
-
-function example(val: string | number) {
-  if (isString(val)) {
-    console.log(val.toUpperCase()); // narrowed to string
-  } else {
-    console.log(val.toFixed(2));    // narrowed to number
-  }
-}
-```
-
-**[new content] Poora narrowing toolkit.** Original notes sirf custom type predicates cover karte hain. Senior interviews *sabhi* narrowing mechanisms mein fluency expect karte hain:
-
-| Mechanism | Example | Notes |
+| Technique | Example | Notes |
 |---|---|---|
-| `typeof` | `typeof x === "string"` | `null` ko distinguish nahi karta (`typeof null === "object"`) |
-| `instanceof` | `x instanceof MyClass` | Sirf class instances ke liye kaam karta hai, plain object shapes ke liye nahi |
-| `in` operator | `"prop" in obj` | Ek key ki presence se object types ke union ko narrow karta hai |
-| Truthiness | `if (x) {...}` | `null`/`undefined`/`0`/`""`/`NaN` ko narrow out karta hai — lekin legitimate `0`/`""` values ko narrow karte hue careful raho |
-| Equality narrowing | `if (x === "a") {...}` | Literal unions ko narrow karta hai |
-| Discriminant property | `if (shape.kind === "circle")` | Neeche discriminated unions dekhein |
-| User-defined type predicate | `function isFoo(x): x is Foo` | Custom runtime validation logic ke liye sirf yehi mechanism hai |
-| Assertion functions | `function assertIsString(x): asserts x is string` | Call ke baad *enclosing scope ke baaki hisse ke liye* narrow karta hai, predicates ke ulat jo sirf ek conditional ke andar narrow karte hain |
-
-```mermaid
-flowchart TD
-    Start["Value of type: string | number | null"] --> Check1{"typeof x === 'string'?"}
-    Check1 -->|Yes| Narrowed1["x: string"]
-    Check1 -->|No| Check2{"x === null?"}
-    Check2 -->|Yes| Narrowed2["x: null"]
-    Check2 -->|No| Narrowed3["x: number (by elimination)"]
-```
-
-Assertion functions woh ek narrowing mechanism hain jo zyada tar senior candidates bhool jaate hain:
+| `typeof` | `if (typeof x === "string")` | Primitives only |
+| `instanceof` | `if (err instanceof Error)` | Classes |
+| `in` operator | `if ("vin" in obj)` | Property presence |
+| Equality narrowing | `if (status === "approved")` | Narrows literal unions |
+| Discriminant property | `if (shape.kind === "circle")` | See discriminated unions below |
+| User-defined type predicate | `function isVehicle(x): x is Vehicle` | The only mechanism for custom runtime validation logic |
+| Assertion functions | `function assertDefined(x): asserts x is NonNullable<...>` | Narrows the *rest of the enclosing scope* after the call, unlike predicates which only narrow inside one conditional |
 
 ```typescript
 function assertIsDefined<T>(val: T): asserts val is NonNullable<T> {
   if (val === undefined || val === null) {
-    throw new Error("Expected value to be defined");
+    throw new Error('Expected value to be defined');
   }
 }
 
-function process(input?: string) {
-  assertIsDefined(input);
-  console.log(input.toUpperCase()); // input narrowed to string for the rest of the function
+function process(vin?: string) {
+  assertIsDefined(vin);
+  console.log(vin.toUpperCase()); // narrowed to string for the rest of the function
 }
 ```
 
-### Discriminated Unions & Exhaustiveness Checking
+### 2.9 Discriminated unions & exhaustiveness checking 🎯
 
 ```typescript
-interface Square { kind: "square"; size: number; }
-interface Circle { kind: "circle"; radius: number; }
-type Shape = Square | Circle;
+interface CashSale { kind: 'cash'; amount: number; }
+interface FinancedSale { kind: 'financed'; amount: number; monthlyPayment: number; }
+type Sale = CashSale | FinancedSale;
 
-function area(shape: Shape): number {
-  switch (shape.kind) {
-    case "square":
-      return shape.size * shape.size;
-    case "circle":
-      return Math.PI * shape.radius * shape.radius;
+function total(sale: Sale): number {
+  switch (sale.kind) {
+    case 'cash': return sale.amount;
+    case 'financed': return sale.amount;
   }
 }
 ```
 
-**[new content] Exhaustiveness checking.** Original example mein sabse important senior-level follow-up missing hai: *jab koi `Triangle` variant add karta hai aur `area()` update karna bhool jaata hai to kya hota hai?* Exhaustiveness checking ke bina, yeh silently compile ho jaata hai aur runtime par `undefined` return karta hai. Idiomatic fix `never`-based exhaustiveness guard hai:
+**The important follow-up:** what happens when someone adds a `LeaseSale` variant and forgets to update `total()`? Without an exhaustiveness guard, this silently compiles and returns `undefined` at runtime. Fix with a `never`-based guard:
 
 ```typescript
-interface Triangle { kind: "triangle"; base: number; height: number; }
-type Shape = Square | Circle | Triangle;
+interface LeaseSale { kind: 'lease'; amount: number; leaseTermMonths: number; }
+type Sale = CashSale | FinancedSale | LeaseSale;
 
-function area(shape: Shape): number {
-  switch (shape.kind) {
-    case "square":
-      return shape.size * shape.size;
-    case "circle":
-      return Math.PI * shape.radius * shape.radius;
-    case "triangle":
-      return (shape.base * shape.height) / 2;
+function total(sale: Sale): number {
+  switch (sale.kind) {
+    case 'cash': return sale.amount;
+    case 'financed': return sale.amount;
+    case 'lease': return sale.amount;
     default:
-      // If a case is missing above, `shape` here is NOT `never`,
-      // so this line fails to compile — catching the bug at build time.
-      const _exhaustiveCheck: never = shape;
+      // If a case is missing above, `sale` here is NOT `never`,
+      // so this fails to compile.
+      const _exhaustiveCheck: never = sale;
       return _exhaustiveCheck;
   }
 }
 ```
 
-Yeh pattern (discriminated union + `never` exhaustiveness check) TS seniority ka ek top-tier signal hai — yeh frequently "aap kaise ensure karte ho ki naya case add karne par miss na ho" ke tor par poocha jaata hai.
+This pattern (discriminated union + `never` exhaustiveness check) is one of the strongest signals of TS seniority — it's a natural fit for API response types, NgRx actions, and state machines in the Dealer Dashboard (e.g. `OrderState = 'draft' | 'submitted' | 'approved' | 'delivered'`).
 
-### Optional Chaining & Nullish Coalescing
+### 2.10 Optional chaining & nullish coalescing
 
 ```typescript
-const obj = { user: { profile: { name: "John" } } };
-console.log(obj.user?.profile?.name);   // John
-console.log(obj.user?.address?.city);   // undefined
-
-let name: string | null = null;
-console.log(name ?? "Default Name"); // "Default Name"
+console.log(dealer.address?.city);      // undefined if address is missing
+const displayName = dealer.name ?? 'Unnamed Dealer';
 ```
 
-Gotcha: `??` `||` se different hai — `0`, `""`, aur `false` `??` ke under valid values hain lekin `||` ke under incorrectly replace ho jaate hain. Yeh ek classic bug hai jab purane `||`-based default logic ko TS mein migrate karte hain, falsy-but-valid values ke liye re-audit kiye bina.
+**Gotcha:** `??` is not the same as `||`. `0`, `""`, and `false` are valid values under `??`, but incorrectly get replaced under `||`. A classic bug when migrating old `||`-based default logic without re-auditing falsy-but-valid values (e.g. a vehicle with `discount: 0` should keep `0`, not fall back to a default).
 
-### strictNullChecks and the strict Family of Flags [new content]
+### 2.11 `strictNullChecks` and the `strict` family of flags 🎯
 
-Original notes `strictNullChecks` enable karne ka mention ek line mein karte hain, impact explain kiye bina — yeh ek highest-value senior topic hai kyunki yeh govern karta hai ki `strict: true` se aapko actually kitna milta hai.
-
-`strict: true` ek bundle flag hai jo (at minimum, current stable TS mein) on karta hai:
+`strict: true` is a bundle flag. Here's what it turns on:
 
 | Flag | Effect | Real-world impact |
 |---|---|---|
-| `strictNullChecks` | `null`/`undefined` default se har type ka part nahi hote | Single sabse bada bug-catcher; use se pehle explicit `T \| null` aur narrowing force karta hai |
-| `noImplicitAny` | Inferred `any` par error deta hai | Silent type-safety holes ko prevent karta hai, especially untyped function params par |
-| `strictFunctionTypes` | Function parameters contravariantly check hote hain | Unsound function assignment ko prevent karta hai (variance section dekhein) |
-| `strictBindCallApply` | `.bind`/`.call`/`.apply` function signature ke against type-checked hote hain | In rarely-typed-safe APIs par wrong-arg-count/type bugs catch karta hai |
-| `strictPropertyInitialization` | Class properties ko constructor mein initialize karna hoga ya explicitly `undefined` allow karna hoga | Bahut common Angular pain point — DI-populated fields ko `!` (definite assignment assertion) ya constructor initialization chahiye |
-| `noImplicitThis` | Jab `this` ka implicit `any` type ho tab error deta hai | Callbacks ke tor par use hone wale regular functions ke liye relevant |
-| `alwaysStrict` | `"use strict"` emit karta hai aur strict JS mode mein parse karta hai | Mostly day-to-day invisible |
-| `useUnknownInCatchVariables` (TS 4.4 se `strict` ke under default on) | `catch (e)` `unknown` type ka hota hai, `any` nahi | Safe error handling force karta hai — Error Handling section dekhein |
+| `strictNullChecks` | `null`/`undefined` are not part of every type by default | The single biggest bug-catcher; forces explicit `T \| null` and narrowing |
+| `noImplicitAny` | Errors on inferred `any` | Prevents silent type-safety holes, especially on untyped params |
+| `strictFunctionTypes` | Function parameters checked contravariantly | Prevents unsound function assignment |
+| `strictBindCallApply` | `.bind`/`.call`/`.apply` type-checked against the function signature | Catches wrong-arg bugs on these rarely-typed APIs |
+| `strictPropertyInitialization` | Class properties must be initialized in the constructor, or explicitly allow `undefined` | Common Angular pain point — DI-populated fields need `!` or constructor init |
+| `noImplicitThis` | Errors when `this` would implicitly be `any` | Relevant for regular functions used as callbacks |
+| `useUnknownInCatchVariables` | `catch (e)` is typed `unknown`, not `any` | Forces safe error handling — see Part 5 |
 
-Flags jo `strict` mein **included nahi** hain lekin real senior-grade configs mein essential hain:
+**Flags NOT included in `strict` but essential in real senior-grade configs:**
+- `noUncheckedIndexedAccess` — makes `arr[i]` / `record[key]` return `T | undefined` instead of `T`, closing a real hole around index signatures.
+- `exactOptionalPropertyTypes` — distinguishes "key can be absent" from "key can be present with value `undefined`."
+- `noFallthroughCasesInSwitch` — catches missing `break`/`return` in a `switch`.
 
-- `noUncheckedIndexedAccess` — `arr[i]` aur `record[key]` ko `T` ke bajaye `T | undefined` return karata hai, jo ek huge structural-typing hole close karta hai (index signatures otherwise guaranteed presence ke baare mein lie karte hain).
-- `exactOptionalPropertyTypes` — `{ x?: string }` (key absent ho sakti hai) ko `{ x?: string | undefined }` (key present ho sakti hai `undefined` value ke saath) se distinguish karta hai — subtle hai lekin exact API contracts ke liye matter karta hai.
-- `noUnusedLocals` / `noUnusedParameters` — hygiene, safety nahi.
-- `noFallthroughCasesInSwitch` — `switch` mein missing `break`/`return` catch karta hai.
-
-Interviewers aksar poochte hain: *"Aapki team ne migration unblock karne ke liye `strictNullChecks` disable kiya — aap kya lose kar rahe ho?"* Jawab: aap app ke har nullable path par compile-time guarantees lose kar dete ho; kisi bhi possibly-null value par `.foo` access ek latent `TypeError` ban jaata hai, aur third-party `.d.ts` files jo `strictNullChecks` assume karti hain (zyada tar modern wali karti hain) aapke codebase mein incorrect inference produce kar sakti hain.
+🎯 **Q: Your team wants to disable `strictNullChecks` to speed up a migration. What do you push back with?**
+A: You lose compile-time guarantees on every nullable path in the *entire* app, not just the migrated files — any possibly-null value becomes a latent `TypeError`. Most modern third-party `.d.ts` files also assume `strictNullChecks` is on, so inference from libraries becomes less trustworthy too. Prefer incremental adoption (per-file suppressions, or scoped `strict` via project references) over a blanket disable.
 
 ---
 
-## Advanced (Generics & the Type System)
+## Part 3 — Advanced Types & Generics
 
-### Generics & Generic Constraints
+### 3.1 Generics & generic constraints
 
 ```typescript
-function identity<T>(arg: T): T {
-  return arg;
-}
-console.log(identity<string>("Hello")); // Hello
+function identity<T>(arg: T): T { return arg; }
 
-function printLength<T extends { length: number }>(arg: T) {
-  console.log(arg.length);
-}
-printLength("Hello"); // 5
+function getLength<T extends { length: number }>(arg: T) { return arg.length; }
 ```
 
-**[new content] Generic defaults aur multiple type parameters jinke constraints ek-doosre ko reference karte hain** — real code mein common hai (jaise, typed reducers, typed HTTP clients):
+**Generic defaults and inter-referencing constraints** (common in typed HTTP clients / reducers):
 
 ```typescript
-function get<T, K extends keyof T = keyof T>(obj: T, key: K): T[K] {
+function getField<T, K extends keyof T = keyof T>(obj: T, key: K): T[K] {
   return obj[key];
 }
 ```
 
-### Generic Variance (Covariance/Contravariance) [new content]
+**Dealer Dashboard example — a typed repository:**
 
-Source notes mein bilkul present nahi tha, aur senior-level type-system depth ka ek strong signal hai — especially ek .NET dev ke liye valuable jo already C# generics se `in`/`out` variance annotations jaanta hai (`IEnumerable<out T>`, `IComparer<in T>`).
+```typescript
+interface Repository<T extends { id: string }> {
+  getById(id: string): Promise<T | undefined>;
+  save(entity: T): Promise<void>;
+}
 
-- **Covariance**: agar `Dog` `Animal` ka subtype hai, to kya `Dog[]` `Animal[]` ka subtype hai? TypeScript arrays aur return positions ke liye **haan** kehta hai — yeh technically **unsound** hai (aap ek `Animal[]`-typed reference ke through us `Dog[]` mein ek `Cat` push kar sakte ho jise compiler `Dog[]` sochta hai) lekin pragmatic hai, real-world JS usage ke saath match karta hai.
-- **Contravariance**: function *parameter* types ko safely opposite direction mein narrow hona chahiye. `strictFunctionTypes` ke under, standalone function types ke liye method parameters contravariantly check hote hain, jo unsound case ko catch karta hai:
+class VehicleRepository implements Repository<Vehicle> {
+  async getById(id: string) { /* ... */ return undefined; }
+  async save(v: Vehicle) { /* ... */ }
+}
+```
+
+### 3.2 Generic variance (covariance / contravariance)
+
+Valuable to raise explicitly if you're coming from C#, since it bridges directly to `in`/`out` variance annotations (`IEnumerable<out T>`, `IComparer<in T>`).
+
+- **Covariance:** if `Dog` is a subtype of `Animal`, is `Dog[]` a subtype of `Animal[]`? TypeScript says **yes** for arrays and return positions — technically unsound (you could push a `Cat` into what the compiler thinks is `Dog[]`), but pragmatic and matches real JS usage.
+- **Contravariance:** function *parameter* types should narrow safely in the opposite direction. Under `strictFunctionTypes`, standalone function types are checked contravariantly, catching the unsound case:
 
 ```typescript
 type AnimalHandler = (a: Animal) => void;
@@ -618,99 +487,71 @@ type DogHandler = (d: Dog) => void;
 
 let handler: AnimalHandler;
 let dogHandler: DogHandler = (d) => console.log(d.bark());
-
-// Without strictFunctionTypes this incorrectly compiles:
-// handler = dogHandler; // unsound: handler could now be called with a Cat
+// handler = dogHandler; // unsound without strictFunctionTypes — handler could now be called with a Cat
 ```
 
-Ek well-known TS quirk note karo (current version ke against verify karo, historically true): **method syntax** (`interface X { fn(a: Animal): void }`) backward-compatibility reasons ki wajah se `strictFunctionTypes` ke under bhi *bivariantly* check hota hai, jabki **property syntax with a function type** (`interface X { fn: (a: Animal) => void }`) contravariantly (strictly) check hota hai. Yeh genuinely obscure lekin real "gotcha" hai jo senior interviewers deep TS knowledge ko surface knowledge se separate karne ke liye use karte hain.
+**Known quirk:** method syntax (`interface X { fn(a: Animal): void }`) is checked *bivariantly* even under `strictFunctionTypes`, for backward-compatibility reasons, while property syntax with a function type (`interface X { fn: (a: Animal) => void }`) is checked *contravariantly* (strictly). This is an obscure but real distinguishing question at senior level.
 
-C# ke ulat, TypeScript mein **user generics par koi explicit `in`/`out` variance annotations nahi hain** (jab yeh likha ja raha hai tab widely deployed versions ke hisaab se — current spec status verify karo; explicit variance annotations for generics par active TC39/TS proposal discussion chal rahi hai). TS generics mein variance type parameter ke type ke andar use hone ke tareeke se *structurally inferred* hoti hai, explicitly declared nahi.
+Unlike C#, TypeScript has **no explicit `in`/`out` variance annotations for user generics** — variance is structurally *inferred* from how the type parameter is used, not explicitly declared.
 
-### keyof, typeof, and Indexed Access Types
+### 3.3 `keyof`, `typeof`, and indexed access types
 
 ```typescript
-type User = { id: number; name: string };
-type UserKeys = keyof User; // "id" | "name"
+type Vehicle = { vin: string; model: string; price: number };
+type VehicleKeys = keyof Vehicle; // "vin" | "model" | "price"
 
-let person = { name: "Alice", age: 25 };
-type PersonType = typeof person;
+let sample = { model: 'Sedan', year: 2024 };
+type SampleType = typeof sample;
+
+type ModelType = Vehicle['model'];           // string
+type AllValues = Vehicle[keyof Vehicle];      // string | number
 ```
 
-**[new content] Indexed access types** (`T[K]`) `keyof` ke natural complement hain aur source notes mein missing the, halaanki `infer`/`ReturnType` examples mein implicitly use ho rahe the:
+### 3.4 Mapped types
 
 ```typescript
-type User = { id: number; name: string; address: { city: string } };
-type NameType = User["name"];              // string
-type CityType = User["address"]["city"];   // string
-type AllValues = User[keyof User];         // number | string | { city: string }
+type ReadonlyVehicle = { readonly [K in keyof Vehicle]: Vehicle[K] };
 ```
 
-### Mapped Types
+**Key remapping with `as`, and `+`/`-` modifiers** (TS 4.1+):
 
 ```typescript
-type ReadonlyUser = { readonly [K in keyof User]: User[K] };
-```
-
-**[new content] `as` aur modifiers (`+`/`-`) ke saath key remapping** — TS 4.1+ mein introduce hua, notes mein absent tha:
-
-```typescript
-// Strip readonly/optional modifiers
 type Mutable<T> = { -readonly [K in keyof T]-?: T[K] };
 
-// Remap keys entirely — e.g., build getter names from property names
-type Getters<T> = {
-  [K in keyof T as `get${Capitalize<string & K>}`]: () => T[K];
-};
+type Getters<T> = { [K in keyof T as `get${Capitalize<string & K>}`]: () => T[K] };
 
-interface Person { name: string; age: number; }
-type PersonGetters = Getters<Person>;
-// { getName: () => string; getAge: () => number }
+interface Dealer { name: string; region: string; }
+type DealerGetters = Getters<Dealer>;
+// { getName: () => string; getRegion: () => string }
 ```
 
-### Conditional Types & infer
+### 3.5 Conditional types & `infer`
 
 ```typescript
-type IsString<T> = T extends string ? "yes" : "no";
-type Test = IsString<number>; // "no"
+type IsString<T> = T extends string ? 'yes' : 'no';
 
 type ReturnTypeOf<T> = T extends (...args: any[]) => infer R ? R : never;
-
-function getName(): string { return "Alice"; }
-type NameType = ReturnTypeOf<typeof getName>; // string
 ```
 
-**[new content] Unions ke upar distributive conditional types** — ek frequently-tested subtlety: jab conditional type ka checked type ek *naked* type parameter ho, TS conditional ko har union member par individually distribute karta hai:
+**Distributive conditional types** — a frequently-tested subtlety. When the checked type is a *naked* type parameter, TS distributes the conditional over each union member:
 
 ```typescript
 type ToArray<T> = T extends any ? T[] : never;
 type Result = ToArray<string | number>; // string[] | number[]  (distributed)
 
-// Wrapping in a tuple opts out of distribution:
 type ToArrayNonDist<T> = [T] extends [any] ? T[] : never;
-type Result2 = ToArrayNonDist<string | number>; // (string | number)[]
+type Result2 = ToArrayNonDist<string | number>; // (string | number)[]  (wrapping opts out)
 ```
 
-Yeh distributive behavior *exactly* wahi tareeka hai jisse built-in utility types jaise `Exclude`/`Extract`/`NonNullable` internally implement hote hain, isliye ise samajhna "yeh utility types is tareeke se kyun kaam karte hain" ko mechanical level par explain kar deta hai, sirf memorized effect se nahi.
+This is exactly how built-in `Exclude`/`Extract`/`NonNullable` are implemented — understanding it explains *why* those utilities work, not just what they do.
 
-### Template Literal Types
-
-```typescript
-type Greeting = `Hello, ${string}!`;
-const greet: Greeting = "Hello, John!";
-```
-
-**[new content] Template literal types ko union distribution aur intrinsic string manipulation types ke saath combine karna** — yeh modern, practical use case hai (jaise, typed event names, typed CSS-in-JS keys, typed REST route params) jo one-line original example nahi dikhata:
+### 3.6 Template literal types
 
 ```typescript
-type EventName = "click" | "hover" | "focus";
+type EventName = 'click' | 'hover' | 'focus';
 type HandlerName = `on${Capitalize<EventName>}`;
 // "onClick" | "onHover" | "onFocus"
 
-// Intrinsic string manipulation types: Uppercase, Lowercase, Capitalize, Uncapitalize
-type Loud = Uppercase<"hello">; // "HELLO"
-
-// Extracting typed params from a route string (common in typed-router libraries)
 type ExtractParams<T extends string> =
   T extends `${string}:${infer Param}/${infer Rest}`
     ? Param | ExtractParams<Rest>
@@ -718,73 +559,28 @@ type ExtractParams<T extends string> =
       ? Param
       : never;
 
-type Params = ExtractParams<"/users/:userId/posts/:postId">; // "userId" | "postId"
+type Params = ExtractParams<'/dealers/:dealerId/vehicles/:vin'>; // "dealerId" | "vin"
 ```
 
-### [gaps] Recursive Type Alias Depth Limits (TS2589)
+### 3.7 Recursive type depth limits (`TS2589`)
 
-Existing notes mein cover nahi kiya gaya, lekin yeh ek real error hai jo har senior TS engineer eventually hit karta hai jab upar dikhaye gaye jaisa "clever" recursive type likhta hai (`ExtractParams`, `DeepPartial`, JSON-path types) — aur *kyun* hota hai yeh explain kar sakna, sirf "cast add kar do" nahi, ek genuine depth signal hai.
+Every senior TS engineer eventually hits this when writing a "clever" recursive type (deep params extractor, `DeepPartial`, JSON-path types).
 
-**Ek concrete trigger.** TypeScript compiler conditional/recursive types ko expand karke evaluate karta hai, aur uski ek hard internal recursion-depth limit hai (roughly ~50 levels of instantiation, halaanki exact number ek implementation detail hai jo releases ke across shift hui hai) genuinely infinite type-level recursion se protect karne ke liye. Ek naive recursive "increment" ya "deep concatenation" type ek large ya unbounded structure ke upar us limit ko cross kar jaata hai:
+**Why it happens:** the compiler evaluates conditional/recursive types by expansion, with a hard internal recursion-depth limit (roughly ~50 instantiation levels) to protect against genuinely infinite type-level recursion. A naive recursive counter/concatenation type over a large or unbounded structure crosses that limit.
 
-```typescript
-// A naive recursive tuple-length-counter, called on something the compiler
-// can't bound in advance:
-type BuildTuple<N extends number, T extends unknown[] = []> =
-  T['length'] extends N ? T : BuildTuple<N, [...T, unknown]>;
+**Mitigation strategies:**
+1. **Cap recursion depth explicitly:**
+   ```typescript
+   type DeepPartialBounded<T, Depth extends number = 5> =
+     Depth extends 0 ? T
+     : T extends object ? { [K in keyof T]?: DeepPartialBounded<T[K], Prev[Depth]> }
+     : T;
+   ```
+2. **Break circularity explicitly** — for genuinely circular graphs (`Order`/`Customer`), model the flat DTO shape you actually need (`OrderSummary` with `customerId: string`) instead of deep-transforming the full circular domain graph.
+3. **Prefer pre-built, well-tested utility types** (`Partial`, `Pick`, or a vetted library like `type-fest`) over hand-rolled unbounded recursion.
+4. **Simplify the base case** — wrapping in a tuple (`[T] extends [U]`) to opt out of distribution can dramatically cut the number of instantiations.
 
-type Big = BuildTuple<10000>;
-// error TS2589: Type instantiation is excessively deep and possibly infinite.
-```
-
-Same error zyada "realistic" code mein bhi dikhta hai — sabse common ek recursive `DeepPartial<T>`/`DeepReadonly<T>`-style mapped type jo ek large, self-referential, ya circular domain model par apply hota hai (jaise, ek ORM entity graph jahan `Order` ke paas `customer: Customer` hai, `Customer` ke paas `orders: Order[]` hai — circular reference), ya ek template-literal path-extraction type jo ek bahut lambi string par recurse kar rahi hai:
-
-```typescript
-interface Order { id: string; customer: Customer; }
-interface Customer { id: string; orders: Order[]; } // circular reference
-
-type DeepPartial<T> = T extends object
-  ? { [K in keyof T]?: DeepPartial<T[K]> }
-  : T;
-
-type PartialOrder = DeepPartial<Order>;
-// With a genuinely circular type graph and no depth guard, the compiler keeps
-// expanding Order -> Customer -> Order -> Customer ... until it hits the
-// recursion ceiling and raises TS2589 (behavior here also depends on TS version —
-// modern TS has some circularity detection, but it's not a guarantee for every
-// recursive-type shape, especially conditional types combined with mapped types).
-```
-
-**Yeh mechanically kyun hota hai:** ek recursive *function* ke ulat, jo runtime par recurse karta hai aur theoretically indefinitely chal sakta hai (jab tak stack overflow na ho), ek recursive *type* ko compiler ko type-checking time par fully expand karna padta hai — zyada tar recursive type shapes ke liye "lazy evaluation" jaisa kuch equivalent nahi hai. Recursion ka har level ek real, materialized intermediate type hai jise compiler track karta hai, isliye ek type jo recursively unbounded hai (koi clear terminating condition thode se steps mein reachable nahi hai) ya to compiler ko uske depth budget se bahar chala deta hai (`TS2589`), ya less bounded cases mein, hard error hit karne se pehle bhi type-checking/IDE responsiveness ko visibly slow kar sakta hai.
-
-**Type ko restructure karke ise kaise avoid karein:**
-
-1. **Recursion ko explicitly ek depth-limiting type parameter se bound karo** — ek decrementing counter (usually ek tuple-length trick ke through, kyunki TS mein types par native arithmetic nahi hai) recursive type ke through thread karo aur exhaust hone par ek safe fallback par bail out karo:
-
-```typescript
-type Prev = [never, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9]; // lookup table simulating "N - 1"
-
-type DeepPartialBounded<T, Depth extends number = 5> =
-  Depth extends 0
-    ? T
-    : T extends object
-      ? { [K in keyof T]?: DeepPartialBounded<T[K], Prev[Depth]> }
-      : T;
-```
-
-Yeh recursion ko ek fixed, safe depth (yahan 5 levels) par cap kar deta hai, chahe actual input type kitna bhi deep ya circular ho — trade-off yeh hai ki cap se deeper nested types transform nahi hote (waise hi pass through hote hain jaise hain), jo usually acceptable trade-off hai kyunki zyada tar real domain models ko useful hone ke liye infinite type-level depth ki zaroorat nahi hoti.
-
-2. **Circularity ko explicitly break karo** — agar type graph genuinely circular hai (`Order`/`Customer` ki tarah), consider karo ki kya *type* ko actually cycle walk karne ki zaroorat hai bhi; often practical fix yeh hai ki aap wahi DTO/view-model shape model karo jo aapko actually chahiye (jaise, `OrderSummary` ek flat `customerId: string` ke saath nested `customer: Customer` ki jagah), full circular domain graph ko deep-transform karne ke bajaye.
-
-3. **Hand-rolled unbounded recursive types ke bajaye ek small set of pre-built, well-tested utility types prefer karo** (built-in `Partial`/`Readonly`/`Pick`/etc., ya `type-fest` jaisi vetted library ka `PartialDeep`) jahan possible ho — yeh already depth-limit problem ke around engineered hain.
-
-4. **Base case simplify karo** — kabhi-kabhi real issue ek conditional type hota hai jismein ek naked type parameter unexpectedly ek large union par distribute ho raha hota hai (upar distributive conditional types wala note dekhein); tuple mein wrap karna (`[T] extends [U]`) distribution se opt out karke compiler ko perform karne padne wale instantiations ki count dramatically reduce kar sakta hai, kabhi-kabhi bina kisi depth-limiting machinery ke `TS2589` resolve kar deta hai.
-
-**Senior level par yeh kyun jaanna zaroori hai:** yeh is guide mein kahin aur cover hui "type-level programming" techniques (conditional types, `infer`, mapped types, template literal recursion) ke practical cost side hai — inhe use karna jaanna tab tak complete nahi hai jab tak aapko yeh na pata ho ki yeh kahan break down hote hain aur inhe kaise bounded rakha jaaye, jo exactly wahi trade-off awareness hai jo ek lead-level interviewer sun rahe hote hain, ek us candidate ke against jisne sirf Stack Overflow se ek recursive utility type copy-paste ki hai.
-
-### Utility Types Deep Dive
-
-Source notes `Partial`, `Required`, `Readonly`, `Pick`, `Omit`, `Record`, `NonNullable`, `Extract`, `Exclude`, `ReturnType`, `InstanceType`, `Parameters` list karte hain — har ek do baar thodi different wording ke saath explain kiya gaya hai (Q32–40 aur Q92–100/46–50). Neeche consolidated hai, de-duplicated, ke saath ki har ek actually kaise implement hua hai (important senior detail: interviewers aksar aapse inmein se ek ko *scratch se likhne* ko kehte hain).
+### 3.8 Utility types deep dive
 
 | Utility | Effect | Simplified implementation |
 |---|---|---|
@@ -797,99 +593,76 @@ Source notes `Partial`, `Required`, `Readonly`, `Pick`, `Omit`, `Record`, `NonNu
 | `NonNullable<T>` | Strip `null`/`undefined` | `T extends null \| undefined ? never : T` |
 | `Extract<T, U>` | Keep union members assignable to `U` | `T extends U ? T : never` |
 | `Exclude<T, U>` | Remove union members assignable to `U` | `T extends U ? never : T` |
-| `ReturnType<T>` | Function's return type | `T extends (...args: any[]) => infer R ? R : never` |
-| `Parameters<T>` | Function's parameter tuple | `T extends (...args: infer P) => any ? P : never` |
-| `InstanceType<T>` | Instance type of a constructor | `T extends new (...args: any[]) => infer R ? R : any` |
+| `ReturnType<T>` | Function's return type | `T extends (...a: any[]) => infer R ? R : never` |
+| `Parameters<T>` | Function's parameter tuple | `T extends (...a: infer P) => any ? P : never` |
+| `InstanceType<T>` | Instance type of a constructor | `T extends new (...a: any[]) => infer R ? R : any` |
+
+Interviewers often ask you to **implement one of these from scratch** — know the right-hand column, not just the names.
 
 ```typescript
-interface User { id: number; name: string; email: string; age?: number; }
+interface Vehicle { vin: string; model: string; price: number; discount?: number; }
 
-type PartialUser  = Partial<User>;             // all optional
-type RequiredUser = Required<User>;            // all required
-type UserPreview  = Pick<User, "name" | "email">;
-type UserNoEmail  = Omit<User, "email">;
-type UserRoles    = Record<string, boolean>;
-
-type Union       = string | number | boolean;
-type OnlyNumbers = Extract<Union, number>;     // number
-type NoBooleans  = Exclude<Union, boolean>;    // string | number
-
-function greet(name: string): string { return `Hello, ${name}`; }
-type GreetReturn = ReturnType<typeof greet>;   // string
-type GreetParams = Parameters<typeof greet>;   // [string]
-
-class Person { constructor(public name: string) {} }
-type PersonInstance = InstanceType<typeof Person>; // Person
+type VehicleSummary = Pick<Vehicle, 'vin' | 'model'>;
+type VehicleNoDiscount = Omit<Vehicle, 'discount'>;
+type VehicleRegistry = Record<string, Vehicle>;
 ```
 
-**[new content] Utility types jo original notes ne bilkul omit kiye the** lekin jo senior interviews mein regularly aate hain:
+**Utility types often missed:**
 
 ```typescript
-// Awaited<T> — unwraps nested Promise types (critical for async/await return typing since TS 4.5)
-async function fetchUser(): Promise<User> { /* ... */ return {} as User; }
-type FetchedUser = Awaited<ReturnType<typeof fetchUser>>; // User (not Promise<User>)
+// Awaited<T> — unwraps nested Promise types (critical since TS 4.5)
+async function fetchVehicle(): Promise<Vehicle> { return {} as Vehicle; }
+type Fetched = Awaited<ReturnType<typeof fetchVehicle>>; // Vehicle, not Promise<Vehicle>
 
-// Required deep utility isn't built in — a common "write this" interview task:
-type DeepPartial<T> = T extends object
-  ? { [K in keyof T]?: DeepPartial<T[K]> }
-  : T;
+// DeepPartial isn't built in — a common "write this" task
+type DeepPartial<T> = T extends object ? { [K in keyof T]?: DeepPartial<T[K]> } : T;
 ```
 
-### as const and satisfies
+### 3.9 `as const` and `satisfies` 🎯
 
 ```typescript
-const colors = ["red", "green", "blue"] as const;
-// readonly ["red", "green", "blue"] — each element is a literal type, array is readonly
+const statuses = ['pending', 'approved', 'rejected'] as const;
+// readonly ["pending", "approved", "rejected"]
 
-const person = {
-  name: "Alice",
-  age: 25,
-} satisfies { name: string; age: number };
+const dealer = { name: 'Downtown Motors', region: 'North' } satisfies { name: string; region: string };
 ```
 
-**[new content] `satisfies` kyun matter karta hai aur yeh type annotation se kaise different hai.** Original note kehta hai ki `satisfies` (TS 4.9) value ko ek type ke against check karta hai "uski inferred type change kiye bina" lekin explain nahi karta ki *yeh valuable kyun hai* — yeh actual interview follow-up hai:
+**Why `satisfies` matters — and how it differs from a type annotation:**
 
 ```typescript
-// Type annotation WIDENS the variable to the annotated type — you lose literal info
-const config1: Record<string, string | number> = { retries: 3, mode: "fast" };
-config1.retries; // type: string | number  (widened — lost the fact it's specifically `number`)
+// Annotation WIDENS the variable — you lose literal info
+const config1: Record<string, string | number> = { retries: 3, mode: 'fast' };
+config1.retries; // type: string | number (widened)
 
-// satisfies VALIDATES against the type but keeps the narrower inferred type
-const config2 = { retries: 3, mode: "fast" } satisfies Record<string, string | number>;
-config2.retries; // type: number  (preserved!)
+// satisfies VALIDATES against the type but KEEPS the narrower inferred type
+const config2 = { retries: 3, mode: 'fast' } satisfies Record<string, string | number>;
+config2.retries; // type: number (preserved!)
 ```
 
-`satisfies` aapko dono duniya ka best deta hai: compile-time validation ki shape ek contract ke conform karti hai, *aur* downstream use ke liye precise, narrow inferred literal types (jaise, `config2.mode` par autocomplete `"fast"` mein narrow hota hai, `string` mein nahi). Yeh ab constant config objects ko type karne ka idiomatic tareeka hai, purane pattern `as const` (koi shape validation nahi) ya sirf annotation (literal narrowing lose ho jaata hai) ki jagah.
+`satisfies` gives you both: compile-time validation that the shape conforms to a contract, *and* precise, narrow inferred types for downstream use. It's now the idiomatic way to type constant config objects.
 
-### Ambient Declarations, Triple-Slash Directives, Module Augmentation & Declaration Merging
+### 3.10 Ambient declarations, module augmentation & declaration merging
 
 ```typescript
 // Ambient declaration (.d.ts)
 declare function jQuery(selector: string): any;
 
-// Triple-slash directive
-/// <reference path="path/to/file.d.ts" />
-
-// Module augmentation
-declare module "some-library" {
-  interface SomeInterface {
-    newMethod(): void;
-  }
+// Module augmentation — extending a third-party library's types
+declare module 'some-library' {
+  interface SomeInterface { newMethod(): void; }
 }
 
 // Declaration merging
-interface Window { customProperty: string; }
-interface Window { anotherProperty: number; }
-// Merged Window now has both properties.
+interface Window { dealerConfig: string; }
+interface Window { featureFlags: string[]; }
+// Window now has both properties merged.
 ```
 
-Senior nuance: triple-slash directives modern module-based (ESM) TypeScript projects mein largely legacy hain — yeh mainly global/ambient `.d.ts` files (koi imports/exports nahi) aur old-style script concatenation ke liye matter karte hain. Third-party module types ko extend karne ke liye modern approach module augmentation hai (jaise, ek Node/Angular Universal backend mein Express ke `Request` object mein custom property add karna, ya RxJS operators ko extend karna).
+Triple-slash directives are largely legacy in modern ESM projects. The modern way to extend third-party types (e.g. adding a custom property to Express's `Request` in an Angular Universal backend) is **module augmentation**.
 
-### Decorators & Metadata (Angular Relevance) [new content]
+### 3.11 Decorators & metadata (Angular relevance) 🎯
 
-Source notes mein completely absent tha, halaanki yeh Angular (`@Component`, `@Injectable`, `@Input`) ke liye core hai — us candidate ke liye must-know jo "Angular/TS frontend work bhi karta hai."
-
-Decorators functions hote hain jo classes/members/parameters par declaration time par `@expression` syntax ke through apply hote hain, declarative metadata aur behavior injection enable karte hain:
+Decorators are functions applied to classes/members/parameters at declaration time via `@expression` syntax, enabling declarative metadata and behavior injection.
 
 ```typescript
 function Log(target: any, propertyKey: string, descriptor: PropertyDescriptor) {
@@ -901,75 +674,53 @@ function Log(target: any, propertyKey: string, descriptor: PropertyDescriptor) {
   return descriptor;
 }
 
-class Calculator {
+class PricingService {
   @Log
-  add(a: number, b: number) { return a + b; }
+  calculateDiscount(base: number) { return base * 0.9; }
 }
 ```
 
-Key senior-level points:
+**Key points:**
+- Angular's decorators (`@Component`, `@NgModule`, `@Injectable`, `@Input`) rely on **`reflect-metadata`** plus the `emitDecoratorMetadata`/`experimentalDecorators` compiler flags to implement dependency injection — DI resolves constructor parameter types at runtime from emitted metadata. This is *why* Angular DI silently breaks if you use an interface (erased at compile time, no runtime trace) as an injection token instead of a class or `InjectionToken`.
+- **Standards-track decorators** (TC39 Stage 3, default in TypeScript 5.0+) have **different runtime semantics** than the legacy `experimentalDecorators: true` model Angular has historically used. This is a live migration concern — new decorators are plain functions receiving `(value, context)` instead of `(target, key, descriptor)`, don't rely on `reflect-metadata`, and compose differently with class fields. Mixing legacy and standard decorator semantics in one project/library boundary causes subtle bugs.
 
-- Angular decorators (`@Component`, `@NgModule`, `@Injectable`, `@Input`, `@Output`) par **`reflect-metadata`** aur TypeScript ke `emitDecoratorMetadata`/`experimentalDecorators` compiler flags ke saath combine karke apna dependency-injection container implement karne ke liye rely karta hai — DI runtime par constructor parameter types ko emitted metadata padhkar resolve karta hai, jo *isi wajah se* hai ki Angular DI silently break ho jaata hai agar aap injection token ke tor par ek interface (compile time par erase ho jaata hai, koi runtime metadata nahi) use karo class ya `InjectionToken` ki jagah.
-- **Standards track decorators** (Stage 3 TC39 proposal, TypeScript 5.0+ mein default ke tor par shipped) ki **different runtime semantics** hoti hai us legacy `experimentalDecorators: true` model se jo Angular historically use karta rahaa hai (pre-Angular v16/Ivy-era metadata reflection nuances ko chhod kar). Yeh ek live migration concern hai: Angular standard decorators support ki taraf move kar raha hai, aur ek hi project mein dono decorator models ko mix karna real compile errors cause karta hai. Agar poocha jaaye "TS 5.0 decorators mein kya change hua," jawab hai: naye decorators plain functions hote hain jo `(target, key, descriptor)` ke bajaye `(value, context)` receive karte hain, yeh `reflect-metadata` par rely nahi karte, aur class fields ke liye differently compose hote hain.
-- Parameter decorators (`@Inject(TOKEN)`) aur property decorators (`@Input()`) common Angular patterns hain jinhe candidates explain kar paane chahiye ki yeh sirf `Object.defineProperty`/constructor parameter interception ke upar sugar hain.
-
-(exact current default decorator behavior ko apne project mein use ho rahe TypeScript/Angular versions ke against verify karo, kyunki yeh area recent major versions ke across change hua hai.)
-
-### Module Resolution: ESM vs CommonJS [new content]
-
-Source notes mein bilkul cover nahi kiya gaya, phir bhi real build failures ka ek bahut common source hai jinhe senior candidates diagnose kar paane expected hote hain.
+### 3.12 Module resolution: ESM vs CommonJS
 
 | Aspect | CommonJS (CJS) | ES Modules (ESM) |
 |---|---|---|
 | Syntax | `require()` / `module.exports` | `import` / `export` |
 | Loading | Synchronous, runtime-resolved | Static, analyzable at compile time (enables tree-shaking) |
-| `this` at module top level | `module.exports` object | `undefined` |
-| File extension signal (Node) | `.cjs` or `"type": "commonjs"` in package.json | `.mjs` or `"type": "module"` in package.json |
-| Interop | N/A | `esModuleInterop`/`allowSyntheticDefaultImports` needed to import CJS packages cleanly |
 | `tsconfig` setting | `"module": "CommonJS"` | `"module": "ESNext"` / `"NodeNext"` / `"Bundler"` |
 
-Practical senior-level gotchas:
-
-- `moduleResolution: "Bundler"` (TS 5.0+) vs `"NodeNext"` vs classic `"Node"` — Angular/Vite/webpack frontend projects ke liye `"Bundler"` pick karo (bundler ko resolution handle karne deta hai, Node ke strict ESM rules ke bina `exports` map support karta hai), actual Node.js backend services ke liye `"NodeNext"` pick karo jinhe Node ke real runtime resolution algorithm ke saath match karna hota hai (real ESM ke under relative imports mein mandatory file extensions included).
-- Tree-shaking (Angular bundle size budgets ke liye critical) ko **static, analyzable ESM `import`/`export`** chahiye — dynamically computed `require()` calls ya CommonJS ke through re-exporting ise defeat kar deta hai, isi liye library authors dual ESM/CJS builds ya ESM-only packages publish karne ki taraf push kiye jaate hain.
-- Angular CLI (Angular 17+ se esbuild ke through) build graph mein throughout ESM expect karta hai; ek transitive CommonJS dependency well-known `CommonJS or AMD dependencies can cause optimization bailouts` warning trigger karti hai — build performance debugging ke baare mein poochhe jaane par mention karne layak ek real-world issue.
+**Practical gotchas:**
+- For an Angular/Vite frontend, pick `moduleResolution: "Bundler"` (lets the bundler handle resolution). For an actual Node.js backend service, pick `"NodeNext"` to match Node's real ESM runtime rules.
+- Tree-shaking needs **static, analyzable ESM `import`/`export`** — dynamic `require()` or CommonJS re-exports defeat it, which is why library authors are pushed toward ESM-only or dual builds.
+- Angular CLI (esbuild-based since v17) expects ESM throughout the build graph; a transitive CommonJS dependency triggers the well-known `CommonJS or AMD dependencies can cause optimization bailouts` warning.
 
 ---
 
-## Object-Oriented Programming in TypeScript
+## Part 4 — Object-Oriented TypeScript
 
-### Access Modifiers
+### 4.1 Access modifiers
 
 ```typescript
-class Person {
+class Dealer {
   public name: string;
-  private age: number;
-  protected address: string;
-
-  constructor(name: string, age: number, address: string) {
-    this.name = name;
-    this.age = age;
-    this.address = address;
+  private taxId: string;
+  protected region: string;
+  constructor(name: string, taxId: string, region: string) {
+    this.name = name; this.taxId = taxId; this.region = region;
   }
 }
 ```
 
-| Modifier | Access Scope |
+| Modifier | Access scope |
 |---|---|
-| `public` (default) | Kahin se bhi accessible |
-| `private` | Sirf same class ke andar |
-| `protected` | Class aur subclasses ke andar |
+| `public` (default) | Accessible anywhere |
+| `private` | Only inside the same class |
+| `protected` | Class and subclasses |
 
-```typescript
-class Parent {
-  protected greet() { console.log("Hello from Parent"); }
-}
-class Child extends Parent {
-  public sayHello() { this.greet(); } // Allowed
-}
-```
-
-Senior nuance vs C#: TS ke `private`/`protected` **compile-time only** hote hain — emitted JS mein erase ho jaate hain, isliye runtime par koi bhi code bracket notation ke through `instance["age"]` access kar sakta hai ya kisi instance ko `JSON.stringify` karke private fields dekh sakta hai. Agar aapko *true* runtime privacy chahiye, to native JS **private fields** (`#age`) use karo, jo JS engine dwara khud enforce hote hain, sirf TS compiler dwara nahi:
+**Senior nuance vs C#:** TS's `private`/`protected` are **compile-time only** — erased in the emitted JS, so runtime code can access `instance['taxId']` via bracket notation, or see it via `JSON.stringify`. For *true* runtime privacy, use native JS private fields (`#field`), enforced by the JS engine itself:
 
 ```typescript
 class Account {
@@ -978,205 +729,130 @@ class Account {
 }
 ```
 
-### Inheritance, Overriding, super
+### 4.2 Inheritance, overriding, `super`
 
 ```typescript
-class Animal {
-  move() { console.log("Moving..."); }
+class Vehicle {
+  move() { console.log('Moving...'); }
 }
-class Dog extends Animal {
-  bark() { console.log("Woof!"); }
-}
-const pet = new Dog();
-pet.move(); // Moving...
-pet.bark(); // Woof!
-
-class Parent {
-  greet() { console.log("Hello from Parent"); }
-}
-class Child extends Parent {
-  greet() {
-    super.greet();
-    console.log("Hello from Child");
-  }
+class ElectricVehicle extends Vehicle {
+  charge() { console.log('Charging...'); }
 }
 ```
 
-**[new content] `override` keyword (TS 4.3+).** Iske bina, ek base-class method rename ya remove karna subclass "override" ko silently orphan kar deta hai (yeh simply ek naya unrelated method ban jaata hai) — ek real-world refactoring bug class. Explicit `override` annotations force karne ke liye `tsconfig.json` mein `noImplicitOverride` enable karo:
+**The `override` keyword (TS 4.3+):** without it, renaming or removing a base-class method silently orphans a subclass "override" — it just becomes an unrelated new method. Enable `noImplicitOverride` in `tsconfig.json` to force explicit annotations:
 
 ```typescript
-class Child extends Parent {
-  override greet() { // compiler verifies Parent.greet actually exists
+class PremiumDealer extends Dealer {
+  override greet() {      // compiler verifies Dealer.greet actually exists
     super.greet();
   }
 }
 ```
 
-### Abstract Classes vs Interfaces
+### 4.3 Abstract classes vs interfaces
 
-```typescript
-abstract class Animal {
-  abstract makeSound(): void;
-  move() { console.log("Moving..."); }
-}
-interface Flyable {
-  fly(): void;
-}
-```
-
-| Feature | Abstract Class | Interface |
+| Feature | Abstract class | Interface |
 |---|---|---|
-| Methods | Concrete aur abstract dono methods ho sakte hain | Sirf signatures (koi implementation nahi) |
-| Instantiation | Instantiate nahi kar sakte | Instantiate nahi kar sakte (yeh ek "type" bhi nahi hai) |
-| Properties | Default values / initialization logic ke saath properties ho sakti hain | Sirf property type definitions |
-| Multiple inheritance | Nahi (sirf single class inheritance) | Haan (`interface C extends A, B`) |
-| Runtime existence | Haan — emitted output mein ek real JS class | Nahi — fully erased, zero runtime footprint |
-| Constructors | Ek constructor ho sakta hai | Nahi ho sakta |
+| Methods | Concrete and abstract | Signatures only |
+| Instantiation | Cannot | Cannot (not even a runtime "type") |
+| Properties | Can have defaults/init logic | Type definitions only |
+| Multiple inheritance | No (single class inheritance) | Yes (`interface C extends A, B`) |
+| Runtime existence | Yes — a real JS class in emitted output | No — fully erased |
 
-Interview framing: ek abstract class choose karo jab subclasses actual reusable implementation share karti hain (template-method pattern); ek interface choose karo pure contract ke liye, especially jab multiple unrelated classes ko use satisfy karna ho (interfaces structural, multiple "implementation" ko single-inheritance constraint ke bina support karte hain).
+**Interview framing:** choose an abstract class when subclasses share real reusable implementation (template-method pattern). Choose an interface for a pure contract, especially when multiple unrelated classes need to satisfy it.
 
-### Multiple Interface Implementation & Interface Extension
+### 4.4 Multiple interface implementation & extension
 
 ```typescript
-interface A { a: string; }
-interface B { b: number; }
-interface C extends A, B { c: boolean; }
-const obj: C = { a: "hello", b: 42, c: true };
+interface HasVin { vin: string; }
+interface HasPrice { price: number; }
+interface Sellable extends HasVin, HasPrice { listedDate: Date; }
 
-interface X { aMethod(): void; }
-interface Y { bMethod(): void; }
-class MyClass implements X, Y {
-  aMethod() { console.log("A method"); }
-  bMethod() { console.log("B method"); }
+interface Auditable { audit(): void; }
+interface Notifiable { notify(): void; }
+class Order implements Auditable, Notifiable {
+  audit() { /* ... */ }
+  notify() { /* ... */ }
 }
-
-// An interface can even extend a class (extracting its public shape):
-class AnimalBase { name: string = ""; }
-interface Dog extends AnimalBase { breed: string; }
 ```
 
-Flag karne layak gotcha: `implements` sirf **public** shape check karta hai — yeh enforce nahi karta ki private members exist karte hain ya kisi certain tarike se behave karte hain, aur yeh koi runtime check bhi nahi karta (fully erased). `implements` (compile-time contract check) ko actually behavior delegate/inherit karne ke saath confuse mat karo.
+**Gotcha:** `implements` only checks the **public** shape — it doesn't verify private member behavior, and it's not a runtime check (fully erased). Don't confuse `implements` (compile-time contract check) with actually inheriting behavior.
 
-### Mixins
+### 4.5 Mixins
 
 ```typescript
-function Mixin<T extends new (...args: any[]) => {}>(Base: T) {
+function Auditable<T extends new (...args: any[]) => {}>(Base: T) {
   return class extends Base {
-    mixinMethod() { console.log("Mixin method"); }
+    logAction(action: string) { console.log('Audit:', action); }
   };
 }
-class Person {}
-const MixedPerson = Mixin(Person);
-const instance = new MixedPerson();
-instance.mixinMethod(); // Mixin method
+class Order {}
+const AuditableOrder = Auditable(Order);
 ```
 
-Mixins multiple class inheritance ki lack ka TS/JS ka jawab hain — conceptually C# extension methods ya default interface methods jaisa, lekin runtime par layer hone wale class-factory functions ke tor par implement hota hai, ek language feature ke tor par nahi.
+Mixins are TS/JS's answer to the lack of multiple class inheritance — conceptually similar to C# extension methods or default interface methods, but implemented as runtime class-factory functions rather than a language feature.
 
-### Private Constructors & Singletons
+### 4.6 Private constructors & singletons
+
+**Senior nuance:** in Angular, prefer DI-scoped singletons (`@Injectable({ providedIn: 'root' })`) over the classic GoF singleton pattern. Angular's injector already guarantees one instance per scope, is testable (mockable via DI), and avoids hidden global state.
 
 ```typescript
-class Singleton {
-  private static instance: Singleton;
-  private constructor() {}
-
-  static getInstance() {
-    if (!Singleton.instance) {
-      Singleton.instance = new Singleton();
-    }
-    return Singleton.instance;
-  }
+@Injectable({ providedIn: 'root' })
+export class InventoryCacheService {
+  private cache = new Map<string, Vehicle>();
 }
-const obj1 = Singleton.getInstance();
-const obj2 = Singleton.getInstance();
-console.log(obj1 === obj2); // true
 ```
 
-Senior nuance: Angular mein, upar dikhaye classic GoF singleton pattern ke bajaye DI-scoped singletons (`@Injectable({ providedIn: 'root' })`) prefer karo — Angular ka injector already har injector scope ke liye ek single instance guarantee karta hai, testable hai (DI ke through mockable), aur hidden global-state problems aur hand-rolled singletons ke saath aane wale hard-to-test static state se bachata hai.
-
-### Index Signatures
+### 4.7 Index signatures
 
 ```typescript
-interface Dictionary {
-  [key: string]: string;
-}
-const translations: Dictionary = {
-  hello: "hola",
-  goodbye: "adiós",
-};
+interface Translations { [key: string]: string; }
 ```
 
-`noUncheckedIndexedAccess` ke saath paired (strict flags section dekhein): iske bina, `translations["missingKey"]` `string` ke tor par type hota hai halaanki yeh runtime par actually `undefined` hota hai — production `undefined.toUpperCase()`-style crashes ka ek bahut common source jo TS ke default settings catch nahi karte.
+Pair with `noUncheckedIndexedAccess`: without it, `translations['missingKey']` types as `string` even though it's actually `undefined` at runtime — a very common source of `undefined.toUpperCase()`-style production crashes.
 
-### The this Type & Polymorphism
+### 4.8 The `this` type & fluent APIs
 
 ```typescript
-class Fluent {
-  setName(name: string): this {
-    console.log(name);
-    return this;
-  }
-}
-const obj = new Fluent().setName("John");
-
-class Animal {
-  speak() { console.log("Animal speaks"); }
-}
-class Dog extends Animal {
-  speak() { console.log("Bark"); }
+class QueryBuilder {
+  withStatus(status: string): this { /* ... */ return this; }
 }
 ```
 
-`this` return type wahi cheez hai jo fluent/chainable builder APIs ko subclass-safe banati hai — ek method jo `this` return karta hai, subclass instance par call hone par correctly *subclass* type return karta hai, jabki literal base class type return karna chaining ke baad subclass ke additional members ko lose kar deta.
+A method returning `this` correctly returns the *subclass* type when called on a subclass instance — this is what makes fluent/chainable builder APIs subclass-safe.
 
-### Parameter Properties Shorthand [new content]
-
-Source notes mein missing tha, lekin ek example mein (`constructor(private radius: number)` abstract class section mein) implicitly use hua tha bina explain kiye — explicitly call out karne layak hai kyunki yeh idiomatic TS/Angular/NestJS style hai aur interviewers expect karte hain ki aap use bhi karo aur explain bhi karo:
+### 4.9 Parameter properties shorthand
 
 ```typescript
-class Circle {
-  // Shorthand: declares AND assigns `radius` as a private field in one line
-  constructor(private radius: number) {}
-
-  area(): number {
-    return Math.PI * this.radius * this.radius;
-  }
+class VehicleService {
+  // Declares AND assigns `http`/`router` as private fields in one line
+  constructor(private http: HttpClient, private router: Router) {}
 }
 ```
 
-Yeh pure syntax sugar hai — yeh `private radius: number;` declare karne aur constructor body mein `this.radius = radius;` karne ke equivalent hai, lekin Angular/NestJS constructor-DI code mein dominant style hai (`constructor(private http: HttpClient, private router: Router) {}`).
+Pure syntax sugar over declaring the field and assigning it in the constructor body — but it's the dominant style in Angular/NestJS constructor DI.
 
 ---
 
-## Error Handling
+## Part 5 — Error Handling
 
-### try/catch/finally & Custom Errors
+### 5.1 `try`/`catch`/`finally` & custom errors
 
 ```typescript
-try {
-  throw new Error("Something went wrong!");
-} catch (error) {
-  console.log(error.message);
-} finally {
-  console.log("Cleanup operations");
-}
-
-class CustomError extends Error {
-  constructor(message: string) {
+class ApiError extends Error {
+  constructor(message: string, public statusCode: number) {
     super(message);
-    this.name = "CustomError";
+    this.name = 'ApiError';
   }
 }
-throw new CustomError("This is a custom error!");
 ```
 
-JS se carry hui ek gotcha: TS mein `Error` ko subclass karna jab older JS targets (pre-ES2015 `target`, ya kuch transpilation setups) mein compile hota hai, to custom error class ke against `instanceof` checks break ho sakte hain — iski wajah yeh hai ki ES5 built-ins ke liye class inheritance ko kaise downlevel karta hai. Agar aap ES5 target kar rahe ho, to historically constructor mein workaround ke tor par `Object.setPrototypeOf(this, CustomError.prototype)` chahiye hota tha (apne target ke liye verify kar lena ki abhi bhi relevant hai ya nahi — modern `target: ES2015+` ko iski zarurat nahi hoti).
+**Gotcha carried over from JS:** subclassing `Error` when compiling to older JS targets can break `instanceof` checks against the custom error class, due to how class inheritance downlevels to ES5. On `target: ES2015` or newer this isn't an issue; verify for your specific target if unsure.
 
-### Typed Catch Clauses (unknown in catch) [new content]
+### 5.2 Typed catch clauses (`unknown` in catch) 🎯
 
-Original example mein caught `error` ko implicitly type kiya gaya hai aur directly `.message` access kiya gaya hai — yeh aaj compile ho jaata hai lekin ek properly configured strict project ke under yeh ek real inaccuracy hai, aur isko call out karna zaruri hai kyunki yeh *exactly* waisi subtlety hai jo senior interviewers probe karte hain.
-
-TypeScript 4.4 se, `strict` ke under (specifically `useUnknownInCatchVariables`), `catch (error)` `error` ko `unknown` ke tor par type karta hai, `any` nahi — kyunki JS kisi bhi value ka `throw` allow karta hai, sirf `Error` instances nahi (`throw "a string"`, `throw 42`, `throw { code: 500 }` sab valid hain). Senior-correct pattern yeh hai:
+Since TypeScript 4.4, under `strict` (specifically `useUnknownInCatchVariables`), `catch (error)` types `error` as `unknown`, not `any` — because JS allows throwing *any* value (`throw "a string"`, `throw 42`, `throw { code: 500 }` are all valid).
 
 ```typescript
 try {
@@ -1185,135 +861,120 @@ try {
   if (error instanceof Error) {
     console.log(error.message); // safe — narrowed
   } else {
-    console.log("Unknown error", error);
+    console.log('Unknown error', error);
   }
 }
 ```
 
-Un libraries/APIs ke liye jo structured non-Error values throw karti hain (kuch HTTP clients mein common hai), isko ek type guard ke saath pair karo:
+For APIs that throw structured non-`Error` values (common with some HTTP clients), pair with a type guard:
 
 ```typescript
-interface ApiError { code: number; message: string; }
-function isApiError(e: unknown): e is ApiError {
-  return typeof e === "object" && e !== null && "code" in e && "message" in e;
+interface ApiErrorShape { code: number; message: string; }
+function isApiErrorShape(e: unknown): e is ApiErrorShape {
+  return typeof e === 'object' && e !== null && 'code' in e && 'message' in e;
 }
 
 try {
   await callApi();
 } catch (error: unknown) {
-  if (isApiError(error)) {
+  if (isApiErrorShape(error)) {
     console.error(`API error ${error.code}: ${error.message}`);
   } else if (error instanceof Error) {
     console.error(error.message);
   } else {
-    console.error("Unexpected throw value", error);
+    console.error('Unexpected throw value', error);
   }
 }
 ```
 
 ---
 
-## Performance
+## Part 6 — Performance
 
-### [new content] Compiler Performance & Type-Checking Cost
+### 6.1 Compiler performance & type-checking cost
 
-Source notes mein cover nahi kiya gaya tha. Senior/lead-level interviews mein build-time performance ko increasingly probe kiya jaata hai kyunki large Angular monorepos routinely multi-minute `tsc` times hit karte hain.
+- **Project references** (`references` + `composite: true`) split a large codebase into independently type-checked/cached projects, enabling incremental builds — critical in Nx/Angular monorepos.
+- **`skipLibCheck: true`** skips type-checking `.d.ts` files in `node_modules`, often significantly cutting build time, at the cost of not catching errors that originate purely in third-party type definitions.
+- Deep conditional/recursive types can measurably slow the type checker or hit its recursion-depth limit — a known real-world cost of "clever" type-level programming.
+- **`isolatedModules: true`** is required by single-file transpilers (esbuild, swc, Babel) that transpile files independently without full program type information — it forbids constructs that need cross-file type knowledge (e.g. re-exporting a type without `export type`).
 
-- **Project references** (`tsconfig` `references` + `composite: true`) aapko ek large codebase ko independently type-checked/build-cached projects mein split karne dete hain, jisse incremental builds enable hote hain — monorepos (Nx/Angular workspace libraries) mein critical hai.
-- **`skipLibCheck: true`** `node_modules` mein `.d.ts` files ka type-checking skip kar deta hai, jisse often build time significantly kam ho jaata hai — cost yeh hai ki jo type errors purely third-party type definitions mein originate hote hain unhe catch nahi kiya jaata.
-- Deep conditional/recursive types (template-literal-based route parsers, deep mapped types) type checker ko measurably slow kar sakte hain ya compiler ki recursion depth limit hit kar sakte hain — "clever" type-level programming ki ek known real-world cost jise acknowledge karna zaruri hai (trade-off: expressive types vs. IDE responsiveness).
-- `isolatedModules: true` modern single-file transpilers (esbuild, swc, Babel) ke liye required hai jo files ko independently transpile karte hain full program type information ke bina — yeh un constructs ko forbid karta hai jinhe correctly compile hone ke liye cross-file type knowledge chahiye hoti hai (e.g., `export type` ke bina ek type ko re-export karna).
+### 6.2 Runtime performance: erasure, enums & bundle size
 
-### [new content] Runtime Performance: Erasure, Enums, and Bundle Size
-
-- **Types runtime par 100% erase ho jaate hain** — types, generics, interfaces, ya type aliases khud use karne ka zero runtime performance cost hota hai. Yeh ek common interview trick question hai ("kya TypeScript mera code slower banata hai?") — honest answer hai nahi, *except* un constructs ke liye jo real runtime code emit karte hain (neeche dekhein).
-- Real runtime cost wale constructs: numeric/string `enum` (`const enum` ke bina ek object + reverse mapping emit karta hai), decorators + `reflect-metadata` (metadata emission aur ek runtime dependency add karta hai), parameter properties (trivial constructor assignment, negligible), namespaces (IIFE wrappers emit karte hain).
-- Enums ke bajaye literal unions prefer karo, aur classes ke bajaye plain interfaces/types prefer karo jab aapko sirf compile-time shape chahiye ho bina kisi runtime behavior ke — har `class` real constructor/prototype JS emit karta hai, jabki `interface`/`type` kuch bhi emit nahi karta.
+- **Types are 100% erased at runtime** — using types, generics, interfaces, or type aliases has zero runtime cost.
+- **Constructs that DO have runtime cost:** non-`const` enums (emit an object + reverse mapping), decorators + `reflect-metadata`, namespaces (emit IIFE wrappers). Parameter properties are negligible (just a trivial constructor assignment).
+- Prefer literal unions over enums, and plain interfaces/types over classes when you only need compile-time shape — every `class` emits real constructor/prototype JS, while `interface`/`type` emit nothing.
 
 ---
 
-## Best Practices
+## Part 7 — Best Practices Cheat Sheet
 
-- Day one se `strict` on karo (aur, ideally, `noUncheckedIndexedAccess` + `exactOptionalPropertyTypes` bhi) — ek large codebase par baad mein strictness retrofit karna shuruaat se hi karne se kaafi zyada expensive hota hai.
-- Har I/O boundary par (HTTP responses, `JSON.parse`, third-party callbacks) `any` ke bajaye `unknown` prefer karo; use karne se pehle explicitly narrow karo.
-- New code ke liye `enum` ke bajaye literal union types prefer karo; `const enum` ko sirf tab reserve karo jab aap build pipeline ko fully control karte ho aur ESM/isolatedModules compatibility ki zarurat nahi hai.
-- Multiple variants wale kisi bhi domain modeling ke liye discriminated unions + exhaustiveness (`never`) checks use karo (API responses, Redux/NgRx actions, state machines).
-- Typed constant objects/config ke liye type annotation ke bajaye `satisfies` use karo, taaki literal type precision maintain rahe.
-- Untrusted data ko runtime par ek schema library (`zod`, `io-ts`, class-validator) ke saath validate karo, ek type assertion par trust karne ke bajaye — types runtime par exist nahi karte aur aapko malformed API payloads se protect nahi kar sakte.
-- Function/module boundary types explicit rakho (parameters aur exported return types); baaki sab internal cheezein inference ko handle karne do.
-- `as` type assertions ko last resort ke tor par hi use karo, aur `as unknown as T` ko kabhi bhi chain mat karo bina ek comment ke jo justify kare ki koi safer narrowing possible kyun nahi thi.
-- Un inputs par `readonly`/`Readonly<T>` use karo jinhe aap mutate karne ka intend nahi karte, aur in-place mutation ke bajaye immutable update patterns (spread, `structuredClone`, immer) prefer karo, especially Angular ke change-detection-sensitive code mein.
-- Kisi bhi depth ki class hierarchy par ek baar `noImplicitOverride` enable karo taaki silent override drift catch ho sake.
-
----
-
-## Common Pitfalls
-
-- **`any` ko "fix the red squiggly" escape hatch samajhna** `unknown` + narrowing use karne ke bajaye — exactly wahi bug class reintroduce karta hai jise prevent karne ke liye TypeScript exist karta hai.
-- **Yeh assume karna ki `readonly` deep hai** — yeh shallow hai; nested objects/arrays mutable rehte hain.
-- **Discriminated unions par exhaustiveness checks bhool jaana** — ek naya variant add karna silently compile ho jaata hai aur compile error ke bajaye runtime par `undefined` produce karta hai.
-- **`??` ko `||` ke saath confuse karna** — `||` `0`, `""`, `false` ko incorrectly "missing" treat karta hai.
-- **Excess property check blind spot** — ek intermediate variable ke through assign karna literal freshness check ko bypass kar deta hai jo otherwise ek typo hui property name ko catch karta.
-- **`private`/`protected` sirf compile-time par hote hain** — actual runtime data hiding/security ke liye inpar rely mat karo; agar runtime enforcement matter karta hai to `#privateFields` use karo.
-- **`const enum` + `isolatedModules`/modern bundlers** — kai current build setups (esbuild/swc-based tooling, Angular ka esbuild builder) mein incompatible hai; otherwise "correct" code par confusing build errors leads karta hai.
-- **Yeh assume karna ki index signatures presence guarantee karte hain** — `noUncheckedIndexedAccess` ke bina, `dict[key]` `T` ke tor par type hota hai, `T | undefined` nahi, jo real `undefined` risk ko hide kar deta hai.
-- **Yeh assume karna ki caught errors hamesha `Error` instances hote hain** — JS mein `throw` kisi bhi value ko accept karta hai; jo code narrowing ke bina `error.message` karta hai wo non-`Error` throws par crash ho jaayega.
-- **Legacy (`experimentalDecorators`) aur standard (TS 5+) decorator semantics ko mix karna** ek project/library boundary mein, jisse subtle metadata ya execution-order differences aate hain.
-- **Type-level logic ko over-engineer karna** (deeply recursive conditional types) jo technically kaam karta hai lekin marginal type-safety gain ke liye IDE responsiveness aur compiler performance ko tank kar deta hai.
+- Turn on `strict` from day one (ideally plus `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes`) — retrofitting strictness later is far more expensive.
+- Prefer `unknown` over `any` at every I/O boundary (HTTP responses, `JSON.parse`, third-party callbacks); narrow explicitly before use.
+- Prefer literal union types over `enum` for new code; reserve `const enum` only when you fully control the build pipeline and don't need ESM/isolatedModules compatibility.
+- Use discriminated unions + exhaustiveness (`never`) checks for any domain modeling with multiple variants (API responses, NgRx actions, state machines).
+- Use `satisfies` instead of a type annotation for typed constant objects/config, to preserve literal type precision.
+- Validate untrusted data at runtime with a schema library (`zod`, `io-ts`, class-validator) rather than trusting a type assertion — types don't exist at runtime and can't protect you from malformed payloads.
+- Keep function/module boundary types explicit (parameters and exported return types); let inference handle the rest internally.
+- Treat `as` assertions as a last resort; never chain `as unknown as T` without a comment justifying why no safer narrowing was possible.
+- Use `readonly`/`Readonly<T>` on inputs you don't intend to mutate, and prefer immutable update patterns (spread, `structuredClone`, immer) — especially in Angular's change-detection-sensitive code.
+- Enable `noImplicitOverride` on any class hierarchy to catch silent override drift.
 
 ---
 
-## Sample Interview Q&A
+## Part 8 — Common Pitfalls
 
-**Q: Ek function ke liye jo external API response parse karta hai, aap `any` ke bajaye `unknown` kyun choose karoge?**
-A: `any` type checking ko entirely disable kar deta hai, isliye parsed result par koi bhi property access ya method call compile ho jaata hai chahe wrong ho, aur bug runtime tak deferred ho jaata hai. `unknown` caller ko force karta hai ki value ke saath kuch bhi karne se pehle narrow kare (`typeof`, ek type guard, ya `zod` jaisa schema validator ke through) — iska matlab compiler actively unvalidated external data ke unsafe usage ko catch karta hai — exactly wahi boundary jahaan malformed payloads se bugs aane ka chance sabse zyada aur sabse costly hota hai.
-
-**Q: Aap kaise guarantee karte ho ki ek discriminated union par `switch` naye variants add hone par bhi exhaustive rahe?**
-A: Ek `default` branch add karo jo remaining (narrowed) value ko `never` type wale ek variable mein assign kare. Agar har case handled hai, to compiler ne `default` tak pahunchne se pehle union ko nothing (`never`) tak narrow kar diya hoga, isliye assignment type-check ho jaata hai. Agar ek naya variant add ho jaaye aur ek case miss ho jaaye, to unhandled variant `default` branch par type mein reh jaata hai, aur usko `never` mein assign karna ek compile error ban jaata hai — jo ek silent runtime bug ko build failure mein badal deta hai.
-
-**Q: Aaj `interface` aur `type` ke beech practical difference kya hai, aur aap default kisko karte ho?**
-A: Dono object shapes describe karte hain aur most cases mein structurally interchangeable hain — ek interface ek type alias ko extend kar sakta hai aur vice versa. Real differences yeh hain: interfaces declaration merging support karte hain (multiple declarations combine ho jaate hain) aur `extends`-based multiple inheritance; type aliases unions, tuples, aur mapped/conditional types express kar sakte hain jo interfaces nahi kar sakte. Main object/class contracts ke liye `interface` default karta hoon jinhe extend ya merge kiya ja sakta ho (public DTOs, Angular component inputs), aur unions, function signatures, aur type-level utilities ke liye `type`.
-
-**Q: Aapki team ek legacy migration speed up karne ke liye `strictNullChecks` disable karna chahti hai. Aap kya push back karoge?**
-A: `strictNullChecks` single highest-value strict flag hai — iske bina, `null`/`undefined` implicitly har type ko assignable ho jaate hain, isliye compiler app mein kahin bhi ek guaranteed value ko ek possibly-missing value se distinguish nahi kar sakta. Ise off karna sirf "migration ko unblock" nahi karta, yeh silently exact `TypeError: cannot read property of undefined` bug class ko reintroduce kar deta hai jise TypeScript eliminate karne ke liye bana hai, poore *entire* codebase mein, sirf migrated files mein nahi — aur `node_modules` se aane wali most modern `.d.ts` files assume karti hain ki `strictNullChecks` on hai, isliye third-party libraries se inference bhi kam trustworthy ho jaata hai. Ek better path hai per-file `// @ts-strict-ignore`-style suppressions ke through incremental adoption ya project references se scoped `strict` flag rollout, ek blanket global disable nahi.
-
-**Q: Structural typing explain karo aur ek jagah bataao jahaan yeh ek surprising result cause karta hai.**
-A: TypeScript types ko shape se compare karta hai, declared name/hierarchy se nahi — compatible members ka set rakhne wala koi bhi object ek type ko satisfy karta hai, regardless is baat ki wo kis interface/class ko implement karne ka claim karta hai. Surprising case yeh hai: excess property checks sirf un object *literals* par apply hote hain jo directly ek typed location mein assign hote hain; agar aap pehle literal ko ek variable mein assign karo (jo ek wider/looser type ke tor par infer hota hai) aur phir wo variable pass karo, to check fire nahi hota, aur ek extra/typo hui property silently slip through ho jaati hai — kyunki us point par yeh ek structural assignability check hai, literal freshness check nahi.
-
-**Q: TypeScript vs C# mein generics kaise differ karte hain, aur practice mein yeh kahaan matter karta hai?**
-A: C# generics reified hote hain — CLR ko runtime par concrete type argument pata hota hai (aap `typeof(T)` kar sakte ho, runtime `is T` checks har closed generic type ke liye correctly kaam karte hain). TypeScript generics compile time par fully erase ho jaate hain — runtime par `T` bilkul exist nahi karta, isliye ek generic parameter ke against runtime type-checking, ya `new T()` jaise patterns directly possible nahi hain; agar aapko wo behavior chahiye to aapko ek constructor/class reference ya ek runtime discriminant explicitly ek value ke tor par pass karna padta hai. Yeh matter karta hai jab C# se generic factories ya repository base classes jaise patterns port kiye jaate hain — TS equivalent ko ek explicit constructor parameter (`new (...args: any[]) => T`) chahiye hota hai, na ki runtime par `T` ko inspectable hone par rely karna.
-
-**Q: esbuild ke saath build ki gayi ek modern Angular app mein `enum` use karne ka risk kya hai, aur aap iske bajaye kya use karte ho?**
-A: Regular (non-const) enums real runtime objects reverse mappings ke saath emit karte hain, jo bundle size mein add hote hain aur tree-shaking ko defeat karte hain. `const enum` compile time par values ko inline karke isse avoid karta hai, lekin `isolatedModules` ke saath incompatible hai, jo esbuild-based builds (Angular 17 se Angular ke esbuild builder including) require karte hain, kyunki yeh full program knowledge ke bina single-file-transpile karta hai. Idiomatic replacement ek literal union type hai, optionally ek `as const satisfies Record<...>` object ke saath paired agar aapko ek iterable/enumerable value list chahiye ho — yeh same type safety deta hai zero runtime cost aur full build-tool compatibility ke saath.
+- **Treating `any` as "the fix for the red squiggly"** instead of using `unknown` + narrowing.
+- **Assuming `readonly` is deep** — it's shallow; nested objects/arrays stay mutable.
+- **Forgetting exhaustiveness checks on discriminated unions** — a new variant silently compiles and produces `undefined` at runtime instead of a compile error.
+- **Confusing `??` with `||`** — `||` incorrectly treats `0`, `""`, `false` as "missing."
+- **Excess property check blind spot** — assigning through an intermediate variable bypasses the literal-freshness check that would otherwise catch a typo'd property name.
+- **Relying on `private`/`protected` for real security** — they're compile-time only; use `#privateFields` if runtime enforcement matters.
+- **`const enum` + `isolatedModules`/modern bundlers** — incompatible with many current build setups (esbuild/swc, Angular's esbuild builder).
+- **Assuming index signatures guarantee presence** — without `noUncheckedIndexedAccess`, `dict[key]` types as `T`, not `T | undefined`, hiding real `undefined` risk.
+- **Assuming caught errors are always `Error` instances** — JS allows throwing any value; code that does `error.message` without narrowing will crash on non-`Error` throws.
+- **Mixing legacy and standard decorator semantics** across a project/library boundary.
+- **Over-engineering type-level logic** (deeply recursive conditional types) that technically works but tanks IDE responsiveness and compiler performance for marginal type-safety gain.
 
 ---
 
-## Summary of Additions
+## Part 9 — Rapid-Fire Interview Q&A
 
-Consolidation ke dauraan add ki gayi new sections/headings (document mein sab `[new content]` se prefixed hain), aur har ek senior/lead .NET-full-stack + Angular interview ke liye kyun matter karta hai:
+**Q: For a function that parses an external API response, why choose `unknown` over `any`?**
+A: `any` disables type checking entirely, so any property access or method call on the parsed result compiles even if wrong, deferring the bug to runtime. `unknown` forces the caller to narrow before doing anything with the value — catching unsafe usage of unvalidated external data at exactly the boundary where malformed payloads cause the most, and the costliest, bugs.
 
-1. **any vs unknown vs never vs void** — notes ke partial `any`/`unknown` table ko full four-way comparison mein extend karta hai jo interviewers actually poochte hain, top/bottom type relationships ke ek diagram ke saath.
-2. **Enums, and Why Senior Devs Avoid Them** — notes ne enums introduce kiye the bina unke real-world downsides (bundle size, `const enum`/`isolatedModules` incompatibility) ya modern literal-union replacement pattern ka mention kiye.
-3. **Structural Typing vs Nominal Typing** — single most common "C# se aa rahe ho" conceptual question; source mein entirely missing tha.
-4. **strictNullChecks and the strict Family of Flags** — notes ek line mein flag enable karne ka mention karte hain; yeh isko full flag-by-flag breakdown mein expand karta hai jo senior interviewers expect karte hain (including `strict` ke bahar wale flags jaise `noUncheckedIndexedAccess`).
-5. **Generic Variance (Covariance/Contravariance)** — directly C# `in`/`out` generic variance se bridge karta hai, is candidate ke background ke liye ek natural comparison point, aur entirely absent tha.
-6. **Decorators & Metadata (Angular Relevance)** — critical hai kyunki candidate Angular work karta hai; Angular DI ki `reflect-metadata` par reliance aur TS 5 standard-decorators migration risk explain karta hai.
-7. **Module Resolution: ESM vs CommonJS** — real, common build-failure territory (tree-shaking, esbuild/Angular 17+ builder warnings), source mein zero coverage ke saath.
-8. **Parameter Properties Shorthand** — source ke apne example mein implicitly use hua tha bina naam/explain kiye; ab explicit hai.
-9. **Typed Catch Clauses (unknown in catch)** — ek properly strict project ke under original try/catch example ki inaccuracy ko correct karta hai aur safe pattern dikhata hai.
-10. **Compiler Performance & Type-Checking Cost** aur **Runtime Performance: Erasure, Enums, and Bundle Size** — ek poora Performance section jiski source mein kami thi, senior/lead level par common build-time aur runtime cost questions ko address karta hai.
-11. Chhote inline additions: labeled/variadic tuples, mapped types mein key remapping (`as`), distributive conditional types, `infer` ke saath template literal type composition, `Awaited<T>` aur `DeepPartial<T>`, `override` keyword, aur native `#privateFields`.
+**Q: How do you guarantee a `switch` over a discriminated union stays exhaustive as new variants are added?**
+A: Add a `default` branch that assigns the narrowed remaining value to a variable typed `never`. If every case is handled, the compiler has narrowed the union to nothing by the time it reaches `default`, so the assignment type-checks. If a new variant is added and a case is missed, the unhandled variant remains in the type at `default`, and assigning it to `never` becomes a compile error — turning a silent runtime bug into a build failure.
 
-**Flag ki gayi Contradictions/imprecisions (true contradictions nahi hain, lekin accuracy ke liye correct ki gayi hain):**
-- Notes type aliases ko "not extendable" describe karte hain (Q17, Q69) — clarify kiya gaya hai ki yeh sirf `extends` keyword ke liye true hai; type aliases intersections (`&`) ke through compose hote hain, isliye "not extendable" ek oversimplification hai, ek hard limitation nahi.
-- Duplicate Q&A pairs ke beech koi outright factual contradictions nahi milin (e.g., Q28/Q88, Q30/Q90, Q31/Q91, Q32-40/Q92-97 par do `keyof`, `infer`, `mapped types`, aur utility-type explanations different words mein same baat kehte the) — inhe conflicts ke tor par flag karne ke bajaye de-duplicate aur merge kiya gaya.
+**Q: What's the practical difference between `interface` and `type` today, and which do you default to?**
+A: Both describe object shapes and are largely structurally interchangeable — an interface can extend a type alias and vice versa. Real differences: interfaces support declaration merging and `extends`-based multiple inheritance; type aliases can express unions, tuples, and mapped/conditional types that interfaces can't. Default to `interface` for object/class contracts meant to be extended or merged (public DTOs, Angular component inputs), and `type` for unions, function signatures, and type-level utilities.
 
-## Summary of [gaps] Additions (This Pass)
+**Q: Your team wants to disable `strictNullChecks` to speed up a legacy migration. What's your pushback?**
+A: It's the single highest-value strict flag — without it, `null`/`undefined` are implicitly assignable to every type, so the compiler can't distinguish a guaranteed value from a possibly-missing one anywhere in the app. Disabling it reintroduces the exact `TypeError: cannot read property of undefined` bug class across the *entire* codebase, not just migrated files, and most modern `.d.ts` files from `node_modules` assume it's on, making library inference less trustworthy too. Prefer incremental, scoped adoption over a blanket disable.
 
-Is pass ne ek formal gap-analysis review se identify hui teen sections add ki, jo earlier **[new content]** pass se distinguish karne ke liye **[gaps]** tag ki gayi hain:
+**Q: Explain structural typing and give an example of a surprising result it causes.**
+A: TypeScript compares types by shape, not by declared name — any object with a compatible set of members satisfies a type, regardless of what it claims to implement. Surprising case: excess property checks only apply to object *literals* assigned directly into a typed location; assign the literal to a variable first and pass that variable instead, and the check doesn't fire — an extra or typo'd property silently slips through, because it's now a structural assignability check, not a literal-freshness check.
 
-1. **Branded/Nominal Typing — Full Worked Example** (Structural Typing vs Nominal Typing ke baad inserted) — original notes ne `UserId`/`OrderId` branding pattern ko ek single line mein mention kiya tha bina ek usable implementation ke. Yeh full pattern add karta hai: `string & { readonly __brand: ... }` type, ek constructor function jo ek branded value produce karne ka sole sanctioned tareeka hai (jahaan real validation rehti hai), aur ek worked example jo dikhata hai ki compiler actually ek misused `OrderId` ko reject kar deta hai jahaan `UserId` expected hai — plus `unique symbol`-brand variant un large codebases ke liye jinme kai branded types hain.
-2. **`ReadonlyArray<T>` / `readonly T[]` as Defensive API Design** (Tuples ke baad inserted) — pehle bilkul cover nahi kiya gaya tha. Yeh concrete mutation bug dikhata hai jo yeh pattern prevent karta hai (ek function jo silently caller ke array ko `sort()` kar deta hai), explain karta hai ki yeh ek compile-time-only contract hai (mutating methods type se remove ho jaate hain, koi `Object.freeze` involved nahi hota), aur shallow-immutability boundary case ko flag karta hai (`readonly Point[]` `arr[0].x = 5` ko nahi rokta).
-3. **Recursive Type Alias Depth Limits (TS2589)** (Template Literal Types ke baad inserted) — notes ne recursive/conditional types (`ExtractParams`, `DeepPartial`) use kiye the bina kabhi unke real-world failure mode ko address kiye. Yeh `TS2589` ke liye ek concrete trigger, iske hone ka mechanical reason (recursive types check time par fully expand hone chahiye, ek recursing function ke unlike), aur chaar concrete mitigation strategies (depth-limiting counter types, modeled shape mein circularity break karna, vetted utility libraries prefer karna, aur distributive conditional types ko simplify karna) add karta hai.
+**Q: How do generics in TypeScript differ from C#, and where does that matter in practice?**
+A: C# generics are reified — the CLR knows the concrete type argument at runtime (`typeof(T)` works, `is T` checks work per closed generic type). TypeScript generics are fully erased at compile time — `T` doesn't exist at runtime, so runtime type-checking against a generic parameter, or patterns like `new T()`, aren't directly possible; you need an explicit constructor reference or a runtime discriminant passed as a value. This matters when porting patterns like generic factories or repository base classes from C# — the TS equivalent needs an explicit constructor parameter (`new (...args: any[]) => T`).
 
-Teeno self-contained, senior-level additions hain working code ke saath — is file ke liye koi version-sensitive framing ki zarurat nahi thi kyunki yeh core-language TypeScript mechanics hain, Angular-version-dependent APIs nahi.
+**Q: What's the risk of using `enum` in a modern Angular app built with esbuild, and what do you use instead?**
+A: Regular (non-const) enums emit real runtime objects with reverse mappings, adding to bundle size and defeating tree-shaking. `const enum` avoids this by inlining values at compile time, but is incompatible with `isolatedModules`, which esbuild-based builds (including Angular's esbuild builder since v17) require. The idiomatic replacement is a literal union type, optionally paired with an `as const satisfies Record<...>` object for an iterable value list — same type safety, zero runtime cost, full build-tool compatibility.
+
+---
+
+## Quick Revision Sheet
+
+- **`any`** = checking off. **`unknown`** = checking on, narrow before use. **`never`** = unreachable/bottom type. **`void`** = no meaningful return.
+- **`interface`**: mergeable, `extends`-based, object contracts. **`type`**: unions/tuples/mapped types, not mergeable.
+- **`readonly`** is shallow — nested data still mutable.
+- **Structural typing**: shape matters, not declared name. Excess-property checks only fire on literals, not variables.
+- **Branded types**: `string & { __brand: 'X' }` + constructor function = simulated nominal typing.
+- **Discriminated unions + `never` exhaustiveness check** = compile-time safety net for adding new variants.
+- **`??`** respects `0`/`""`/`false`; **`||`** does not.
+- **`strict: true`** turns on `strictNullChecks`, `noImplicitAny`, `strictFunctionTypes`, `strictBindCallApply`, `strictPropertyInitialization`, `noImplicitThis`, `useUnknownInCatchVariables` — but NOT `noUncheckedIndexedAccess` or `exactOptionalPropertyTypes`, which you should add separately.
+- **`satisfies`** validates against a type while keeping the narrow inferred type; a plain annotation widens.
+- **Enums** have runtime cost and break with `isolatedModules`; prefer literal unions.
+- **`catch (e)`** is `unknown` under `strict` — always narrow with `instanceof Error` or a type guard before using `.message`.
+- **Angular DI** depends on `reflect-metadata` + decorator metadata — never use an interface as an injection token (it's erased at runtime); use a class or `InjectionToken`.
+- **Types are 100% erased at runtime** — zero cost, except for enums, decorators+metadata, and namespaces, which do emit real JS.
+- **`TS2589`** (recursive type too deep) → bound the recursion depth, break circularity, or prefer built-in/vetted utility types.
