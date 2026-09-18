@@ -1441,6 +1441,110 @@ export class UserDetailComponent {
 
 ---
 
+### 27B. Signals vs RxJS — Deep Comparison (Observable / Subject / BehaviorSubject mapped one-by-one)
+
+**💡 Why interviewers push on this:** "Signals vs RxJS" sounds like a one-line answer ("sync vs async") but a senior interviewer will drill into *each RxJS primitive* and ask "so what's the Signal equivalent, and what do you lose?" This section answers that, primitive by primitive.
+
+**Core mental-model difference first:**
+
+| | Signal | Observable (RxJS) |
+|---|---|---|
+| Model | **Pull** — always holds a current value; you read it with `()` whenever you want | **Push** — a stream of events over time; you get nothing until you `subscribe()`, and values arrive *to* you |
+| Has a "current value" right now? | Always — a Signal without a value doesn't make sense | Not necessarily — a plain `Observable` has no concept of "current value" until something emits |
+| Sync or async? | Strictly synchronous | Can be sync or async |
+| Completes / errors? | No such concept | Yes — `next`/`error`/`complete` |
+| Operators (`map`, `debounceTime`, `retry`...) | No operator library — `computed()` is your only "derive" tool | Huge operator library |
+| Auto cleanup | Automatic (framework tracks dependency graph, `effect()` cleans itself up with the component) | Manual — you must unsubscribe (or use `async` pipe / `takeUntilDestroyed()`) |
+
+**Now, primitive-by-primitive:**
+
+| RxJS primitive | Closest Signal equivalent | What matches | What you lose going to Signals |
+|---|---|---|---|
+| **`Observable`** (cold, e.g. `http.get()`) | `toSignal(obs$)` | Read the latest emitted value with `()` in the template, no `async` pipe needed | No operators after conversion, no cancellation/retry semantics — do that *before* `toSignal()`, on the Observable side |
+| **`Subject`** (no memory, future-only events) | **No good equivalent** | — | Signals always have "a current value" — they cannot model a pure fire-and-forget event with no persisted state. For discrete events (button clicked, item deleted) keep using `Subject`/`output()`, not a Signal |
+| **`BehaviorSubject`** (has current value, replays to late subscribers) | `signal(initialValue)` | This is the **closest real match** — both always have a current value, both hand that value to a new consumer immediately (Signal: just call `()`; BehaviorSubject: `.subscribe()` gets it instantly) | Multicasting semantics across async pipelines, and RxJS operators (`combineLatest`, `distinctUntilChanged`, `debounceTime`) — if you need those, wrap with `toObservable(mySignal)` |
+| **`ReplaySubject`** (replays last N values) | No equivalent | — | Signals only ever hold **one** current value, never a history buffer |
+| **`.pipe(map(...))`** derived value | `computed(() => ...)` | Auto-recomputes when a dependency Signal changes, same "derived value" idea | No async operators (`switchMap`, `debounceTime`) inside `computed()` — it must stay synchronous and pure |
+| **`.subscribe(fn)`** side effect | `effect(() => ...)` | Runs whenever a read dependency changes | `effect()` is for Signal-only reactive side effects; it isn't a general async callback mechanism, and side effects that themselves write Signals need care to avoid loops |
+| **`combineLatest([a$, b$])`** | `computed(() => [a(), b()])` | Combine multiple sources into one derived value | `combineLatest` correctly handles async timing of multiple *streams*; `computed()` assumes all inputs are already synchronous Signals |
+| **`valueChanges`** (reactive forms) | `toSignal(control.valueChanges)` | Read latest form value in a template without `async` pipe | Still fundamentally an Observable under the hood — `debounceTime`/`switchMap` etc. must be applied before `toSignal()` |
+
+**🧪 Side-by-side: the same shared "current dealer" state, both ways**
+
+```typescript
+// RxJS BehaviorSubject version (classic pattern)
+@Injectable({ providedIn: 'root' })
+export class DealerContextService {
+  private currentDealer$ = new BehaviorSubject<Dealer | null>(null);
+  dealer$ = this.currentDealer$.asObservable();
+  setDealer(d: Dealer) { this.currentDealer$.next(d); }
+}
+// consumer component
+dealer$ = this.dealerCtx.dealer$;
+// template: {{ (dealer$ | async)?.name }}
+```
+
+```typescript
+// Signal version (same behavior, less ceremony)
+@Injectable({ providedIn: 'root' })
+export class DealerContextService {
+  currentDealer = signal<Dealer | null>(null);
+  setDealer(d: Dealer) { this.currentDealer.set(d); }
+}
+// consumer component
+dealer = this.dealerCtx.currentDealer;
+// template: {{ dealer()?.name }}  — no async pipe, no subscription to manage
+```
+
+Both give every late-subscribing/late-reading consumer the current value immediately. For **pure synchronous shared UI state** (like this), the Signal version is strictly simpler — no `async` pipe, no `.asObservable()` wrapping, no subscription lifecycle. This is why `BehaviorSubject`-for-shared-state is quietly being replaced by `signal()`-for-shared-state in new Angular codebases.
+
+**🧪 Side-by-side: search-as-you-type — where RxJS still wins outright**
+
+```typescript
+// RxJS — this is still the right tool, Signals can't do this cleanly
+searchResults = toSignal(
+  this.searchControl.valueChanges.pipe(
+    debounceTime(300),
+    distinctUntilChanged(),
+    switchMap(term => this.http.get<Vehicle[]>(`/api/vehicles?q=${term}`))
+  ),
+  { initialValue: [] as Vehicle[] }
+);
+```
+There's no Signal-native `debounceTime`/`switchMap`. `effect()` isn't built for "cancel the in-flight async work and start new work" — that's exactly what RxJS operators exist for. The idiomatic pattern is: **do the async orchestration in RxJS, land the final result in a Signal with `toSignal()`** for the template to consume.
+
+**Decision table — "which one do I reach for?"**
+
+| Scenario | Use | Why |
+|---|---|---|
+| Local component UI state (toggle, selected tab, form-step index) | **Signal** | Sync, always-current, no subscription to manage |
+| Derived/computed value from other state | **`computed()`** | Auto-recomputes, memoized, no manual wiring |
+| Shared app-wide state (current user, theme, dealer context) that's purely synchronous | **`signal()`** in a `providedIn: 'root'` service | Simpler than `BehaviorSubject` + `async` pipe for the same job |
+| One-off discrete events (button clicked, item deleted, "sale completed") with no meaningful "current value" | **`Subject`** / `output()` | Signals can't model "an event with no persisted state" cleanly |
+| HTTP requests | **RxJS** (`HttpClient` returns Observables), optionally `toSignal()` at the boundary for templates | Cancellation, retry, error operators |
+| Debounced search / typeahead | **RxJS** (`debounceTime` + `switchMap`), `toSignal()` at the end | No Signal-native async operators |
+| WebSocket / real-time streams | **RxJS** | Genuinely a stream over time, not a "current value" |
+| Combining multiple async sources (e.g., vehicle info + service history + pricing, all via HTTP) | **RxJS `forkJoin`/`combineLatest`**, `toSignal()` at the end | Async orchestration is RxJS's job |
+| Reactive form `valueChanges` with debounce/validation-orchestration | **RxJS** on the Observable, `toSignal()` if the template needs it | Same reasoning as search |
+| Template bindings for anything already-a-Signal (inputs, computed values) | **Signal**, read via `()` | Zero `async` pipe boilerplate, works natively with `OnPush`/zoneless |
+
+**🏢 Dealer Dashboard mein Real Use:** `DealerContextService.currentDealer` (shared logged-in dealer info across header/sidebar) `signal()`-based hai — previously `BehaviorSubject` + `async` pipe har jagah, ab plain `dealer()` reads. Vehicle search box `switchMap`-based RxJS pipeline **hi rehta hai** — `toSignal()` se sirf final results template ko diye jaate hain. "Mark as Sold" click event `output<string>()` se emit hota hai (ek Signal se nahi — yeh ek discrete event hai, persisted state nahi).
+
+**⚠️ Common Mistakes**
+- Shared state ko Signal mein migrate karte waqt **discrete events** (clicks, deletions) ko bhi Signal banane ki koshish karna — events ke liye Signal galat abstraction hai (no "no value yet" / fire-and-forget semantics).
+- `computed()` ke andar async orchestration (`switchMap`-jaisa kuch) fit karne ki koshish karna — `computed()` strictly synchronous hai.
+- `toSignal()` ke baad operators chain karne ki koshish (`mySignal().pipe(...)`) — Signal ek plain value hai, Observable nahi; operators source **Observable** par, `toSignal()` se pehle apply karo.
+
+**❓ Interview Q&A**
+- **Q: `BehaviorSubject` ka sabse close Signal equivalent kya hai, aur exactly kya match/mismatch karta hai?** A: `signal(initialValue)` — dono ke paas hamesha ek current value hoti hai aur naye consumer ko turant milti hai. Mismatch: `BehaviorSubject` RxJS operators (`combineLatest`, `debounceTime`) ke saath compose hota hai aur multiple async streams ke saath multicast ho sakta hai; plain Signal operators-free hai — agar wo chahiye, `toObservable()` se wrap karo.
+- **Q: Kya Signal `Subject` ko replace kar sakta hai?** A: Nahi, cleanly nahi. `Subject` discrete, memory-less events model karta hai (kabhi "current value" nahi hota, sirf future emissions). Signal fundamentally "always has a value" hai — ek event ko force-fit karne ke liye (jaise timestamp/counter signal) hacky hai. Discrete events ke liye `Subject`/`output()` sahi tool hai.
+- **Q: Search-as-you-type ko poori tarah Signals mein kyun nahi likh sakte, `effect()` use karke?** A: `effect()` async cancellation/debounce/retry provide nahi karta — wo sirf "jab dependency change ho, yeh chalao" hai, RxJS operator pipeline nahi. Idiomatic pattern: RxJS se debounce+switchMap+HTTP orchestrate karo, phir `toSignal()` se final stream ko template-consumable Signal mein land karo.
+- **Q: Naye Angular codebases mein `BehaviorSubject`-for-shared-state Signals se replace kyun ho raha hai?** A: Purely synchronous shared state (current user, theme, selected filters) ke liye Signal same guarantee deta hai (current value + immediate access for late consumers) bina `async` pipe/`.asObservable()`/subscription-lifecycle boilerplate ke. RxJS still zaroori hai jab actual async orchestration involved ho.
+
+**📝 Quick Revision:** `BehaviorSubject` ≈ `signal()` (closest match, for sync shared state). `Subject` has **no** Signal equivalent (events need persisted-value semantics Signals don't have). `Observable`/`valueChanges` → `toSignal()` at the template boundary, after any RxJS operators. `computed()` ≈ `.pipe(map())` but sync-only. `effect()` ≈ `.subscribe()` but for Signal deps only, not general async. Rule of thumb: **orchestrate async in RxJS, consume in templates via Signals.**
+
+---
+
 ## Performance
 
 ### 28. Change Detection Deep Dive
