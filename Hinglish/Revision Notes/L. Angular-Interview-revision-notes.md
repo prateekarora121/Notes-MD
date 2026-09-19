@@ -1,6 +1,6 @@
 # Angular Senior/Lead Interview — Quick Revision Notes
 
-> Yeh quick-revision notes "L. Angular-Interview-Guide.md" se derived hain — guide ka har section same order mein cover karta hai, concise Q/A + bullets + essential code/tables/diagrams ke saath. Baseline "Angular 7" (2018) hai, lekin current Angular (v18/19-class: standalone default, Signals, naya control-flow, `@defer`, zoneless) tak cover karta hai.
+> Yeh quick-revision notes "L. Angular-Interview-Guide.md" se derived hain — guide ka har section same order mein cover karta hai, concise Q/A + bullets + essential code/tables/diagrams ke saath. Baseline "Angular 7" (2018) hai, lekin current Angular (v18/19-class: standalone default, Signals, naya control-flow, zoneless) tak cover karta hai.
 
 ---
 
@@ -288,6 +288,22 @@ flowchart TD
 <input #txt /><button (click)="print(txt.value)">Print</button>
 ```
 
+**Signal-based `input()`/`output()`/`model()` (stable v19, recommended default for new code):**
+```typescript
+export class VehicleCardComponent {
+  vehicle = input.required<Vehicle>();     // required Signal input — must be bound
+  role = input<string>('viewer');          // optional with default
+  sold = output<string>();                 // replaces @Output()+EventEmitter — sold.emit(id)
+  range = model<[number, number]>([0, 100000]); // two-way: parent <app-x [(range)]="priceFilter" />
+}
+```
+- `input()` returns a **read-only Signal** (not a plain property) — read as `this.name()`, template `{{ name() }}` too. Auto-integrates with `computed()`/`effect()`.
+- `output()` replaces `@Output() + EventEmitter`; internally `Subject`-like (`.subscribe()` works) but doesn't extend `EventEmitter` in its public API — decoupled so the implementation can change later.
+- `model()` = one writable Signal that internally does `@Input` + matching `@Output() xChange` — same "banana in a box" desugaring as `[(ngModel)]`. Don't also hand-write an `xChange` output — `model()` already provides it.
+- Migration schematics for existing decorator-based code: `ng generate @angular/core:signal-input-migration`, `signal-queries-migration`, `output-migration`.
+- **Common mistake:** treating `input()`/`output()` as plain properties — forgetting the `()` call is the #1 migration bug.
+- **Quick Revision:** Parent→child = `@Input`/`input()`. Child→parent = `@Output`/`output()`. Two-way = `model()` (replaces Input+Output pair). Both decorator and signal styles coexist — not a breaking migration.
+
 ### Routing and Navigation
 
 ```typescript
@@ -546,135 +562,6 @@ flowchart LR
 
 **Framing:** "Ek ko doosre over choose nahi kar rahe — Signals component-local state/bindings ke liye default, RxJS async streams/composition ka backbone. `toSignal`/`toObservable` interop dono ko coexist karata hai."
 
-### State Management (NgRx aur Alternatives)
-
-Increasing formality: service-based state (BehaviorSubject/Signal) → RxJS BehaviorSubject → **NgRx** (Redux, RxJS) → Akita/NGXS/Apollo.
-
-**NgRx concepts:**
-| Concept | Role |
-|---|---|
-| Store | Central single source of truth |
-| Actions | Plain objects — *kya hua* |
-| Reducers | Pure functions — action se new state |
-| Effects | Side effects (API), further actions dispatch |
-| Selectors | Specific, memoized state slices |
-```typescript
-export const increment = createAction('INCREMENT');
-const counterReducer = createReducer(initialState, on(increment, s => ({ count: s.count+1 })));
-loadData$ = createEffect(() => this.actions$.pipe(ofType(loadData),
-  mergeMap(() => this.http.get('/api/data').pipe(map(data => loadDataSuccess({data}))))));
-export const selectCount = (state: AppState) => state.count;
-```
-Setup: `ng add @ngrx/store`.
-| Feature | NgRx | BehaviorSubject |
-|---|---|---|
-| Complexity | Zyada | Kam |
-| Structure | Actions/reducers/effects | Service-based |
-| Scale | Large apps | Small/medium |
-| Side effects | Effects | Service methods |
-
-- **Kab NgRx:** large teams, complex cross-cutting state, strict unidirectional flow, time-travel, strong conventions. Small/medium → signal/service store simpler. Choice justify karo, reflexive default nahi.
-
-### SignalStore / NgRx Signals (Angular 17+)
-
-`@ngrx/signals` — classic Actions/Reducers/Effects ka lighter, Signal-native alternative (boilerplate kam, DX maintain).
-```typescript
-export const CounterStore = signalStore(
-  { providedIn: 'root' },
-  withState({ count: 0 }),
-  withComputed(({ count }) => ({ doubled: computed(() => count() * 2) })),
-  withMethods((store) => ({ increment() { patchState(store, { count: store.count()+1 }); } }))
-);
-```
-- **Why:** "classic NgRx overkill nahi?" ka modern answer. Complex async orchestration (retries, cancellation races, sagas) → classic NgRx effects still mature. Simple feature/component-local → SignalStore.
-
-### NgRx Entity Adapters, Facade Pattern, aur Selector Memoization
-
-**`@ngrx/entity` — `EntityAdapter`:** most state = ID-keyed collection. Array (`User[]`) = O(n) scans + manual immutable dance. Adapter normalize → `{ ids, entities: {[id]:User} }` + typed CRUD helpers + selectors.
-```typescript
-interface UserState extends EntityState<User> { loading: boolean; selectedUserId: string | null; }
-const adapter = createEntityAdapter<User>({ selectId: u => u.id, sortComparer: (a,b) => a.name.localeCompare(b.name) });
-const initialState = adapter.getInitialState({ loading: false, selectedUserId: null });
-const userReducer = createReducer(initialState,
-  on(loadUsersSuccess, (s, {users}) => adapter.setAll(users, s)),
-  on(addUser, (s, {user}) => adapter.addOne(user, s)),
-  on(updateUser, (s, {update}) => adapter.updateOne(update, s)),
-  on(deleteUser, (s, {id}) => adapter.removeOne(id, s)),
-  on(upsertManyUsers, (s, {users}) => adapter.upsertMany(users, s)));
-const { selectIds, selectEntities, selectAll, selectTotal } = adapter.getSelectors();
-```
-- **Why senior:** `selectEntities` = O(1) lookup-by-id vs `Array.find()`; matters at scale + frequent lookups. Update semantics standardized (`updateOne` proper immutable merge), no buggy array-splicing reinvent.
-
-**Facade pattern:** `Store` access ko injectable service ke peeche wrap; components NgRx symbols directly import na karein.
-```typescript
-@Injectable({ providedIn: 'root' })
-export class UserFacade {
-  private store = inject(Store);
-  users$ = this.store.select(selectAllUsers);
-  loadUsers() { this.store.dispatch(loadUsers()); }
-  selectUser(id: string) { this.store.dispatch(selectUser({ id })); }
-}
-```
-- **Why:** (1) small testable app-specific API; (2) implementation swap (→SignalStore) = sirf facade rewrite; (3) mock facade > MockStore in unit tests. Trade-off: extra indirection — worth jab state 1-2 se zyada components consume karein.
-
-**`createSelector` memoization:** last input args (`===`) + last result cache karta hai. Har call par input selectors re-invoke, reference-equality compare:
-- Saare inputs `===` last → projector **re-run nahi**, cached return.
-- Koi input different → projector ek baar re-run, cache update.
-- Isiliye immutable updates matter (jaise OnPush): in-place mutation → same reference → `===` "unchanged" (recompute skip OK); par unconditional `return {...state}` → cache har dispatch defeat.
-- **Cache size = 1** (sirf latest). Alternating args (parameterized selectors) → thrash, har baar recompute. "Selector memoize kyun nahi ho raha?" gotcha.
-```mermaid
-flowchart TD
-    A[Selector called] --> B{All inputs === last?}
-    B -->|Yes| C[Return cached — projector NOT called]
-    B -->|No| D[Run projector] --> E[Cache new inputs+result] --> F[Return new]
-```
-
-### Dependency Injection: Hierarchical Injectors Deep Dive
-
-```mermaid
-flowchart TD
-    R[Platform Injector] --> Root[Root - providedIn:root]
-    Root --> Route[Route Injector - lazy route providers]
-    Route --> Comp[Component Injector - @Component providers]
-    Comp --> Child[Child - viewProviders]
-```
-- Angular requesting component se **upar** walk karta hai jab tak provider mile — *nearest* jeetta hai.
-- Component `providers` mein service = us subtree ke liye fresh instance (root wali ko shadow).
-- `viewProviders` `providers` se ek tarike se differ: `<ng-content>`-projected content ko invisible (projected content apni deps *apne origin* injector se resolve).
-- **Multi-providers** (`multi: true`, e.g. `HTTP_INTERCEPTORS`) — token ke under multiple values accumulate (overwrite nahi).
-- **Resolution modifiers:** `@Optional()` (provider nahi → `null`, throw nahi); `@Self()` (sirf requesting injector); `@SkipSelf()` (local skip, ek level upar se — `ControlContainer` parent pattern); `@Host()` (host boundary par stop).
-
-### Micro-Frontends / Module Federation for Angular
-
-**Problem:** ek team ka single large app organizationally scale nahi karta jab multiple independent teams (Checkout/Account/Search) ko own/build/**independently deploy** karna ho bina shared release train.
-- **Webpack Module Federation:** ek build ("remote") runtime par modules expose karta hai, doosri ("host"/shell) consume — bina saath compile kiye; shell ko sirf runtime manifest URL chahiye.
-```javascript
-// remote — exposes
-new ModuleFederationPlugin({ name:'checkoutApp', filename:'remoteEntry.js',
-  exposes:{ './CheckoutModule':'./src/app/checkout/checkout.module.ts' },
-  shared:['@angular/core','@angular/common','@angular/router'] });
-// shell — consumes
-new ModuleFederationPlugin({ name:'shell',
-  remotes:{ checkoutApp:'checkoutApp@https://checkout.example.com/remoteEntry.js' },
-  shared:['@angular/core','@angular/common','@angular/router'] });
-```
-- Angular ke liye standard: **`@angular-architects/module-federation`** schematic (CLI builder par wire, dynamic remote loading).
-```typescript
-{ path:'checkout', loadChildren: () => loadRemoteModule({
-    type:'module', remoteEntry:'https://checkout.example.com/remoteEntry.js', exposedModule:'./CheckoutModule'
-  }).then(m => m.CheckoutModule) }
-```
-- **Mechanics:** `shared` = framework singletons negotiate (duplicate instances/bloat avoid, warna DI/routing/CD break). Har remote independently deployable (public contract break na ho tab tak shell rebuild nahi). **Version skew = real cost** — runtime warn/fail (build-time type error se harder to catch).
-- **Kab worth vs Nx monorepo:** MF sirf jab **independent deployability** chahiye (team B wait/coordinate na kare). Agar constraint sirf "kaafi teams, ek codebase, fast builds, enforced boundaries" → **Nx monorepo** (lint tags/boundaries) same benefit, kam operational cost, compile-time breakage. **Framing:** "MF ek *organizational/deployment* problem solve karta hai, code-org nahi — pehle Nx boundaries, MF sirf jab independent deploy cadence business requirement ho."
-
-| Concern | Nx Monorepo | Module Federation |
-|---|---|---|
-| Team independence | Shared pipeline, lint boundaries | True independent build+deploy |
-| Version coordination | Single version | Runtime negotiation, skew risk |
-| Breaking-change failure | Compile-time (CI fail) | Often runtime |
-| Operational complexity | Kam (ek pipeline) | Zyada (per-remote, manifest, governance) |
-| Best fit | Zyadatar orgs | Teams jinhe *must* independent deploy |
-
 ---
 
 ## Performance
@@ -748,29 +635,6 @@ trackByFn(index: number, item: any) { return item.id; }
 ```
 "50,000 rows to?" → trackBy = *update* cost kam; virtual scrolling = *render* cost kam (off-screen materialize nahi).
 
-### Deferrable Views: @defer (Angular 17+)
-
-**Template regions** ke liye built-in declarative lazy-loading — deferred content + deps separate JS chunk mein, trigger par load.
-```html
-@defer (on viewport) { <heavy-chart [data]="chartData" /> }
-@placeholder { <div class="skeleton"></div> }
-@loading (minimum 500ms) { <spinner /> }
-@error { <p>Failed to load.</p> }
-```
-- Triggers: `on idle` (default), `on viewport` (IntersectionObserver), `on interaction`, `on hover`, `on timer(2s)`, `when condition`.
-- **Why:** directly Core Web Vitals — heavy/below-fold/rarely-used UI (charts, modals, admin widgets) ab initial bundle mein nahi. Pehle manual lazy route ya `ViewContainerRef.createComponent()` chahiye tha. "Route-level lazy se aage bundle kaise kam karoge" ka pehla answer.
-
-### Lazy Loading aur Preloading
-
-```typescript
-{ path:'dashboard', loadChildren: () => import('./dashboard/dashboard.module').then(m => m.DashboardModule) }
-```
-- **Preloading** — initial app stable hone *ke baad* background mein lazy modules load → first navigation fast.
-```typescript
-RouterModule.forRoot(routes, { preloadingStrategy: PreloadAllModules })
-```
-- Custom `PreloadingStrategy` — selectively preload (role/heuristic). "Sab preload achha?" → nahi, constrained/mobile par critical resources se compete; analytics-based selective = better.
-
 ### Bundle Size, Tree Shaking, Build Optimization
 
 - **Tree shaking** — build (esbuild/webpack) unused/dead code remove.
@@ -833,132 +697,63 @@ flowchart TD
 
 ---
 
-## SSR, PWA & Cross-Cutting
+## Modern Angular Extras (Gap-Fill Topics)
 
-### Angular Universal / SSR
+*2026-era "are you current" signal topics — often skipped by older guides.*
 
-Server (Node.js) par initial HTML snapshot render → perceived load + SEO (crawlers fully rendered content).
-- Setup: legacy `ng add @nguniversal/express-engine`. **v17+:** `ng add @angular/ssr` (ya `ng new` par SSR select) — `@nguniversal` → `@angular/ssr`/`@angular/platform-server`. `@nguniversal/express-engine` deprecated naam.
-- Benefits: SEO, faster perceived load, slow networks par better (meaningful content JS bootstrap se pehle).
+### `hostDirectives` (Angular 15+)
 
-### Hydration (Angular 16+) aur Event Replay (Angular 17+)
-
-Classic SSR problem: client bootstrap poore DOM ko scratch se destroy + re-render ("destructive rehydration") → flicker + wasted work.
-- **Non-destructive hydration** (`provideClientHydration()`, 16/17 stable) — existing server DOM reuse, state/listeners already-painted markup par attach.
+- Combine multiple independent reusable behaviors (draggable + resizable + highlightable) on one component **without class inheritance** (single-parent-only, fragile) or manual delegation boilerplate.
 ```typescript
-providers: [ provideClientHydration() ]
+@Component({
+  selector: 'app-card', template: `<ng-content />`,
+  hostDirectives: [{ directive: HighlightableDirective, inputs: ['color'] }],
+})
+export class CardComponent {}
 ```
-- **Event replay** (17+, Chrome event dispatch lib) — "HTML painted" aur "fully hydrated" ke beech user interactions capture + replay → instant click swallow nahi hota.
-- **Why strong talking point:** hydration correctness = nuanced, prod-SSR-shipped signal (docs padhne wale se differentiate); genuinely hard recent engineering, incremental sugar nahi.
+- **Q: `hostDirectives` vs `@Component` inheritance?** A: `hostDirectives` lets behaviors compose freely; inheritance is single-parent and forces a rigid hierarchy. Angular-native "composition over inheritance."
+- **Quick Revision:** Composition, not inheritance. `inputs`/`outputs` control what gets re-exported.
 
-### Progressive Web Apps aur Service Workers
+### `afterRender` / `afterNextRender` (Angular 16+)
 
-**PWA** = native-app-like: offline, background sync, push, cacheable, installable.
-```
-ng add @angular/pwa   # service worker + Web App Manifest + icons
-```
-**Service Worker** = background script: resources cache, network requests intercept/handle, push enable.
-```json
-{ "assetGroups": [ { "name":"app", "installMode":"prefetch", "updateMode":"prefetch",
-  "resources": { "files":["/favicon.ico","/index.html"], "urls":["/api/**"] } } ] }
-```
-- Check: Chrome DevTools → Lighthouse. Background sync = offline store, connectivity par send. Push = server-initiated updates.
+- `ngAfterViewInit` guarantees DOM-present but **not** browser-painted (fires server-side too under SSR, without real rendering). `afterNextRender`/`afterRender` run **browser-only** (auto-skip under SSR, no `isPlatformBrowser` check needed) and work correctly under zoneless CD (old `setTimeout(0)` hacks were zone-dependent).
 ```typescript
-constructor(updates: SwUpdate) {
-  updates.available.subscribe(() => { if (confirm('New version. Reload?')) window.location.reload(); });
+constructor() {
+  afterNextRender(() => this.initChartLibrary(this.el.nativeElement)); // once, post-paint
+  afterRender(() => { /* every CD cycle's render — use sparingly */ });
 }
 ```
-- **`SwUpdate` modernization:** boolean `updates.available`/`activated` = legacy. Current = `updates.versionUpdates` (discriminated-union: `VersionReadyEvent`, `VersionInstallationFailedEvent`) — filter for `VersionReadyEvent`. Exact API version verify.
+- **Quick Revision:** `afterNextRender` = once, post-paint, SSR-safe — right tool for third-party DOM-lib init (charts, maps). `afterRender` = every render, real perf cost.
 
-### Angular Security
+### `NgOptimizedImage` (Angular 15+)
 
-Built-in: XSS protection, CSRF support, CSP support, HTML/URL/style sanitization.
-- **XSS** — Angular interpolation + property bindings auto-sanitize.
 ```html
-<p>{{ userInput }}</p>            <!-- safe: auto-escaped -->
-<p [innerHTML]="userInput"></p>   <!-- dangerous: bypasses escaping -->
+<img ngSrc="hero.jpg" width="1200" height="600" priority alt="Hero banner" />
 ```
-```typescript
-constructor(private sanitizer: DomSanitizer) {}
-safeUrl = this.sanitizer.bypassSecurityTrustUrl(userInput);
-```
-- **`bypassSecurityTrustX`** = "main personally vouch karta hoon" — sirf controlled/server-validated content par, kabhi raw user input par (warna XSS hole reopen).
-- **CSP** — `<meta http-equiv="Content-Security-Policy" content="default-src 'self'">` — kaunse scripts/resources load; injection slip par bhi XSS mitigate.
-- **CSRF** — `HttpClient` mein `HttpXsrfTokenExtractor`/`withXsrfConfiguration` (double-submit cookie), lekin sirf jab *backend* cookie/header set+validate kare — cooperating contract, automatic nahi.
-- **CORS** — server-side (`Access-Control-Allow-Origin`); Angular sirf request banata hai, browser enforce karta hai.
-- **HTTP Parameter Pollution** — `?user=admin&user=guest` (inconsistent parsing confuse) — backend concern, vocabulary term.
-- Secure auth: JWTs, tokens **HttpOnly cookies** (localStorage nahi = XSS-readable), Auth Guards.
-```typescript
-@Injectable({ providedIn: 'root' })
-export class AuthGuard implements CanActivate {
-  constructor(private authService: AuthService) {}
-  canActivate(): boolean { return this.authService.isLoggedIn(); }
-}
-```
-- **Token storage:** `localStorage`/`sessionStorage` = simple, common, XSS-readable → low-stakes only. BFF + HttpOnly-cookie = browser JS se bahar, `withCredentials:true`, chota blast radius = enterprise. Trade-off name karo, posture commit karo, `localStorage` ko best practice mat batao.
-- Brute-force: rate limiting, CAPTCHA, account lockout (backend-enforced; Angular UX surface kare).
+- Enforces `width`/`height` → reserves layout space → prevents **CLS**. `priority` → `fetchpriority="high"` + eager load for above-the-fold hero images → improves **LCP**; everything else auto-lazy-loads.
+- **Common mistake:** `priority` on too many images — dilutes the signal, defeats the purpose.
+- **Quick Revision:** Drop-in `<img>` replacement enforcing width/height (CLS) + smart priority loading (LCP). Single-highest-ROI perf retrofit for existing apps.
 
-### Accessibility (a11y): ARIA, CDK a11y Module, Focus Management
+### Router View Transitions (Angular 17+)
 
-Enterprise/govt = hard compliance (WCAG 2.1/2.2 AA, Section 508). "Working UI" vs "sab use kar sakein" differentiate.
-- **ARIA on custom components:** native `<button>`/`<input>` free semantics dete hain; `<div>`/`<span>` custom components mein **kuch nahi** — explicit `role`/`aria-*` bindings chahiye.
+```typescript
+bootstrapApplication(AppComponent, { providers: [provideRouter(routes, withViewTransitions())] });
+```
+- Wires the browser-native **View Transitions API** to route navigation — automatic crossfade/morph, no `@angular/animations` triggers. Progressively enhances (silently falls back to instant nav on unsupported browsers, no polyfill).
+- **Not** a replacement for `@angular/animations` — that's still right for complex component-internal animations; this is specifically for route-level page transitions.
+- **Quick Revision:** `withViewTransitions()` = browser-native route-transition animation, minimal code.
+
+### Internationalization (i18n)
+
 ```html
-<div role="tablist" [attr.aria-label]="ariaLabel">
-  @for (tab of tabs; track tab.id) {
-    <button role="tab" [id]="'tab-'+tab.id" [attr.aria-selected]="tab.id===activeTabId"
-      [attr.aria-controls]="'panel-'+tab.id" [tabindex]="tab.id===activeTabId ? 0 : -1"
-      (click)="selectTab(tab.id)" (keydown.arrowRight)="focusNextTab()" (keydown.arrowLeft)="focusPreviousTab()">
-      {{ tab.label }}</button>
-  }
-</div>
+<h1 i18n="@@welcomeHeader">Welcome to our app</h1>
 ```
-Key points: `role=*` = widget kya hai (generic markup); `aria-selected` = visually-obvious state screen reader ko; **roving `tabindex`** (active `0`, baaki `-1` + arrow handlers) = composite widget ek single `Tab` stop.
-
-**CDK `a11y` module** (`@angular/cdk/a11y`):
-| Utility | Purpose |
-|---|---|
-| `FocusTrap`/`cdkTrapFocus` | Tab focus container mein confine — modals essential |
-| `LiveAnnouncer` | ARIA live region se message announce (async state, "3 results") |
-| `FocusMonitor` | *Kaise* focused hua detect (mouse/keyboard/touch) — keyboard-only focus outlines |
-| `InteractivityChecker` | Element genuinely focusable/tabbable hai — FocusTrap internal |
-| `ListKeyManager`/`ActiveDescendantKeyManager` | List widgets arrow-key nav + active tracking |
-```typescript
-private liveAnnouncer = inject(LiveAnnouncer);
-onResultsLoaded(count: number) { this.liveAnnouncer.announce(`${count} results found`, 'polite'); }
-```
-**Modal focus management — 3 steps (narrate karo):**
-```typescript
-ngAfterViewInit() {
-  this.previouslyFocusedElement = document.activeElement as HTMLElement; // 1. capture trigger focus
-  this.focusTrap = this.focusTrapFactory.create(this.containerRef.nativeElement); // 2. trap
-  this.focusTrap.focusInitialElementWhenReady();
-}
-ngOnDestroy() {
-  this.focusTrap?.destroy();
-  this.previouslyFocusedElement?.focus(); // 3. restore focus to trigger
-}
-```
-(1) trigger focus capture, (2) focus trap + move in (heading/first control), (3) close par trigger par restore. Home-grown modals steps 1+3 galat — common a11y bug/audit finding.
-- **Framing:** "Custom widgets par a11y automatic nahi — generic elements = explicit ARIA + keyboard + focus management. CDK `a11y` exactly isliye." Verify: axe-core/`@angular-eslint`/Lighthouse baseline, par automated ~1/3 catch karta hai — manual keyboard + NVDA/VoiceOver baaki.
-
-### Deployment: Firebase aur GitHub Pages
-
-Lightweight targets (demos, side projects, take-homes).
-**Firebase Hosting:**
 ```bash
-npm install -g firebase-tools
-firebase login
-firebase init          # Hosting, dist/<project> point karo
-firebase deploy        # build first (ng build), then push
+ng extract-i18n --output-path src/locale   # generates messages.xlf for translators
 ```
-Free HTTPS, global CDN, easy custom-domain, koi infra nahi.
-**GitHub Pages:**
-```bash
-ng add angular-cli-ghpages
-ng deploy --base-href=/repo-name/
-```
-`--base-href` matters — GH Pages subpath (`username.github.io/repo-name/`) se serve; bhool jaana = broken assets/routes, blank page.
-- **Framing:** Firebase/GH Pages = static SPA/demos/portfolios; SSR/backend proxy/enterprise compliance chahiye to BFF/CloudFront right hai.
+- Angular's native i18n is **compile-time**: one fully-localized bundle per locale (`angular.json` → `"i18n": { "locales": {...} }`). Missing translations fail at **build time**, not silently at runtime. No runtime translation-lookup overhead — but switching language needs a **full page reload** (different bundle).
+- Use a runtime library (`ngx-translate`) instead when the app needs instant, no-reload language switching in one session; compile-time i18n fits locale-per-market deployments (separate country domains/subdomains) better.
+- **Quick Revision:** Compile-time, per-locale bundles, no runtime overhead, needs reload to switch. `ngx-translate` = runtime alternative for instant switching.
 
 ---
 
@@ -1025,12 +820,11 @@ it('resolves', fakeAsync(() => { let v=false; setTimeout(()=>v=true,1000); tick(
 - Manual `.subscribe()` ke bajaye **`async` pipe** (ya `toSignal`) — lifecycle + CD handle, leak class eliminate.
 - **Components thin** — business logic/data access/orchestration services mein; component = template↔service wire.
 - Simplest se aage = **Reactive Forms** (ideally **typed**); template-driven small cases.
-- Feature areas **lazy load**; heavy in-page content = **`@defer`**.
+- Feature areas route-wise **lazy load** karo (`loadChildren`/`loadComponent`).
 - Cross-cutting HTTP (auth/error/loading) = **interceptors** mein centralize.
 - Unsubscribe: pehle `async` pipe, phir `takeUntilDestroyed()`, fallback manual `ngOnDestroy()` unsubscribe.
 - **Bundle budgets** enforce + Angular DevTools/Lighthouse profile (blind optimize nahi).
 - `bypassSecurityTrustX`, `[innerHTML]` on user content, `localStorage` tokens = explicit justified decisions, defaults nahi.
-- State tooling (service/Signal, NgRx Signals, classic NgRx) = app complexity proportionate; choice justify karo.
 
 ## Common Pitfalls
 
@@ -1039,18 +833,20 @@ it('resolves', fakeAsync(() => { let v=false; setTimeout(()=>v=true,1000); tick(
 - **Unsubscribe bhoolna** — memory leak; SPAs mein compounded.
 - **`route.snapshot.paramMap` jab component param-only nav par reuse** — stale; observable form use karo.
 - **Constructor mein business logic** — inputs/DI ready guarantee nahi, testability undermine.
-- **`ElementRef.nativeElement` direct mutate** (Renderer2 ke bajaye) — SSR break.
+- **`ElementRef.nativeElement` direct mutate** (Renderer2 ke bajaye) — SSR/platform-agnostic rendering ke under break.
 - **`forkJoin` on never-completing source** — forever hang, no emission/error.
 - **Large/frequent lists par `trackBy` bina** — DOM churn, janky.
 - **JWTs `localStorage` mein** (low-stakes se aage) — XSS-exposed; BFF/HttpOnly contrast.
-- **NgRx as default** (jinhe guarantees nahi chahiye) — complexity cost.
 - **Signals RxJS replace karte hain assume** — different problems (sync view vs async streams); interop explain karo.
 - **`@for` mein `track` mandatory bhoolna** old `*ngFor` port karte waqt — identity-based fall back, problem reintroduce.
 - **`inject()` injection context ke bahar** (unrelated `setTimeout`/`.then`) — throws; pehle capture ya `runInInjectionContext()`.
+- **`input()`/`output()` ko plain property treat karna** — `this.name` likh dena `this.name()` ke bajaye.
+- **Zoneless app mein Signal-outside mutations** — re-render silently miss ho jaata hai.
+- **`NgOptimizedImage` par `priority` overuse** — sab high-priority = koi actually high-priority nahi.
 
 ## Version Feature Comparison Table
 
-| Feature | Angular 7 (2018 baseline) | Current (2025-26) |
+| Feature | Older Angular (pre-14, NgModule-era) | Current Angular 19-class |
 |---|---|---|
 | Component | NgModule-declared only | Standalone default; NgModules supported |
 | Bootstrap | `platformBrowserDynamic().bootstrapModule(AppModule)` | `bootstrapApplication(AppComponent, appConfig)` |
@@ -1059,13 +855,14 @@ it('resolves', fakeAsync(() => { let v=false; setTimeout(()=>v=true,1000); tick(
 | Change detection | Zone.js Default/OnPush | + experimental zoneless (Signal-driven) |
 | DI | Constructor injection | + `inject()` function |
 | Forms | Untyped FormGroup/FormControl | Strictly typed reactive |
-| In-template lazy | Nahi (route/module only) | `@defer` template-region lazy |
+| Component I/O | `@Input()`/`@Output()` + `EventEmitter` | `input()`/`output()`/`model()` (Signal-based, stable v19) |
 | Build | Webpack via CLI | esbuild + Vite `application` builder (v17 default) |
-| SSR | Angular Universal (`@nguniversal`), destructive rehydration | `@angular/ssr`, non-destructive hydration + event replay |
 | E2E | Protractor | Protractor removed; Cypress/Playwright/WebdriverIO |
 | Rendering | View Engine (Ivy v9) | Ivy |
 | Interceptors | Class-based + `HTTP_INTERCEPTORS` | Functional via `withInterceptors()` (class still supported) |
 | Guards | Class-based `CanActivate` | Functional (`CanActivateFn`); class still supported |
+| Image optimization | Manual `<img>` handling | `NgOptimizedImage` (enforced width/height, priority loading) |
+| Route animations | `@angular/animations` only | + `withViewTransitions()` (browser-native) |
 
 ## Sample Interview Q&A
 
@@ -1087,14 +884,56 @@ A: Browser JS tak pahunchne wala koi token XSS-exposed — koi dependency/inject
 **Q: Angular 7 NgModule codebase modernize (no big-bang)?**
 A: Incrementally: pehle `ng update` version-by-version (har major ke migration schematics; versions skip risky). Standalone-support version (14+) par `ng generate @angular/core:standalone` schematics se ek feature area at a time convert (coexist karte hain). Parallel: control-flow migration schematic se `@if`/`@for`, genuinely simpler jagah Signals, touch par `HttpInterceptor`→functional. Poore build system (webpack→esbuild) + component model same change mein flip nahi — regress bisect karna hard.
 
+**Q: `input()` signal function `@Input()` decorator se practically kaise differ karta hai, migrate kyun/kab?**
+A: `@Input()` plain class property banata hai jo Angular externally set karta hai; `input()` read-only **Signal** return karta hai — `this.name()` se read (template mein bhi). Fayda: `computed()`/`effect()` ke saath directly compose hota hai, `input.required<T>()` compile-time-enforced required-input deta hai. Naye components ke liye `input()`/`output()`/`model()` default; existing `@Input()`-heavy code sirf touch hone par migrate — dono styles coexist.
+
+**Q: `hostDirectives` `@Component` inheritance se better kab hai?**
+A: Jab multiple independent reusable behaviors (draggable + resizable + highlightable) combine karne hon — freely compose hote hain, class inheritance single-parent-only hoti hai aur behaviors ko rigid hierarchy mein couple kar deti hai. "Composition over inheritance" ka Angular-native implementation.
+
+**Q: `NgOptimizedImage`'s `priority` attribute kya karta hai, kis par lagaoge?**
+A: `fetchpriority="high"` + eager loading signal karta hai (LCP candidate). Sirf viewport ke above-the-fold 1-2 sabse important images par (hero banner) — bahut saari images par lagana priority signal dilute kar deta hai. Baaki automatically default lazy-loading.
+
+**Q: `mergeMap` vs `switchMap` vs `concatMap` vs `exhaustMap` — ek real scenario har ek ke liye.**
+A: `switchMap` = search-as-you-type (stale request cancel). `mergeMap` = parallel independent uploads (order doesn't matter). `concatMap` = ordered sequential saves (batch price updates, exact user order). `exhaustMap` = submit-button double-click prevention.
+
+**Q: Zoneless CD adopt karne se pehle kya check karoge?**
+A: Ki saara reactive state Signals (ya `markForCheck`/`OnPush`-compatible patterns) use kar raha ho — Zone.js ka "automatically detect har async op" safety net ab nahi hai; Signal-outside mutations silently missed ho jaate hain.
+
+**Q: `FormGroup` vs `FormArray` — difference aur ek real use case.**
+A: `FormGroup` = fixed, named group of controls. `FormArray` = dynamic, indexed collection, jab inputs ki count unknown/user-driven ho. Use case: dealer intake form jisme user "add another contact number" bar-bar click kare — phone numbers `FormArray` mein, naam/email jaise fixed fields `FormGroup` mein.
+
 ---
 
-## Summary of Additions
+## Final Quick-Revision Cheat Sheet (Read This Night Before)
 
-**[new content] sections** (2018 baseline → 2025-26 gap close): 1. Standalone Components (14+, v17 default) 2. inject() (14+) 3. Control-Flow @if/@for/@switch (17+) 4. Typed Reactive Forms (14+) 5. Functional Interceptors (15+) 6. Signals (16+) 7. RxJS vs Signals 8. SignalStore/NgRx Signals (17+) 9. Hierarchical Injectors deep dive 10. Zoneless CD (18+) 11. @defer (17+) 12. esbuild/Vite builder (17+) 13. Hydration + Event Replay (16+/17+).
+Agar bilkul kam time hai, yeh woh concepts hain jo almost har senior/lead Angular interview mein show up karte hain:
 
-**Resolved contradictions:** (1) Token storage — `AuthInterceptor` ab `TokenService` inject karta hai (localStorage direct read nahi); storage posture explicit decision, trade-off dono jagah stated. (2) `ng build --prod` (old) vs `--configuration production`/`-c production` (current) — `--prod` deprecated/removed. Baaki apparent duplication = de-duplicated repetition, conflicts nahi.
+1. **Ivy vs View Engine** — Ivy (v9 default) = smaller bundles, faster compile, better debugging. Kyunki locally compile karta hai (View Engine globally karta tha).
+2. **Standalone Components** (v14→v17 default) — `NgModule` ke bina; biggest structural shift. Coexist karte hain NgModules ke saath.
+3. **Signals** (`signal`/`computed`/`effect`, v16+; `linkedSignal`/`resource` v19) — fine-grained reactivity, `count()` function-call read. RxJS ko replace **nahi** karte — sync view state vs async streams; `toSignal`/`toObservable` se interop.
+4. **`@if`/`@for`/`@switch`** (v17) — `track` mandatory in `@for` (unlike optional `trackBy`). Old syntax coexists.
+5. **Zoneless CD** (v18, experimental) — Zone.js hata deta hai; Signals-driven. State non-Signal-tracked ho to re-render miss ho sakta hai.
+6. **Typed Reactive Forms** (v14) — typo'd control names ab compile-time fail, runtime silent-null nahi.
+7. **Functional interceptors/guards + `inject()`** (v14-15) — class-based ka simpler alternative; `inject()` sirf injection-context mein kaam karta hai (`setTimeout` ke andar fail).
+8. **`input()`/`output()`/`model()`** (stable v19) — Signal-based component I/O; `this.name()` se read, `model()` = two-way binding in one line.
+9. **`OnPush` + immutability** — reference-based comparison; in-place mutation silently breaks CD.
+10. **`switchMap` for search boxes** — single most-asked RxJS question.
+11. **BFF pattern** — Angular never holds tokens; token storage is a security *decision*, not a default (`localStorage` vs BFF+HttpOnly cookie).
+12. **`trackBy`/`track`** reduces update cost; **virtual scrolling** reduces render cost for huge lists.
+13. **`NgOptimizedImage`** — single-highest-ROI perf retrofit for LCP/CLS.
+14. **esbuild/Vite builder** (v17 default) — faster builds, replaces webpack-based `browser` builder.
 
-## Summary of [gaps] Additions
+**One-line mnemonic for the whole modern-Angular story:** *"Standalone removed the module ceremony, Signals removed the guesswork from change detection, and functional APIs (`inject()`, guards, interceptors) removed the class-boilerplate — everything else (zoneless, esbuild, typed forms) is downstream of those three shifts."*
 
-Formal gap-analysis se 3 sections (**[gaps]** tagged): 1. **NgRx Entity Adapters, Facade Pattern, Selector Memoization** (SignalStore ke baad) — normalized CRUD O(1) lookups, component decoupling + easier tests, `createSelector` reference-equality mechanics + single-slot cache gotcha. 2. **Micro-Frontends / Module Federation** (DI deep dive ke baad) — lead-level system design: MF mechanics, `@angular-architects/module-federation`, shared-singleton risk, kab justified (independent deploy cadence) vs Nx monorepo. 3. **Accessibility (a11y)** (Security ke baad) — ARIA roles/states/roving-tabindex, CDK `FocusTrap`/`LiveAnnouncer`/`FocusMonitor`, 3-step modal focus management. Teeno forward-looking/conceptual mark (particularly Module Federation) hands-on Angular 4/7 experience relative.
+---
+
+## Coverage Check vs `L__Angular-19-Interview-Guide.md`
+
+These notes now mirror the current guide's scope exactly — every section here maps to a section in the guide, in the same order, and nothing extra.
+
+**What changed in this pass:**
+1. **Added** — three real gaps vs the guide: Signal-based `input()`/`output()`/`model()` (into Component Communication), the whole "Modern Angular Extras" section (`hostDirectives`, `afterRender`/`afterNextRender`, `NgOptimizedImage`, Router View Transitions, i18n), and the guide's "Final Quick-Revision Cheat Sheet."
+2. **Removed** — sections that aren't in the current guide: State Management (NgRx & alternatives), SignalStore/NgRx Signals, NgRx Entity Adapters/Facade Pattern/Selector Memoization, Dependency Injection Hierarchical Injectors deep-dive, Micro-Frontends/Module Federation, `@defer`, Lazy Loading & Preloading (as its own section), Angular Universal/SSR, Hydration & Event Replay, PWA/Service Workers, the dedicated Angular Security section, Accessibility (a11y), and Deployment (Firebase/GitHub Pages). Best Practices, Common Pitfalls, and the Version Table were also trimmed to drop bullets/rows tied to that removed content (NgRx pitfall, `@defer` bullet, SSR row).
+
+If any of these removed topics come up in an actual interview (NgRx and accessibility especially are common at senior/lead level), they're worth re-adding — just say the word and I'll bring them back in, either here or as a separate file.
+

@@ -52,7 +52,37 @@ A: TS type system kaafi jagah **design se unsound** hai (`any`, type assertions,
 }
 ```
 
-Senior expectation: har strict flag *kyun* matter karta hai wo pata ho, sirf `strict: true` exist karta hai itna nahi.
+Senior expectation: har strict flag *kyun* matter karta hai wo pata ho, sirf `strict: true` exist karta hai itna nahi. Yeh ek **bahut common interview area hai** ("apna `tsconfig` explain karo") — neeche har option field-by-field, ek-line "kyun" ke saath:
+
+### `compilerOptions` — Field-by-Field Breakdown 🎯
+
+| Option | Kya karta hai | Ek-line "kyun" |
+|---|---|---|
+| `target: "ES2022"` | JS output kis version mein downlevel hoga | Modern browsers → chhota/faster output; native class fields etc. bina rewrite ke emit hoti hain |
+| `module: "ESNext"` | Import/export kis format mein emit hongi | Native ESM syntax static/analyzable hai → tree-shaking enable karta hai (bundle size ke liye critical) |
+| `moduleResolution: "Bundler"` | `import './x'` ko file kaise resolve karta hai | Modern esbuild/Vite behavior replicate karta hai; Node ke strict ESM extension rules force nahi karta |
+| `lib: ["ES2022", "DOM"]` | Kaunse built-in type declarations included hain | `DOM` ke bina `document`/`window` compile error dete hain — Angular frontend ko dono chahiye |
+| `strict: true` | Strict flags ka poora bundle on karta hai | Master switch — iske bina `noImplicitAny` jaisi cheezein silently pass ho jaati hain |
+| `noUncheckedIndexedAccess` | Index access mein `\| undefined` add karta hai | `arr[0]` ka type ab `Vehicle \| undefined` hota hai, na ki jhooti-guarantee wala `Vehicle` — production `Cannot read property of undefined` crashes ka common source pकड़ता hai |
+| `exactOptionalPropertyTypes` | "key absent" vs "key present with `undefined` value" distinguish karta hai | `{ region: undefined }` ab `{}` se different treat hota hai — precise API contracts ke liye |
+| `esModuleInterop: true` | CommonJS packages ka clean default import allow karta hai | `import express from 'express'` chalta hai, `import * as express` ki jagah |
+| `skipLibCheck: true` | `node_modules` ke `.d.ts` files ka type-check **skip** karta hai | Build time significantly kam; trade-off — purely third-party type-def errors catch nahi hote |
+| `isolatedModules: true` | "poore program" ka knowledge chahne wale constructs forbid karta hai | esbuild/swc jaise single-file transpilers (Angular ka esbuild builder) ke liye required; e.g. type-only exports ko explicit `export type` chahiye |
+| `forceConsistentCasingInFileNames` | File-name casing imports ke across enforce karta hai | Mac/Windows (case-insensitive) par locally chalta hai, Linux CI (case-sensitive) par build todta — isko locally hi catch karta hai |
+
+```typescript
+// noUncheckedIndexedAccess ka concrete before/after:
+const vehicles: Vehicle[] = [];
+const first = vehicles[0];
+// false → first: Vehicle (galat! array khaali hai)
+// true  → first: Vehicle | undefined (sahi)
+
+// isolatedModules ka fix — type-only export explicitly mark karo:
+type Vehicle = { vin: string };
+export type { Vehicle };   // export { Vehicle } ambiguous hoga, error degi
+```
+
+(Poori `tsconfig.json` quick-reference table doc ke end mein hai, sab options ek jagah.)
 
 ### Primitive & Special Types
 
@@ -783,6 +813,45 @@ A: Non-const enums real runtime objects (reverse mappings) emit karte — bundle
 
 ---
 
+## Quick Revision Sheet
+
+*(Guide ka night-before "ek-page" summary — sabse zyada high-density recap.)*
+
+- **`any`** = checking band. **`unknown`** = checking on, use se pehle narrow karo. **`never`** = unreachable/bottom type. **`void`** = koi meaningful return nahi.
+- **`interface`**: mergeable, `extends`-based, object contracts. **`type`**: unions/tuples/mapped types, mergeable nahi.
+- **`readonly`** shallow hai — nested data mutable rehta hai.
+- **Structural typing**: shape matter karta hai, declared name nahi. Excess-property checks sirf literals par fire hoti hain, variables par nahi.
+- **Branded types**: `string & { __brand: 'X' }` + constructor function = simulated nominal typing.
+- **Discriminated unions + `never` exhaustiveness check** = naye variants add karne ke liye compile-time safety net.
+- **`??`** `0`/`""`/`false` respect karta hai; **`||`** nahi karta.
+- **`strict: true`** on karta hai: `strictNullChecks`, `noImplicitAny`, `strictFunctionTypes`, `strictBindCallApply`, `strictPropertyInitialization`, `noImplicitThis`, `useUnknownInCatchVariables` — lekin `noUncheckedIndexedAccess` ya `exactOptionalPropertyTypes` **NAHI**, jo separately add karne chahiye.
+- **`satisfies`** type ke against validate karta hai narrow inferred type ko keep karte hue; plain annotation widen kar deta hai.
+- **Enums** ka runtime cost hai aur `isolatedModules` ke saath break hote hain; literal unions prefer karo.
+- **`catch (e)`** `strict` ke under `unknown` hai — `.message` use karne se pehle hamesha `instanceof Error` ya type guard ke saath narrow karo.
+- **Angular DI** `reflect-metadata` + decorator metadata par depend karta hai — injection token ke tor par kabhi interface use mat karo (runtime par erase ho jaata hai); class ya `InjectionToken` use karo.
+- **Types runtime par 100% erase ho jaate hain** — zero cost, except enums, decorators+metadata, aur namespaces ke, jo real JS emit karte hain.
+- **`TS2589`** (recursive type too deep) → recursion depth bound karo, circularity break karo, ya built-in/vetted utility types prefer karo.
+
+---
+
+## `tsconfig.json` Quick Reference — sab `compilerOptions` ek jagah
+
+| Option | Kya karta hai | Kyun matter karta hai |
+|---|---|---|
+| `target` | JS output kis version mein compile hogi | `ES2022` = chhota, modern output; purana target = zyada, uglier downleveled code |
+| `module` | Compiled output mein import/export kis format mein emit hongi | `ESNext` tree-shaking enable karta hai; `CommonJS` bundler ke bina Node ke liye |
+| `moduleResolution` | TS files kaise resolve karta hai | `Bundler` = modern esbuild/Vite behavior; `NodeNext` = strict Node ESM rules |
+| `lib` | Kaunse built-in type declarations include hon | `DOM` ke bina `document`/`window` compile error dete hain |
+| `strict` | Strict flags ka poora bundle on karta hai | Master switch — bina iske `noImplicitAny` jaisi cheezein silently pass ho jaati hain |
+| `noUncheckedIndexedAccess` | Index access mein `\| undefined` add karta hai | `arr[0]` jaisi cheezein safe force karta hai, jhoothi guarantee nahi deta |
+| `exactOptionalPropertyTypes` | "absent key" vs "undefined value wali key" distinguish karta hai | Precise API contracts ke liye |
+| `esModuleInterop` | CommonJS packages ka clean default import allow karta hai | `import express from 'express'` `import * as express` ke bajaye |
+| `skipLibCheck` | `node_modules` ke `.d.ts` files ka type-check skip karta hai | Build time kam karta hai |
+| `isolatedModules` | Cross-file type knowledge chahne wale constructs forbid karta hai | esbuild/swc jaise single-file transpilers ke liye required |
+| `forceConsistentCasingInFileNames` | File-name casing ko imports ke across enforce karta hai | Case-sensitive Linux CI par build breaks se bachata hai |
+
+---
+
 ## Summary of Additions
 
 Consolidation ke dauran add hui sections aur kyun matter:
@@ -808,3 +877,11 @@ Formal gap-analysis se add hui teen self-contained sections (working code ke saa
 3. **Recursive Type Alias Depth Limits (TS2589)** (Template Literal Types ke baad) — concrete trigger, mechanical reason (types check time par fully expand), chaar mitigations (depth-limiting counter, circularity break, vetted utilities, distributive simplify).
 
 Teeno core-language mechanics hain (Angular-version-dependent nahi).
+
+## Summary of Sync-with-Guide Additions (Latest Pass)
+
+Guide ke saath line-by-line compare karke jo do genuine content gaps mile, unhe add kiya gaya (baaki sab topics already 1:1 covered the):
+1. **`compilerOptions` — Field-by-Field Breakdown** (Toolchain Basics ke andar) — guide ka detailed per-flag "apna tsconfig explain karo" walkthrough (target/module/moduleResolution/lib/strict/noUncheckedIndexedAccess/exactOptionalPropertyTypes/esModuleInterop/skipLibCheck/isolatedModules/forceConsistentCasingInFileNames) ab ek condensed table + do code snippets ke roop mein — pehle sirf scattered mentions the, structured breakdown nahi tha.
+2. **Quick Revision Sheet** aur **`tsconfig.json` Quick Reference table** (doc ke end mein) — guide ke dedicated "night-before" one-page summary aur poori tsconfig options table, jo pehle is notes file mein bilkul absent the.
+
+Baaki har Guide section (Parts 1–9) revision notes mein already exist karta tha equivalent ya usse zyada detail (extra mermaid diagrams, extra gotchas) ke saath — wo sab retain kiya gaya hai, kuch remove nahi kiya.
