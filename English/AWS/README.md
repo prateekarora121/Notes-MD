@@ -10,7 +10,7 @@
 
 ## Start Here
 
-- **[Resume-Aligned Priority Map](/Hinglish/AWS/Detailed/00-resume-aligned-priority-map.md)** - tiering of every topic below, the Azure→AWS translation table, and the resume follow-ups to expect. Read this first; it tells you which of the files below to revise hardest.
+- **[Resume-Aligned Priority Map](/English/AWS/Detailed/00-resume-aligned-priority-map.md)** - tiering of every topic below, the Azure→AWS translation table, and the resume follow-ups to expect. Read this first; it tells you which of the files below to revise hardest.
 
 ## PART I — Tier 1: Resume-Claimed Core
 
