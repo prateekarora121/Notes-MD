@@ -6,6 +6,30 @@
 
 ---
 
+## Interview Questions
+
+**Q: Dependency Injection (DI) ke benefits kya hain?**
+- **Loose coupling** — class ek abstraction (`IService`) par depend karti hai, concrete class par nahi — isliye implementation swap karne ke liye consumer ka code touch nahi karna padta.
+- **Testability** — unit tests mein real implementation ke bajaye ek mock/fake inject kiya ja sakta hai (e.g., real email bhejne wali `IEmailService` ke bajaye ek fake).
+- **Centralized object creation & lifetime management** — container decide karta hai objects kaise aur kab banenge (Transient/Scoped/Singleton) — manually har jagah `new` likhne aur lifetime manage karne ki zarurat nahi.
+- **Single Responsibility** — classes sirf constructor mein declare karti hain unhe kya chahiye; *kaise* banega yeh unka concern nahi hota (dependency ki apni dependencies manually wire nahi karni padti).
+- **Easier maintenance/extension** — naya implementation add karna ya configuration change karna ek hi jagah (`Program.cs`) hota hai, poore codebase mein scattered nahi.
+
+**Q: `AddTransient(Service)` ka use kya hai — bina interface ke bhi?**
+```csharp
+// Form 1: interface -> implementation (usual DI pattern)
+builder.Services.AddTransient<IPasswordHasher, PasswordHasher>();
+
+// Form 2: sirf concrete class, koi interface nahi
+builder.Services.AddTransient<ReportService>();
+```
+- Interface ke bina bhi, `AddTransient<ReportService>()` value deta hai — **container `ReportService` khud construct karta hai**, uski constructor dependencies ko automatically resolve/inject karte hue — kabhi manually `new ReportService(...)` call nahi karna padta.
+- **Lifetime control** — `Transient` ka matlab hai har baar jab bhi `ReportService` maanga jaata hai, ek **bilkul naya instance** milta hai — useful jab service mein state ho jo requests/callers ke beech share/reuse nahi honi chahiye.
+- `ReportService` ko kisi bhi doosri class ke constructor mein inject kiya ja sakta hai aur yeh automatically kaam karta hai — poora dependency graph container dwara recursively resolve hota hai.
+- Interface na hone se sirf yeh lose hota hai: baad mein implementation swap karne (e.g., tests ke liye mocking) ki ability — isi liye interfaces + DI aksar saath use hote hain, lekin yeh DI ki hard requirement nahi hai.
+
+---
+
 ## Table of Contents
 
 - [Part I — Core Concepts: Type System & CLR](#part-i--core-concepts-type-system--clr)
@@ -96,6 +120,7 @@
 - [Part X — Design Principles & Patterns](#part-x--design-principles--patterns)
   - [SOLID Principles](#solid-principles)
   - [Dependency Injection](#dependency-injection-di)
+  - [[new content] Singleton vs Scoped vs Transient — Real-Life Examples](#new-content-singleton-vs-scoped-vs-transient--real-life-examples)
   - [Serialization & Deserialization](#serialization--deserialization)
   - [AutoMapper](#automapper)
   - [Architectural Patterns](#architectural-patterns)
@@ -1937,6 +1962,67 @@ flowchart TB
     B -.-> D
 ```
 
+### [new content] Singleton vs Scoped vs Transient — Real-Life Examples
+
+Teeno lifetimes ka core difference sirf ek sawaal hai: **"container mujhe kab ek naya instance deta hai?"** Neeche har lifetime ko ek real-world analogy, actual .NET use case, aur registration/consumption code ke saath explain kiya gaya hai.
+
+**1. Transient — "har baar ek fresh, disposable instance"**
+
+*Real-life analogy:* ek restaurant mein **paper napkin** — har customer ko ek naya milta hai, use hone ke baad throw ho jata hai, koi state carry nahi hoti next customer tak.
+
+*.NET use case:* lightweight, **stateless** services jinme koi mutable/shared state nahi hoti — e.g. ek `IEmailValidator`, `IPasswordHasher`, ya ek `IOrderNumberGenerator` jo pure logic hai aur cheap hai banana.
+
+```csharp
+builder.Services.AddTransient<IPasswordHasher, BCryptPasswordHasher>();
+```
+
+Container `BCryptPasswordHasher` ka **naya instance** deta hai **har baar** jab bhi koi dependency usse maangti hai — chahe wo ek hi HTTP request ke andar 3 alag jagah injected ho, teeno alag instances honge.
+
+**2. Scoped — "ek HTTP request (ya ek explicit scope) ke liye ek shared instance"**
+
+*Real-life analogy:* ek hospital visit ka **patient file** — usi visit ke dauraan reception, nurse, aur doctor sab **same file** use karte hain (shared state within that visit), lekin agle visit (next request) par ek **fresh file** khulti hai.
+
+*.NET use case:* sabse classic example **`DbContext`** hai. ASP.NET Core mein `AddDbContext<T>()` by default `DbContext` ko **Scoped** register karta hai — ek hi HTTP request ke andar agar `OrderService` aur `InventoryService` dono `AppDbContext` inject karte hain, to unhe **wahi ek instance** milta hai (EF Core change-tracking ke liye zaroori — same request ke andar entities ko track karna), lekin next request par ek naya `DbContext` banega.
+
+```csharp
+builder.Services.AddScoped<AppDbContext>();          // EF Core ka default
+builder.Services.AddScoped<IOrderService, OrderService>();
+```
+
+**3. Singleton — "poori application lifetime ke liye ek hi instance"**
+
+*Real-life analogy:* ek office ka **shared printer** — sab employees (saare requests) wahi ek printer use karte hain, application (office) band hone tak.
+
+*.NET use case:* **`IMemoryCache`**, ek `IConfiguration` object, ya ek `HttpClient`-wrapping typed client jise `AddHttpClient` khud singleton `IHttpClientFactory` ke through manage karta hai. Ek aur bahut common real-world Singleton: application-wide **in-memory cache** ya **connection pool manager** jisme state saare requests ke beech share honi chahiye taaki repeatedly expensive kaam (e.g., ek config file parse karna, ek external API ka rate-limit token maintain karna) baar-baar na ho.
+
+```csharp
+builder.Services.AddSingleton<ICacheService, InMemoryCacheService>();
+```
+
+```csharp
+public class InMemoryCacheService : ICacheService
+{
+    // Yeh dictionary poori application lifetime ke liye ek hi baar banta hai
+    // aur har request/user ke beech SHARE hota hai.
+    private readonly ConcurrentDictionary<string, object> _cache = new();
+
+    public T? Get<T>(string key) => _cache.TryGetValue(key, out var v) ? (T)v : default;
+    public void Set(string key, object value) => _cache[key] = value;
+}
+```
+
+> **Note:** Singleton service ke andar state ko `ConcurrentDictionary` jaisa thread-safe rakhna zaroori hai — kyunki ek hi instance **concurrently multiple requests** se access ho sakta hai (office printer ki tarah, jise ek saath kai log use karne ki koshish kar sakte hain).
+
+**Ek nazar mein comparison:**
+
+| Lifetime | Real-life analogy | Instance kab naya banta hai | Typical .NET example |
+|---|---|---|---|
+| **Transient** | Paper napkin | Har baar resolve/inject hone par | `IPasswordHasher`, `IEmailValidator` |
+| **Scoped** | Patient file during one hospital visit | Har HTTP request / explicit scope ke liye ek baar | `DbContext`, `IOrderService` |
+| **Singleton** | Office ka shared printer | Poori application life mein sirf ek baar | `IMemoryCache`, `IConfiguration`, logging providers |
+
+**Interviewer follow-up jo aksar poocha jata hai:** *"Agar ek Singleton service ek Scoped dependency (jaise `DbContext`) capture kar le to kya hota hai?"* — yeh exactly **Captive Dependency Problem** hai, jo neeche detail mein cover kiya gaya hai.
+
 ### Serialization & Deserialization
 
 ```csharp
@@ -2826,6 +2912,23 @@ A: Cheap aur non-invasive se start karo: live PID ke against `dotnet-counters mo
 
 **Q: .NET 9 mein Swagger ke saath kya change hua?**
 A: Swashbuckle ko default Web API template dependency se drop kar diya gaya, uski jagah built-in `Microsoft.AspNetCore.OpenApi` package (sirf document generation, koi UI ship nahi hoti) aa gaya — Swashbuckle ke maintenance gaps aur Native AOT incompatibility ki wajah se driven. Ab aap separately ek UI choose karte ho (Swagger UI, Scalar, ReDoc, NSwag).
+
+**Q: Kya `app.Run()` middleware chain ke end mein required hai?**
+A: **Nahi, required nahi hai** — yeh ek common misconception hai. `app.Run()` (terminal middleware overload, `app.Use(...)` **nahi**) sirf ek **convention** hai, ek hard requirement nahi: ek short-circuiting/terminal delegate jo pipeline ko end karta hai, `next()` ko call kiye bina. Agar koi bhi `app.Use(...)` middleware `next()` ko call nahi karta (short-circuit kar deta hai — e.g. ek auth failure par early `401` return karna), to pipeline wahin khatam ho jata hai, chahe koi explicit `app.Run()` end mein ho ya na ho. Practically bhi minimal APIs mein `app.MapGet(...)`, `app.MapControllers()`, etc. khud terminal endpoints ke roop mein act karte hain — agar koi registered route request ko match kar leta hai, to `app.Run()` kabhi reach hi nahi hota.
+```csharp
+app.Use(async (context, next) =>
+{
+    if (!context.Request.Headers.ContainsKey("X-Api-Key"))
+    {
+        context.Response.StatusCode = 401;
+        return;              // next() call NAHI kiya gaya — pipeline yahin short-circuit ho gaya
+    }
+    await next();             // agla middleware invoke hota hai
+});
+
+app.Run(async context => await context.Response.WriteAsync("Fallback response"));   // truly optional
+```
+`app.Run()` sirf ek **safety-net / fallback terminal handler** ke roop mein useful hota hai — jab koi bhi upstream middleware ya endpoint request ko handle nahi karta, to `app.Run()` ek catch-all default response de deta hai. Iske bina, agar koi middleware/endpoint request ko handle nahi karta, to response bina body ke (typically 404, ASP.NET Core ke default routing/`UseEndpoints` behavior ki wajah se) khatam ho jata hai — koi exception ya crash nahi aata.
 
 ---
 

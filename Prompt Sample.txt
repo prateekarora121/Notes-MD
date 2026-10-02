@@ -1,0 +1,180 @@
+Create a comprehensive **hands-on learning exercise in Markdown (.md)** to help me deeply understand **.NET 8 request lifecycles, Dependency Injection (DI), service registration, and service factories**.
+
+Cover the following topics progressively, starting from fundamentals and moving toward advanced concepts:
+
+### 1. .NET 8 Request Lifecycle
+
+* Explain the complete lifecycle of an HTTP request in ASP.NET Core/.NET 8.
+* Middleware pipeline and execution order.
+* Routing and endpoint execution.
+* Controller/Minimal API execution.
+* Model binding and validation.
+* Dependency Injection resolution during a request.
+* Service scopes and disposal.
+* Response generation and middleware execution on the way back.
+* Explain what happens internally at each stage.
+
+### 2. Dependency Injection Service Lifetimes
+
+Explain and demonstrate:
+
+* `AddTransient`
+* `AddScoped`
+* `AddSingleton`
+
+For each, explain:
+
+* When it is created.
+* How long it lives.
+* When it is disposed.
+* Where it should and should not be used.
+* Common mistakes and real-world use cases.
+
+### 3. Interface-to-Implementation vs Concrete-Type Registration
+
+Explain the difference between:
+
+```csharp
+services.AddTransient<IService, Service>();
+```
+
+and:
+
+```csharp
+services.AddTransient<Service>();
+```
+
+Include hands-on examples showing:
+
+* How DI resolves each registration.
+* What happens when a constructor depends on `IService`.
+* What happens when a constructor depends directly on `Service`.
+* When concrete-type registration is appropriate.
+* How multiple implementations are handled.
+* How these registrations affect testing and maintainability.
+
+### 4. Service Factory
+
+Explain the concept of a **service factory** in .NET DI.
+
+Cover:
+
+* Why service factories are needed.
+* Factory delegates using `AddTransient`, `AddScoped`, and `AddSingleton`.
+* `Func<T>`-based factories.
+* Factory classes.
+* Keyed services in .NET 8.
+* Choosing an implementation dynamically.
+* Factory pattern vs DI.
+* How DI can reduce the need for manually implemented factories.
+* When a factory is still the better design.
+
+Include practical examples.
+
+### 5. Advanced DI Concepts
+
+Also cover related concepts such as:
+
+* Constructor injection.
+* Method injection where applicable.
+* Service provider and service resolution.
+* `IServiceProvider`.
+* Nested scopes.
+* Captive dependency problem.
+* Singleton depending on Scoped/Transient services.
+* `IServiceScopeFactory`.
+* `IOptions` / `IOptionsSnapshot` / `IOptionsMonitor`.
+* Multiple registrations of the same interface.
+* `IEnumerable<T>` resolution.
+* Keyed services.
+* Open generic registrations.
+* Decorator patterns.
+* DI validation.
+* Disposal and `IDisposable` / `IAsyncDisposable`.
+
+### 6. Hands-On Exercises
+
+Design the learning material primarily around **exercises rather than theory**.
+
+Create exercises in increasing difficulty:
+
+**Level 1 – Beginner**
+
+* Simple service registration.
+* Experiment with Transient, Scoped, and Singleton.
+* Observe object creation using `Guid`/instance IDs.
+* Understand request boundaries.
+
+**Level 2 – Intermediate**
+
+* Multiple implementations of an interface.
+* Interface vs concrete registration.
+* Service factories.
+* `IEnumerable<T>`.
+* Different lifetimes interacting with each other.
+
+**Level 3 – Advanced**
+
+* Build a realistic service-selection mechanism.
+* Use keyed services.
+* Implement a factory using DI.
+* Demonstrate captive dependencies.
+* Create multiple scopes manually.
+* Demonstrate service disposal.
+* Build a small application that combines middleware, DI, factories, and request lifecycle concepts.
+
+### 7. Debugging & Experiments
+
+For each important concept, provide an experiment where I can:
+
+1. Modify the code.
+2. Run the application.
+3. Observe the behavior.
+4. Predict what should happen.
+5. Compare it with the actual result.
+6. Understand **why** it happened.
+
+Include expected output where useful.
+
+### 8. Interview Questions
+
+At the end, include:
+
+* Beginner interview questions.
+* Intermediate interview questions.
+* Advanced interview questions.
+* Scenario-based questions.
+* Common trick questions.
+
+Provide concise but technically accurate answers.
+
+### 9. Final Mini Project
+
+Create a final **.NET 8 Web API mini-project** that combines all the concepts.
+
+The project should include:
+
+* Middleware.
+* Multiple services.
+* Different DI lifetimes.
+* Interface and concrete registrations.
+* Multiple implementations.
+* A service factory.
+* Keyed services.
+* Scoped dependencies.
+* Logging of request/service lifetimes.
+* Proper dependency disposal.
+
+Provide the project structure, step-by-step tasks, and expected behavior.
+
+### Important Requirements
+
+* Use **.NET 8** and modern ASP.NET Core practices.
+* Prefer practical code over lengthy theoretical explanations.
+* Explain **why** something works, not just what to write.
+* Clearly distinguish **DI container behavior** from the **Factory Design Pattern**.
+* Include diagrams using Markdown/Mermaid where helpful.
+* Include complete runnable code snippets.
+* Do not assume prior deep knowledge of DI internals.
+* Structure the exercises so I can complete them sequentially and build a strong mental model of how .NET DI and request processing actually work.
+* At the end, provide a **cheat sheet** summarizing request lifecycle, DI lifetimes, service registration patterns, factories, scopes, and common pitfalls.
