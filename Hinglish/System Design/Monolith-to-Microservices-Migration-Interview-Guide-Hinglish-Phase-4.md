@@ -416,7 +416,15 @@ builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("SalesWrite", policy =>
         policy.RequireAuthenticatedUser()
-              .RequireClaim("scope", "sales.write"));
+              .RequireAssertion(ctx =>
+                  // OAuth2 "scope" claim aksar space-separated single string
+                  // hota hai ("sales.read sales.write"); kuch providers "scp"
+                  // use karte hain (string ya multiple claims).
+                  ctx.User.Claims
+                     .Where(c => c.Type is "scope" or "scp")
+                     .SelectMany(c => c.Value.Split(' ',
+                         StringSplitOptions.RemoveEmptyEntries))
+                     .Contains("sales.write")));
 });
 
 var app = builder.Build();
@@ -432,8 +440,10 @@ app.Run();
 
 **Important production notes:** - Claim shape and scope representation
 identity provider par depend karti hai;
-`RequireClaim("scope", "sales.write")` ko provider ke actual claims
-format ke hisaab se adapt karein. - `Authority` and `Audience` correct
+`scope` aksar space-separated string hota hai, isliye exact-match
+`RequireClaim("scope", "sales.write")` multi-scope token par fail ho
+sakta hai; example mein scope ko split karke check kiya gaya hai. Provider
+ke actual claim format (`scope` vs `scp`) ke hisaab se adapt karein. - `Authority` and `Audience` correct
 configure karein. - Issuer/audience/lifetime/signature validation
 disable na karein. - Role/scope checks ke saath dealer/tenant-level
 resource authorization bhi enforce karein. - Secrets configuration files
@@ -499,6 +509,8 @@ par authorization mandatory hai.
 Example conceptual code:
 
 ``` csharp
+using System.Security.Claims;
+
 app.MapGet("/dealers/{dealerId:guid}/sales",
     async (Guid dealerId, ClaimsPrincipal user, ISalesRepository repo,
            CancellationToken ct) =>

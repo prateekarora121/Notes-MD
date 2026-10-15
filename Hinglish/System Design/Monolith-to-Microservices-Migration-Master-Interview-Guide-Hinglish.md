@@ -8,7 +8,7 @@ Solution Architect interviews\
 AWS, SQS/SNS, ECS/Fargate, CI/CD\
 **Style:** Roman Hindi + English technical terminology
 
-This master guide consolidates all nine phases into one searchable
+This master guide consolidates all eleven phases into one searchable
 Markdown document. The original phase content is retained below in
 sequence. Use the table of contents to navigate, or search for concepts
 such as **Strangler Fig**, **Outbox**, **Saga**, **CDC**,
@@ -18,7 +18,7 @@ such as **Strangler Fig**, **Outbox**, **Saga**, **CDC**,
 
 1.  [Phase 1 --- Foundations, Assessment, and Decomposition](#phase-1)
     --- source file:
-    `Monolith-to-Microservices-Migration-Interview-Guide-Hinglish.md`
+    `Monolith-to-Microservices-Migration-Interview-Guide-Hinglish-Phase-1.md`
 
 2.  [Phase 2 --- Data Ownership and Distributed Transactions](#phase-2)
     --- source file:
@@ -51,6 +51,13 @@ such as **Strangler Fig**, **Outbox**, **Saga**, **CDC**,
     --- source file:
     `Monolith-to-Microservices-Migration-Interview-Guide-Hinglish-Phase-9.md`
 
+10. [Phase 10 --- Testing Strategy and Migration Verification](#phase-10)
+    --- source file:
+    `Monolith-to-Microservices-Migration-Interview-Guide-Hinglish-Phase-10.md`
+
+11. [Phase 11 --- Resume Deep-Dive](#phase-11) --- source file:
+    `Monolith-to-Microservices-Migration-Interview-Guide-Hinglish-Phase-11.md`
+
 ## How to use this guide
 
 1.  **First pass:** Read the foundations and architecture sections to
@@ -69,33 +76,7 @@ such as **Strangler Fig**, **Outbox**, **Saga**, **CDC**,
 
 ------------------------------------------------------------------------
 
-`<a id="phase-1">`{=html}`</a>`{=html}
-
-# Phase 1 --- Foundations, Assessment, and Decomposition
-
-> **Document status:** Phase 1 of a multi-phase guide\
-> **Audience:** Senior Software Engineer, Staff Engineer, Tech Lead,
-> Solution Architect\
-> **Technology focus:** .NET 8, C#, ASP.NET Core, SQL Server, AWS,
-> messaging, CI/CD\
-> **Running example:** Automotive Dealership Management System (DMS)
-
-## How to use this guide
-
-Yeh guide interview preparation aur practical architecture decisions
-dono ke liye hai. Technical terms English mein rakhe gaye hain, lekin
-explanations simple Roman Hinglish mein hain. Har phase mein concept,
-DMS example, diagrams, trade-offs, interview answers aur practical
-checks diye gaye hain.
-
-Is guide ko intentionally phases mein develop kiya ja raha hai. **Phase
-1** foundations, migration assessment, decomposition, DDD aur
-incremental migration strategy cover karta hai. Aage ke phases database
-ownership, communication, distributed transactions, UI integration,
-observability, deployment, security, testing aur interview question bank
-ko expand karenge.
-
-------------------------------------------------------------------------
+<a id="phase-1"></a>
 
 # Phase 1 --- Foundations, Assessment, and Service Decomposition
 
@@ -149,36 +130,17 @@ frequency aur operational needs se define hoti hai.
 
 ### 1.5 Architecture comparison
 
-  --------------------------------------------------------------------------------
-  Dimension      Monolith       Modular Monolith      Microservices
-  -------------- -------------- --------------------- ----------------------------
-  Deployment     One deployable One deployable unit   Multiple independent
-                 unit                                 deployables
-
-  Code           Weak ya strong Explicit modules      Service boundaries
-  boundaries     ho sakti hain                        
-
-  Data           Usually shared Often shared,         Ideally service-owned
-                                module-owned          
-
-  Network        Mostly         Mostly in-process     First-class concern
-  failures       in-process                           
-
-  Transactions   Easier local   Easier local ACID     Cross-service consistency is
-                 ACID           transactions          harder
-                 transactions                         
-
-  Scaling        Often whole    Often whole app       Per-service scaling possible
-                 app                                  
-
-  Operations     Simpler        Simpler-to-moderate   More complex
-
-  Team autonomy  Limited by     Better code ownership Strong when boundaries are
-                 coupling                             good
-
-  Best fit       Small/medium   Many systems needing  Systems needing independent
-                 systems        modularity            scale/deployment/ownership
-  --------------------------------------------------------------------------------
+| Dimension | Monolith | Modular Monolith | Microservices |
+|---|---|---|---|
+| Deployment | One deployable unit | One deployable unit | Multiple independent deployables |
+| Code boundaries | Weak ya strong ho sakti hain | Explicit modules | Service boundaries |
+| Data | Usually shared | Often shared, module-owned | Ideally service-owned |
+| Network failures | Mostly in-process | Mostly in-process | First-class concern |
+| Transactions | Easier local ACID transactions | Easier local ACID transactions | Cross-service consistency is harder |
+| Scaling | Often whole app | Often whole app | Per-service scaling possible |
+| Operations | Simpler | Simpler-to-moderate | More complex |
+| Team autonomy | Limited by coupling | Better code ownership | Strong when boundaries are good |
+| Best fit | Small/medium systems | Many systems needing modularity | Systems needing independent scale/deployment/ownership |
 
 ### 1.6 Diagram: Monolith vs. target architecture
 
@@ -264,7 +226,7 @@ migrate karunga. Main big-bang rewrite avoid karunga."
 
 ------------------------------------------------------------------------
 
-## 2. Migration Phase 1 --- Assessment and Planning
+## 2. Migration Part A --- Assessment and Planning
 
 Migration ka pehla step code ko services mein split karna nahi hai.
 Pehla step system aur business constraints ko samajhna hai.
@@ -395,7 +357,7 @@ metric nahi maanunga.
 
 ------------------------------------------------------------------------
 
-## 3. Migration Phase 2 --- Service Decomposition
+## 3. Migration Part B --- Service Decomposition
 
 Service decomposition ka goal code ko chhote folders ya deployables mein
 todna nahi hai. Goal hai business responsibilities ko aise boundaries
@@ -854,7 +816,7 @@ guide the next migration steps."**
 
 ------------------------------------------------------------------------
 
-`<a id="phase-2">`{=html}`</a>`{=html}
+<a id="phase-2"></a>
 
 # Phase 2 --- Data Ownership and Distributed Transactions
 
@@ -955,47 +917,18 @@ rehti hai.
 
 ## 1.4 Comparison table
 
-  -----------------------------------------------------------------------
-  Dimension               Shared DB with          Separate DB per service
-                          uncontrolled access     
-  ----------------------- ----------------------- -----------------------
-  Ownership               Ambiguous ho sakti hai  Clear ownership define
-                                                  karna easier
-
-  Cross-module joins      Easy                    APIs, events, read
-                                                  models ya analytics
-                                                  layer chahiye
-
-  Schema changes          Multiple consumers      Mostly service-local,
-                          affect ho sakte hain    contracts phir bhi
-                                                  compatible hone chahiye
-
-  Local ACID transaction  Cross-module writes     Service boundary ke
-                          easy                    bahar distributed
-                                                  workflow chahiye
-
-  Independent deployment  Database coupling ki    Better potential, but
-                          wajah se limited        contract compatibility
-                                                  required
-
-  Fault isolation         Shared database         Better isolation
-                          bottleneck common       possible, not automatic
-
-  Operational cost        Lower initially         Higher: backups,
-                                                  monitoring, capacity,
-                                                  credentials
-
-  Reporting               Direct joins convenient Reporting/read
-                                                  model/warehouse may be
-                                                  needed
-
-  Security                Broad access ka risk    Least-privilege
-                                                  boundaries easier
-
-  Migration effort        Lower initial effort    Data movement and
-                                                  consistency planning
-                                                  required
-  -----------------------------------------------------------------------
+| Dimension | Shared DB with uncontrolled access | Separate DB per service |
+|---|---|---|
+| Ownership | Ambiguous ho sakti hai | Clear ownership define karna easier |
+| Cross-module joins | Easy | APIs, events, read models ya analytics layer chahiye |
+| Schema changes | Multiple consumers affect ho sakte hain | Mostly service-local, contracts phir bhi compatible hone chahiye |
+| Local ACID transaction | Cross-module writes easy | Service boundary ke bahar distributed workflow chahiye |
+| Independent deployment | Database coupling ki wajah se limited | Better potential, but contract compatibility required |
+| Fault isolation | Shared database bottleneck common | Better isolation possible, not automatic |
+| Operational cost | Lower initially | Higher: backups, monitoring, capacity, credentials |
+| Reporting | Direct joins convenient | Reporting/read model/warehouse may be needed |
+| Security | Broad access ka risk | Least-privilege boundaries easier |
+| Migration effort | Lower initial effort | Data movement and consistency planning required |
 
 ### Interview point
 
@@ -1048,16 +981,65 @@ rakhna valid ho sakta hai.
 
 ## 2.4 Direct database access kyun avoid karna chahiye?
 
-Agar Sales Service `InventoryDB.Vehicles` table ko directly query karti
-hai: - Inventory schema change Sales ko break kar sakta hai. - Inventory
-service apne internal model ko independently evolve nahi kar sakti. -
-Access control aur audit difficult ho sakte hain. - Service contract
-invisible ho jata hai. - Database availability shared runtime dependency
-ban sakti hai.
+Suppose Sales Service vehicle select karne ke liye
+`InventoryDB.Vehicles` table ko directly query karti hai. Yeh convenient
+lag sakta hai, lekin Sales ab Inventory Service ke supported contract
+ke bajay uske storage design par depend kar rahi hai. Isse kuch problems
+paida hoti hain:
+
+- **Schema coupling:** Inventory team column rename kare, table split
+  kare, data normalize kare ya index/query behavior badle, toh Sales
+  query fail ya unexpectedly slow ho sakti hai. Database migration ab
+  ek service ka internal change nahi rehta; har direct consumer ko
+  coordinate karna padta hai.
+- **Independent deployment ka loss:** Inventory apna schema safely
+  evolve nahi kar sakti jab tak Sales aur doosre consumers update na
+  hon. Teams ke releases aur rollback ek doosre se bandhne lagte hain.
+- **Business rules bypass hona:** Database se rows padhne par Sales
+  Inventory ke validation, authorization, availability rules ya
+  reservation workflow ko skip kar sakti hai. Table ka data padhna
+  supported business operation perform karne ke barabar nahi hota.
+- **Hidden aur unstable contract:** SQL query, table names, joins aur
+  assumed meanings code mein chhupe hue contracts ban jaate hain.
+  Inventory team ko in consumers ka pata na ho, toh change ka impact
+  assess karna mushkil hota hai.
+- **Security aur audit ka risk:** Shared credentials ya broad read
+  permissions least-privilege access ko mushkil bana sakte hain.
+  Database audit se query dikh sakti hai, lekin business intent (jaise
+  kis sale ke liye vehicle check hua) trace karna aasaan nahi hota.
+- **Availability aur load coupling:** Sales ka database connection,
+  connection pool, query load aur database outage Inventory ke saath
+  share hota hai. Sales ki heavy query Inventory workload ko impact kar
+  sakti hai, aur database issue dono services ko affect kar sakta hai.
+- **Data ownership unclear hona:** Agar Sales direct writes bhi karti
+  hai, toh Inventory apne invariants aur authoritative state ko reliably
+  enforce nahi kar pati. Direct reads bhi internal schema ko consumers
+  ke liye de facto public API bana sakti hain.
+
+Iske bajay Sales ko Inventory ke supported API ya event se wahi business
+operation/data lena chahiye jo usse chahiye. Misal ke liye, current
+availability ya vehicle reserve karna Inventory API se poochhein;
+Inventory apne rules apply karke stable response de. Agar Sales ko
+historical sale ke liye vehicle ka naam ya agreed price preserve karna
+hai, toh required values ka snapshot Sales ke apne record mein rakh
+sakti hai. Isse current availability ka ownership Inventory ke paas
+hi rehta hai.
 
 Agar transitional period mein shared database unavoidable hai, explicit
-ownership, separate credentials, permissions, schema boundaries aur
-migration roadmap establish karein.
+ownership aur exit plan define karein:
+
+- Har table/schema ka authoritative owner document karein; doosri
+  services ke writes block karke sirf required read permissions dein.
+- Har service ke liye alag database identity/credentials rakhein; shared
+  admin ya application credentials use na karein.
+- Schema boundaries aur migration process define karein. Breaking
+  changes ke liye backward-compatible rollout rakhein: pehle additive
+  change, phir consumers migrate, aur aakhir mein purana schema remove.
+- Direct queries, owners, consumers aur data freshness expectations
+  document karein; critical access ke liye monitoring aur audit add
+  karein.
+- Shared DB ko permanent service contract na banne dein. API/event ya
+  owned read-model par move karne ka roadmap aur target date rakhein.
 
 ------------------------------------------------------------------------
 
@@ -1308,8 +1290,14 @@ idempotent retry ya reconciliation required ho sakti hai.
 
 ## 5.1 Problem: database write + event publish
 
-Suppose Inventory Service: 1. SQL database mein vehicle reserve karti
-hai. 2. Broker par `VehicleReserved` event publish karti hai.
+Short answer: **SQL database update aur broker par event publish aam
+taur par ek hi atomic transaction mein nahi hote.** Database aur message
+broker alag systems hain; dono ke apne transaction managers hote hain.
+Database transaction commit hone ke baad broker publish fail ho sakta
+hai, aur broker publish hone ke baad database rollback ho sakta hai.
+
+Suppose Inventory Service vehicle reserve karke `VehicleReserved` event
+publish karna chahti hai:
 
 Agar DB commit successful ho, lekin publish se pehle process crash ho
 jaye, vehicle reserved hai lekin downstream services ko event nahi
@@ -1321,10 +1309,23 @@ source database mein commit hi nahi hua.
 
 ## 5.2 Outbox solution
 
-Business data aur outbox event record ko **same local database
-transaction** mein save karein. Separate background publisher outbox se
-event broker tak publish kare. Publisher crash ke baad same event dobara
-publish kar sakta hai, isliye consumers ko idempotent hona chahiye.
+Outbox mein **event ko broker par same transaction mein publish nahi
+karte**. Uske badle business data aur event ka record (outbox row) ek hi
+database mein **same local transaction** ke andar save hota hai:
+
+1. Database transaction shuru karein.
+2. Reservation/business tables update karein.
+3. Outbox table mein `VehicleReserved` event ka type aur payload insert
+   karein.
+4. Transaction commit karein. Dono writes commit hongi, ya dono rollback
+   hongi.
+
+Alag background publisher committed outbox rows padhta hai aur broker
+par event bhejta hai. Publish ke baad row ko published mark karta hai.
+Is tarah application crash hone par committed event outbox mein rehta
+hai aur publisher baad mein retry kar sakta hai. Publish aur
+`PublishedUtc` update ke beech crash hua toh event dobara publish ho
+sakta hai; isliye consumer ko idempotent/deduplicate karna chahiye.
 
 ``` mermaid
 flowchart TD
@@ -1337,9 +1338,11 @@ flowchart TD
     BUS --> CON[Consumer]
 ```
 
-Outbox database aur broker ke beech ek distributed ACID transaction
-provide nahi karta. Yeh reliable publication ke liye local atomic write
-plus retryable delivery design deta hai.
+Outbox database aur broker ke beech distributed ACID transaction ya
+exactly-once delivery provide nahi karta. Yeh database mein state aur
+event-intent ko atomically save karta hai, phir retryable, aam taur par
+at-least-once delivery deta hai. Isliye duplicate-safe consumer zaroori
+hai.
 
 ### Simplified SQL schema
 
@@ -1353,35 +1356,97 @@ CREATE TABLE dbo.OutboxMessages
     PublishedUtc DATETIME2 NULL,
     Attempts INT NOT NULL DEFAULT 0
 );
+
+-- Publisher sirf unpublished rows poll karta hai; index ke bina table
+-- grow hone par har poll full scan karega.
+CREATE INDEX IX_OutboxMessages_Unpublished
+    ON dbo.OutboxMessages (OccurredUtc)
+    WHERE PublishedUtc IS NULL;
 ```
 
-Production design mein indexing, retention, lease/locking strategy,
-poison event handling, schema version, partitioning aur cleanup job
-consider karna hoga.
+Production mein in concerns ko explicitly design karein:
+
+- **Indexing:** Publisher ko pending rows baar-baar scan na karni
+  padein. Status aur ordering/filter ke hisaab se index banayein, jaise
+  unpublished rows ko `OccurredUtc` ke order mein fetch karna. Index
+  actual polling query se match hona chahiye; extra indexes har insert
+  ko mehnga karte hain.
+- **Retention:** Decide karein ki successfully published event records
+  kitne din rakhne hain. Debugging, replay, compliance aur recovery ki
+  zaroorat retention period ko affect karti hai. Failed/unpublished
+  events ko normal published-event policy ke tahat delete na karein.
+- **Lease/locking strategy:** Agar multiple publisher instances chal
+  rahe hon, toh rows ko atomically claim karein, taaki do publishers ek
+  hi row ko concurrently process na karein. Lease mein owner aur expiry
+  rakhein; publisher crash ho toh expiry ke baad doosra worker row claim
+  kar sake. Claim chhote batches mein karein aur broker call ke dauran
+  lamba database transaction/lock hold na karein.
+  **Example:** `Worker-A` event `E123` ko claim karta hai. Row par
+  `LockedBy = Worker-A` aur `LockExpiresUtc = 10:05` set hota hai.
+  `Worker-B` us waqt tak is unexpired lease wali row ko skip karta hai.
+  Agar `Worker-A` crash ho jaye aur 10:05 tak lease renew na kare, toh
+  10:05 ke baad `Worker-B` atomically owner/expiry update karke event
+  claim aur publish kar sakta hai. Successful publish ke baad worker row
+  ko published mark kare, aur update `LockedBy` se match bhi kare, taaki
+  purana worker kisi naye owner ki claim ko overwrite na kar de. Lease
+  publish ke expected time se lambi rakhein ya long publish par renew
+  karein. Lease duplicate publish ko poori tarah nahi rokta: broker ne
+  event accept kar liya ho par worker ko acknowledgement na mila ho, toh
+  retry duplicate bhej sakta hai; consumer idempotency phir bhi zaroori
+  hai.
+- **Poison event handling:** Jo event repeated attempts ke baad bhi
+  publish nahi hota, woh poison event ho sakta hai (invalid payload,
+  incompatible schema ya permanent broker rejection). Attempts/error
+  record karein, alert dein, aur event ko inspectable failed/dead-letter
+  state mein rakhein. Root cause fix aur controlled replay/manual
+  remediation ke bina usse silently drop na karein.
+- **Schema version:** Event ke saath explicit event type aur schema
+  version store karein, jaise `VehicleReserved.v1`. Consumers ko
+  backward-compatible changes support karne dein; incompatible change
+  ke liye naya version aur migration plan rakhein. Sirf current code se
+  purane outbox payloads ko deserialize karna assume na karein.
+- **Partitioning:** Bahut high volume par, outbox ko time ya workload ke
+  hisaab se partition karna scans aur purane data removal ko manageable
+  bana sakta hai. Partition key, indexes aur primary/unique keys ko
+  database ki partitioning restrictions ke saath design karein; chhote
+  outbox ke liye partitioning unnecessary complexity ho sakti hai.
+- **Cleanup job:** Published aur retention period se purane rows ko
+  scheduled job se chhote batches mein delete/archive karein, taaki
+  transaction log, locks aur database load control mein rahen. Active
+  leases, unpublished/failed rows aur replay ke liye required records ko
+  protect karein; cleanup metrics aur failures monitor karein.
 
 ### Simplified C# transactional outline
 
 ``` csharp
-await using var transaction =
-    await dbContext.Database.BeginTransactionAsync(cancellationToken);
+// Agar EF Core retrying execution strategy enabled hai (jaise
+// EnableRetryOnFailure), to user-initiated transaction ko execution
+// strategy ke andar wrap karna zaroori hai; warna runtime exception aata hai.
+var strategy = dbContext.Database.CreateExecutionStrategy();
 
-reservation.Status = ReservationStatus.Reserved;
-
-dbContext.Reservations.Update(reservation);
-dbContext.OutboxMessages.Add(new OutboxMessage
+await strategy.ExecuteAsync(async () =>
 {
-    Id = Guid.NewGuid(),
-    EventType = "VehicleReserved.v1",
-    Payload = JsonSerializer.Serialize(new
-    {
-        ReservationId = reservation.Id,
-        VehicleId = reservation.VehicleId
-    }),
-    OccurredUtc = DateTime.UtcNow
-});
+    await using var transaction =
+        await dbContext.Database.BeginTransactionAsync(cancellationToken);
 
-await dbContext.SaveChangesAsync(cancellationToken);
-await transaction.CommitAsync(cancellationToken);
+    reservation.Status = ReservationStatus.Reserved;
+
+    dbContext.Reservations.Update(reservation);
+    dbContext.OutboxMessages.Add(new OutboxMessage
+    {
+        Id = Guid.NewGuid(),
+        EventType = "VehicleReserved.v1",
+        Payload = JsonSerializer.Serialize(new
+        {
+            ReservationId = reservation.Id,
+            VehicleId = reservation.VehicleId
+        }),
+        OccurredUtc = DateTime.UtcNow
+    });
+
+    await dbContext.SaveChangesAsync(cancellationToken);
+    await transaction.CommitAsync(cancellationToken);
+});
 ```
 
 Yeh illustrative code hai. Entity configuration, serialization contract,
@@ -1739,7 +1804,7 @@ and a controlled backfill/cutover strategy for migration."
 
 ------------------------------------------------------------------------
 
-`<a id="phase-3">`{=html}`</a>`{=html}
+<a id="phase-3"></a>
 
 # Phase 3 --- Service Communication and Messaging
 
@@ -2011,8 +2076,10 @@ Non-idempotent operation without an idempotency mechanism.
 
 Retries ko bounded rakhein, exponential backoff aur jitter use karein.
 Multiple layers par retries multiply ho sakti hain: API Gateway 3
-retries, service 3 retries, client 3 retries = potentially 27 downstream
-attempts in a naive chain.
+retries, service 3 retries, client 3 retries (yaani har layer par 3
+attempts) = 3 x 3 x 3 = 27 downstream attempts. Agar har layer 3
+*retries* (4 total attempts) kare, to yeh 4 x 4 x 4 = 64 ho jata hai.
+Naive chain mein yeh amplification dependency ko aur gira sakta hai.
 
 ## 3.2 Exponential backoff and jitter
 
@@ -2087,34 +2154,16 @@ service communication ke liye useful ho sakte hain.
 
 ## 4.2 Comparison
 
-  -----------------------------------------------------------------------
-  Dimension               REST/JSON               gRPC/Protobuf
-  ----------------------- ----------------------- -----------------------
-  Human readability       High                    Binary payload, less
-                                                  directly readable
-
-  Browser/client support  Broad                   Browser support often
-                                                  needs gRPC-Web/proxy
-                                                  considerations
-
-  Contract                OpenAPI commonly used   `.proto` schema
-
-  Payload size            Often larger JSON       Often smaller binary
-                                                  encoding
-
-  Streaming               Possible, but           First-class streaming
-                          implementation varies   patterns
-
-  Tooling                 Very broad              Strong code
-                                                  generation/tooling
-
-  Compatibility           Careful API evolution   Careful protobuf field
-                          needed                  evolution needed
-
-  Good fit                Public APIs, broad      Internal typed RPC,
-                          integrations            low-latency/streaming
-                                                  needs
-  -----------------------------------------------------------------------
+| Dimension | REST/JSON | gRPC/Protobuf |
+|---|---|---|
+| Human readability | High | Binary payload, less directly readable |
+| Browser/client support | Broad | Browser support often needs gRPC-Web/proxy considerations |
+| Contract | OpenAPI commonly used | `.proto` schema |
+| Payload size | Often larger JSON | Often smaller binary encoding |
+| Streaming | Possible, but implementation varies | First-class streaming patterns |
+| Tooling | Very broad | Strong code generation/tooling |
+| Compatibility | Careful API evolution needed | Careful protobuf field evolution needed |
+| Good fit | Public APIs, broad integrations | Internal typed RPC, low-latency/streaming needs |
 
 gRPC automatically faster in every workload nahi hota. Network, payload,
 serialization, call count, connection reuse, and server behavior
@@ -2482,8 +2531,20 @@ public sealed class SaleConfirmedHandler(AppDbContext db)
             ProcessedUtc = DateTime.UtcNow
         });
 
-        // A unique constraint on MessageId protects against concurrent duplicates.
-        await db.SaveChangesAsync(cancellationToken);
+        try
+        {
+            // Unique constraint on MessageId concurrent duplicates ko rokta hai.
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            // Production mein verify karein ki yeh specifically unique-key
+            // violation hai (provider-specific error number). Agar haan, to
+            // dusra consumer already process kar chuka hai -> duplicate treat
+            // karke ack karein. Baaki errors rethrow karein.
+            // Note: failed SaveChanges ke baad is DbContext ko reuse na karein.
+            return;
+        }
     }
 }
 
@@ -2495,7 +2556,7 @@ public sealed record SaleConfirmed(
 
 public sealed class ProcessedMessage
 {
-    public string MessageId { get; set; } = "";
+    public Guid MessageId { get; set; }   // unique index/primary key
     public DateTime ProcessedUtc { get; set; }
 }
 
@@ -2508,10 +2569,11 @@ public sealed class SaleProjection
 
 ### Important production notes
 
--   Example mein `EventId` GUID hai, lekin `ProcessedMessage.MessageId`
-    string dikhaya gaya hai; actual implementation mein consistent type
-    use karein. Is code ko production use se pehle type alignment ke
-    saath correct karein.
+-   `EventId` aur `ProcessedMessage.MessageId` dono `Guid` hain; dono
+    jagah consistent type rakhein.
+-   `catch (DbUpdateException)` blanket hai; production mein sirf
+    unique-constraint violation ko duplicate maanein, baaki errors retry/
+    DLQ path par jaane dein.
 -   Deduplication table par unique constraint/index required hai.
 -   Concurrent duplicate deliveries ke liye database
     uniqueness/concurrency handling implement karein; sirf initial
@@ -2810,7 +2872,7 @@ end-to-end traces."
 
 ------------------------------------------------------------------------
 
-`<a id="phase-4">`{=html}`</a>`{=html}
+<a id="phase-4"></a>
 
 # Phase 4 --- API Gateway, UI Integration, and Security
 
@@ -3230,7 +3292,15 @@ builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("SalesWrite", policy =>
         policy.RequireAuthenticatedUser()
-              .RequireClaim("scope", "sales.write"));
+              .RequireAssertion(ctx =>
+                  // OAuth2 "scope" claim aksar space-separated single string
+                  // hota hai ("sales.read sales.write"); kuch providers "scp"
+                  // use karte hain (string ya multiple claims).
+                  ctx.User.Claims
+                     .Where(c => c.Type is "scope" or "scp")
+                     .SelectMany(c => c.Value.Split(' ',
+                         StringSplitOptions.RemoveEmptyEntries))
+                     .Contains("sales.write")));
 });
 
 var app = builder.Build();
@@ -3246,8 +3316,10 @@ app.Run();
 
 **Important production notes:** - Claim shape and scope representation
 identity provider par depend karti hai;
-`RequireClaim("scope", "sales.write")` ko provider ke actual claims
-format ke hisaab se adapt karein. - `Authority` and `Audience` correct
+`scope` aksar space-separated string hota hai, isliye exact-match
+`RequireClaim("scope", "sales.write")` multi-scope token par fail ho
+sakta hai; example mein scope ko split karke check kiya gaya hai. Provider
+ke actual claim format (`scope` vs `scp`) ke hisaab se adapt karein. - `Authority` and `Audience` correct
 configure karein. - Issuer/audience/lifetime/signature validation
 disable na karein. - Role/scope checks ke saath dealer/tenant-level
 resource authorization bhi enforce karein. - Secrets configuration files
@@ -3313,6 +3385,8 @@ par authorization mandatory hai.
 Example conceptual code:
 
 ``` csharp
+using System.Security.Claims;
+
 app.MapGet("/dealers/{dealerId:guid}/sales",
     async (Guid dealerId, ClaimsPrincipal user, ISalesRepository repo,
            CancellationToken ct) =>
@@ -3609,7 +3683,7 @@ trusting network location alone."
 
 ------------------------------------------------------------------------
 
-`<a id="phase-5">`{=html}`</a>`{=html}
+<a id="phase-5"></a>
 
 # Phase 5 --- Observability, Reliability, and Operations
 
@@ -3914,7 +3988,7 @@ Example dashboard:
   Error rate            4.5% Failure level
   p50 latency          80 ms Typical request
   p95 latency         900 ms Slow tail
-  p99 latency          2.8 s Worst tail among most requests
+  p99 latency          2.8 s Slowest-1% threshold
 
 Average latency akela misleading ho sakta hai. 99 requests 50 ms mein
 aur 1 request 5 seconds mein complete ho, to average normal lag sakta
@@ -4094,6 +4168,7 @@ verify karein.
 ## 6.2 Example `Program.cs`
 
 ``` csharp
+using OpenTelemetry;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
@@ -4211,12 +4286,15 @@ verify karein.
 
 ## 7.2 AWS X-Ray and OpenTelemetry
 
-AWS X-Ray distributed trace analysis ke liye use ho sakta hai.
-OpenTelemetry instrumentation ke saath OTLP-compatible collector/export
-path use karke telemetry ko supported backend tak route kiya ja sakta
-hai. AWS integrations and recommended instrumentation time ke saath
-evolve kar sakte hain; deployment se pehle current AWS guidance and
-supported SDK/exporter compatibility verify karein.
+AWS X-Ray *service* distributed trace analysis ke liye abhi bhi
+supported hai, lekin X-Ray SDKs aur X-Ray Daemon 25 Feb 2026 se
+maintenance mode mein hain (sirf security fixes; end of support
+Feb 2027 ke aas-paas). AWS ab OpenTelemetry (ADOT / OTel SDK + collector)
+ko primary instrumentation path recommend karta hai. Isliye naye
+services mein OTel se instrument karein aur X-Ray ko trace *backend* ke
+roop mein use karein; purane X-Ray SDK par bane services ke liye
+migration plan rakhein. Deployment se pehle current AWS guidance verify
+karein.
 
 ## 7.3 Practical selection
 
@@ -4226,7 +4304,7 @@ supported SDK/exporter compatibility verify karein.
   AWS infrastructure metrics and     CloudWatch
   alarms                             
 
-  AWS-centric distributed trace      AWS X-Ray-compatible tracing setup
+  AWS-centric distributed trace      OpenTelemetry (ADOT) + X-Ray backend
   analysis                           
 
   Vendor-neutral instrumentation     OpenTelemetry
@@ -4595,7 +4673,7 @@ flowchart TD
     W -. Logs, metrics, traces .-> O
     O --> C[Collector / exporter]
     C --> CW[CloudWatch logs and metrics]
-    C --> X[Trace backend / X-Ray-compatible setup]
+    C --> X[Trace backend, e.g. AWS X-Ray via OTel]
     CW --> A[Dashboards, alerts, runbooks]
     X --> A
 ```
@@ -4806,18 +4884,7 @@ postmortem ke through systemic improvements track karta hoon."
 
 ------------------------------------------------------------------------
 
-## Next phase
-
-**Phase 6 --- Data Migration, Database Decomposition & Zero-Downtime
-Cutover** - Legacy schema and service-owned data boundaries. -
-Expand-and-contract database changes. - Backfill, CDC, dual writes and
-their risks. - Shadow reads, reconciliation and cutover. - Rollback
-strategy and data consistency. - SQL Server / EF Core / AWS-oriented
-examples. - Interview questions and migration scenarios.
-
-------------------------------------------------------------------------
-
-`<a id="phase-6">`{=html}`</a>`{=html}
+<a id="phase-6"></a>
 
 # Phase 6 --- Data Migration and Cutover
 
@@ -5821,19 +5888,7 @@ recovery dependencies retire ho chuki hon."
 
 ------------------------------------------------------------------------
 
-## Next phase
-
-**Phase 7 --- Deployment, CI/CD, Containers & Kubernetes/ECS
-Operations** - Independent deployment and release strategies. -
-Blue/green, canary and rolling deployments. - Docker/container best
-practices for .NET 8. - AWS ECS/Fargate vs Kubernetes trade-offs. -
-Configuration, secrets, migrations and feature flags. - Infrastructure
-as Code and release safety. - Rollback, backward compatibility and
-deployment interview scenarios.
-
-------------------------------------------------------------------------
-
-`<a id="phase-7">`{=html}`</a>`{=html}
+<a id="phase-7"></a>
 
 # Phase 7 --- Deployment, CI/CD, and Infrastructure
 
@@ -5842,7 +5897,7 @@ deployment interview scenarios.
 **Audience:** Senior Software Engineer, Staff Engineer, Tech Lead,
 Solution Architect\
 **Technology context:** .NET 8, C#, Docker, GitHub Actions,
-Terraform/CDKTF, AWS ECS/Fargate, Kubernetes\
+Terraform/OpenTofu (or AWS CDK), AWS ECS/Fargate, Kubernetes\
 **Style:** Hinglish (Roman Hindi + English technical terminology)
 
 ------------------------------------------------------------------------
@@ -5948,7 +6003,12 @@ hain.
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
+# Restore layer cache ke liye saare referenced .csproj (aur
+# Directory.Build.props / Directory.Packages.props / nuget.config) pehle copy karein.
+COPY ["Directory.Build.props", "Directory.Packages.props", "nuget.config", "./"]
 COPY ["Sales.Api/Sales.Api.csproj", "Sales.Api/"]
+COPY ["Sales.Domain/Sales.Domain.csproj", "Sales.Domain/"]
+COPY ["Sales.Infrastructure/Sales.Infrastructure.csproj", "Sales.Infrastructure/"]
 RUN dotnet restore "Sales.Api/Sales.Api.csproj"
 
 COPY . .
@@ -5963,6 +6023,8 @@ WORKDIR /app
 COPY --from=build /app/publish .
 ENV ASPNETCORE_HTTP_PORTS=8080
 EXPOSE 8080
+# Non-root user (.NET 8 images mein APP_UID defined hai); port 8080 non-root ke liye theek hai.
+USER $APP_UID
 ENTRYPOINT ["dotnet", "Sales.Api.dll"]
 ```
 
@@ -6101,25 +6163,11 @@ flowchart TD
 
 ## 5.4 Strategy comparison
 
-  -------------------------------------------------------------------------
-  Strategy     Resource     Detection     Rollback            Good fit
-               cost         speed         characteristics     
-  ------------ ------------ ------------- ------------------- -------------
-  Rolling      Usually      Depends on    Rollout/redeploy;   Routine
-               lower        batch/gates   mixed versions      compatible
-                                                              releases
-
-  Blue/green   Higher       Can validate  Traffic switch may  High-risk
-               during       full          be quick; data      releases
-               overlap      candidate     rollback still      needing
-                            environment   complex             parallel
-                                                              environment
-
-  Canary       Variable     Good if       Halt/shift traffic  Gradual
-                            metrics and   back if data        exposure and
-                            traffic are   compatibility       SLO-based
-                            sufficient    allows              gates
-  -------------------------------------------------------------------------
+| Strategy | Resource cost | Detection speed | Rollback characteristics | Good fit |
+|---|---|---|---|---|
+| Rolling | Usually lower | Depends on batch/gates | Rollout/redeploy; mixed versions | Routine compatible releases |
+| Blue/green | Higher during overlap | Can validate full candidate environment | Traffic switch may be quick; data rollback still complex | High-risk releases needing parallel environment |
+| Canary | Variable | Good if metrics and traffic are sufficient | Halt/shift traffic back if data compatibility allows | Gradual exposure and SLO-based gates |
 
 No strategy guarantees zero downtime automatically. Health checks, load
 balancing, compatible contracts, capacity, connection draining and
@@ -6289,8 +6337,12 @@ preserve evidence and follow the rehearsed recovery strategy.
 
 # 10. Infrastructure as Code and release governance
 
-Terraform/CDKTF or another IaC tool can version infrastructure changes
-alongside application delivery.
+Terraform/OpenTofu, AWS CDK ya Pulumi jaise IaC tool infrastructure
+changes ko application delivery ke saath version kar sakte hain.
+Note: CDK for Terraform (CDKTF) ko HashiCorp ne Dec 2025 mein deprecate/
+archive kar diya; naye projects mein use na karein. Existing CDKTF code
+ko `cdktf synth --hcl` se plain Terraform HCL mein migrate kiya ja sakta
+hai, ya OpenTofu/Pulumi/AWS CDK ki taraf move karein.
 
 Good practices:
 
@@ -6544,18 +6596,7 @@ roll-forward plan follow karta hoon."
 
 ------------------------------------------------------------------------
 
-## Next phase
-
-**Phase 8 --- Microservices Architecture Patterns & System Design** -
-API Gateway, BFF and service discovery. - Saga, Outbox, CQRS and Event
-Sourcing trade-offs. - Caching, rate limiting and idempotency. -
-Multi-tenancy and security boundaries. - Designing a
-DMS/order-processing system end to end. - Capacity estimates,
-bottlenecks, failure modes and interview walkthrough.
-
-------------------------------------------------------------------------
-
-`<a id="phase-8">`{=html}`</a>`{=html}
+<a id="phase-8"></a>
 
 # Phase 8 --- System Design and Architecture
 
@@ -6877,15 +6918,22 @@ reason about because the order has explicit states and compensations.
 stateDiagram-v2
     [*] --> Pending
     Pending --> InventoryReserved
-    InventoryReserved --> PaymentAuthorized
+    Pending --> Failed: Nothing to undo
+    InventoryReserved --> PaymentPending
+    InventoryReserved --> CompensationPending: Step failed
+    PaymentPending --> PaymentAuthorized
+    PaymentPending --> CompensationPending: Payment failed
     PaymentAuthorized --> CompliancePending
     CompliancePending --> Confirmed
-    InventoryReserved --> Failed
-    PaymentAuthorized --> CompensationPending: Compliance rejected
-    CompensationPending --> PaymentVoided
-    PaymentVoided --> InventoryReleased
-    InventoryReleased --> Failed
+    CompliancePending --> CompensationPending: Compliance rejected
+    CompensationPending --> Cancelled: Payment voided, inventory released
+    Confirmed --> Completed
 ```
+
+Yeh diagram neeche wale "Workflow state model" ke saath consistent hai:
+`Failed` sirf tab jab undo karne ko koi side effect nahi hai (e.g. Pending
+validation reject); jahan side effects ho chuke hain wahan
+`CompensationPending` se hoke `Cancelled` terminal state aati hai.
 
 ## Compensation examples
 
@@ -7094,16 +7142,19 @@ customization and recovery requirements.
 
 # 13. Capacity estimation
 
-Assume for interview illustration: - 250,000 requests per month during
-business hours. - Business hours: 10 AM--7 PM, 9 hours/day. - 22 working
-days/month. - Traffic is uneven; peak factor assumed 5× average. - Each
-order request may generate several internal calls/events.
+Assume for interview illustration: - 250,000 order-creation requests
+per month, all during business hours. - Business hours: 10 AM--7 PM,
+9 hours/day. - 22 working days/month. - Traffic is uneven; peak factor
+assumed 5× average. - Each order request may generate several internal
+calls/events (fan-out, estimated separately below).
 
 Average business-hours request rate:
 
 -   Total seconds in business hours = 22 × 9 × 3600 = 712,800 seconds.
--   Average rate = 250,000 / 712,800 ≈ 0.35 requests/second.
--   At an illustrative 5× peak factor ≈ 1.76 requests/second.
+-   Average rate = 250,000 / 712,800 ≈ 0.35 order requests/second.
+-   At an illustrative 5× peak factor ≈ 1.75 order requests/second.
+-   Agar har order ~10 internal calls/events generate kare (assumption),
+    to peak internal load ≈ 17.5 calls/second.
 
 This is a simple average over assumed working days. Actual peak can be
 much higher, so use real traffic distribution and load tests. Internal
@@ -7235,13 +7286,14 @@ complete; document semantics clearly.
 stateDiagram-v2
     [*] --> Pending
     Pending --> InventoryReserved
-    Pending --> Failed
+    Pending --> Failed: Nothing to undo
     InventoryReserved --> PaymentPending
+    InventoryReserved --> CompensationPending: Step failed
     PaymentPending --> PaymentAuthorized
-    PaymentPending --> Failed
+    PaymentPending --> CompensationPending: Payment failed
     PaymentAuthorized --> CompliancePending
     CompliancePending --> Confirmed
-    CompliancePending --> CompensationPending
+    CompliancePending --> CompensationPending: Compliance rejected
     CompensationPending --> Cancelled
     Confirmed --> Completed
 ```
@@ -7476,17 +7528,7 @@ operational needs don't justify the distributed-system complexity."
 
 ------------------------------------------------------------------------
 
-## Suggested next phase
-
-**Phase 9 --- Advanced Interview Scenarios, Architecture Trade-offs &
-Mock Interviews** - Migration strategy decision cases. - Deep-dive
-architecture questions. - Trade-off discussions for senior/staff
-roles. - .NET/AWS design follow-ups. - Mock interview rounds with model
-answers.
-
-------------------------------------------------------------------------
-
-`<a id="phase-9">`{=html}`</a>`{=html}
+<a id="phase-9"></a>
 
 # Phase 9 --- Architecture Decisions and Mock Interviews
 
@@ -8160,13 +8202,883 @@ Before the interview, practise speaking aloud about:
 
 ## End of Phase 9
 
-You now have a nine-phase interview-preparation series covering
+You now have a ten-phase interview-preparation series covering
 migration foundations, data ownership, communication, security,
-observability, database migration, deployment, architecture patterns and
-mock interviews.
+observability, database migration, deployment, architecture patterns,
+mock interviews and testing strategy.
 
-**Suggested next step:** Consolidate the phases into a single master
-guide and use the scenario sections as mock-interview drills.
+**Next step:** Scenario sections ko mock-interview drills ki tarah use
+karein, aur **Phase 10 --- Testing Strategy** se testing/verification
+questions cover karein (microservices interviews mein yeh aksar follow-up
+hota hai).
+
+------------------------------------------------------------------------
+
+<a id="phase-10"></a>
+
+# Phase 10 --- Testing Strategy and Migration Verification
+
+## Phase 10: Testing Strategy for Microservices & Migration Verification
+
+> **Audience:** Senior Software Engineer, Staff Engineer, Tech Lead,
+> Solution Architect\
+> **Technology focus:** .NET 8, xUnit, ASP.NET Core, SQL Server, AWS,
+> messaging, CI/CD\
+> **Running example:** Automotive Dealership Management System (DMS)
+
+Is phase ka goal hai interview mein yeh bol paana: "Distributed system
+mein sirf unit tests kaafi nahi; hum test strategy ko risk ke hisaab se
+layers mein design karte hain, aur migration ke dauran data aur behavior
+ki equivalence bhi *prove* karte hain."
+
+------------------------------------------------------------------------
+
+# 1. Microservices mein testing alag kyun hai?
+
+Monolith mein ek process, ek DB transaction aur ek deployable hota hai.
+Microservices mein failures network, messaging, versioning aur data
+boundaries par aate hain. Naye risks:
+
+-   Service A ka change Service B ko tod sakta hai (contract drift).
+-   Event schema change se consumers silently fail ho sakte hain.
+-   Duplicate/out-of-order messages ya partial failures (saga) aate hain.
+-   Environment ke bina poori system ko ek jagah end-to-end test karna
+    slow aur flaky hota hai.
+-   Migration mein old aur new system ka data/behavior match hona chahiye.
+
+------------------------------------------------------------------------
+
+# 2. Test pyramid / testing layers
+
+``` mermaid
+flowchart TB
+    E[End-to-end & synthetic business checks - few]
+    C[Contract tests - consumer/provider]
+    I[Integration tests - service + real DB/broker]
+    U[Unit tests - many, fast]
+    U --> I --> C --> E
+```
+
+  -------------------------------------------------------------------------
+  Layer             Kya verify hota hai         Speed      Typical tools
+  ----------------- --------------------------- ---------- ----------------
+  Unit              Domain logic, validators,   Very fast  xUnit/NUnit,
+                    state transitions                      FluentAssertions
+
+  Integration       Service + real SQL Server / Medium     WebApplicationFactory,
+                    queue adapter, EF mappings             Testcontainers
+
+  Contract          Consumer expectation vs     Fast       Pact (or
+                    provider behavior / event              schema checks)
+                    schema
+
+  End-to-end        Critical business journey   Slow       Playwright/API
+                    across services                        suites, synthetic
+                                                           monitors
+
+  Non-functional    Load, resilience, security  Varies     k6/NBomber/JMeter,
+                                                           chaos tools
+  -------------------------------------------------------------------------
+
+Principle: zyada tests neeche (fast, deterministic), kam tests upar
+(slow, brittle). E2E sirf critical journeys ke liye rakhein.
+
+------------------------------------------------------------------------
+
+# 3. Unit tests
+
+DMS example: `Order` aggregate ke state transitions.
+
+``` csharp
+public class OrderTests
+{
+    [Fact]
+    public void Confirm_when_not_paid_throws()
+    {
+        var order = Order.CreatePending(Guid.NewGuid(), Guid.NewGuid());
+
+        Assert.Throws<InvalidOperationException>(() => order.Confirm());
+    }
+}
+```
+
+Focus: business rules, invariants, state machine ke valid/invalid
+transitions (Phase 8 ka order state model), idempotency decisions.
+External dependencies ko mock/fake karein; time aur GUID jaisi
+non-determinism ko abstract karein.
+
+------------------------------------------------------------------------
+
+# 4. Integration tests (real dependencies)
+
+Mocked DB par pass hone wale tests production behavior (SQL translation,
+constraints, transactions) ki guarantee nahi dete. Real SQL Server
+container use karein.
+
+``` csharp
+public class SalesApiTests : IClassFixture<SalesApiFactory>
+{
+    private readonly HttpClient _client;
+
+    public SalesApiTests(SalesApiFactory factory)
+        => _client = factory.CreateClient();
+
+    [Fact]
+    public async Task Post_sales_returns_accepted()
+    {
+        var response = await _client.PostAsJsonAsync("/sales",
+            new { vehicleId = Guid.NewGuid(), dealerId = Guid.NewGuid() });
+
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+    }
+}
+```
+
+`SalesApiFactory` ek `WebApplicationFactory<Program>` subclass ho sakti
+hai jo Testcontainers se SQL Server start kare, connection string
+override kare aur auth ko test scheme se replace kare. (Isse `Program`
+class test project ko visible honi chahiye, e.g. `public partial class
+Program {}`.) Exact package versions/config apne project ke hisaab se
+verify karein.
+
+Kya test karein:
+
+-   EF Core mappings, migrations apply hoti hain ya nahi.
+-   Unique constraints (Outbox/Inbox dedup table) aur concurrency.
+-   Transactional outbox: business row + outbox row ek hi transaction mein.
+-   Authorization policies (scope, tenant/dealer isolation).
+
+------------------------------------------------------------------------
+
+# 5. Consumer-driven contract tests
+
+Problem: Sales service Inventory API call karti hai. Inventory team
+response field rename kar de to Sales production mein toot sakti hai,
+chahe dono ke unit tests pass hon.
+
+Contract testing flow (Pact-style):
+
+1.  Consumer (Sales) apni expectations contract file ke roop mein publish
+    karta hai.
+2.  Provider (Inventory) CI mein us contract ke against verify karta hai.
+3.  Agar provider change contract todta hai, provider ka build fail
+    hota hai --- deploy se pehle.
+
+``` mermaid
+sequenceDiagram
+    participant S as Sales (consumer)
+    participant B as Contract broker
+    participant I as Inventory (provider)
+    S->>B: Publish contract
+    I->>B: Fetch contracts
+    I->>I: Verify provider against contract in CI
+    I-->>B: Publish verification result
+```
+
+Events ke liye: message contracts / schema compatibility checks (e.g.
+JSON Schema ya schema registry) --- backward-compatible changes allow
+karein (optional field add), breaking changes (field remove/rename/type
+change) ko versioning (`VehicleReserved.v2`) ke saath introduce karein.
+
+Contract tests E2E ka replacement nahi; woh integration breakages ko
+*jaldi aur sasta* pakadte hain.
+
+------------------------------------------------------------------------
+
+# 6. Messaging, saga aur failure-path tests
+
+Happy path kaafi nahi. Distributed workflow ke liye test karein:
+
+-   **Duplicate delivery:** same message do baar → side effect ek hi
+    baar (Inbox/idempotency).
+-   **Out-of-order events:** stale event ignore/defer.
+-   **Poison message:** repeated failure → DLQ, aur DLQ alarm.
+-   **Saga compensation:** payment fail → inventory release; compliance
+    reject → payment void; terminal state `Cancelled`.
+-   **Timeouts/retries:** bounded retries, backoff, retry amplification.
+-   **Outbox publisher crash:** publish ke baad aur `PublishedUtc` mark
+    se pehle crash → duplicate publication consumers handle karte hain.
+
+``` csharp
+[Fact]
+public async Task Duplicate_event_is_applied_once()
+{
+    var message = new SaleConfirmed(Guid.NewGuid(), saleId, vehicleId,
+                                    DateTime.UtcNow);
+
+    await handler.HandleAsync(message, ct);
+    await handler.HandleAsync(message, ct);   // redelivery
+
+    Assert.Equal(1, await db.ProcessedMessages.CountAsync());
+}
+```
+
+Concurrent duplicate ke liye parallel `Task.WhenAll` test bhi likhein,
+kyunki sirf `AnyAsync` check race se protect nahi karta.
+
+------------------------------------------------------------------------
+
+# 7. Migration-specific verification
+
+Migration mein sabse bada risk hai "naya system galat answer deta hai
+aur kisi ko pata nahi chalta". Isliye:
+
+## 7.1 Characterization tests
+
+Legacy monolith ke current behavior ko pin karne wale tests pehle likhein
+(golden master). Extraction ke baad wahi tests new service par chalayein.
+Isse refactor ke dauran behavior regression pakadta hai.
+
+## 7.2 Backfill and reconciliation tests
+
+-   Row counts, checksums/hash by key range, aggregates (sum of amounts,
+    count by status) --- source vs target.
+-   Sampling: random records ka field-by-field compare.
+-   Edge cases: NULLs, encoding, time zones/UTC conversion, decimal
+    precision, soft-deleted rows.
+-   Re-runnable/idempotent backfill: dobara chalane par duplicates na
+    bane.
+
+## 7.3 Shadow reads / traffic comparison
+
+Production read traffic ko new service par bhi bhejein (response user ko
+na jaye) aur outputs compare karein. Differences ko categorize karein
+(real bug vs acceptable difference). Side-effect wale writes ko shadow
+mode mein avoid karein ya isolate karein.
+
+## 7.4 Cutover rehearsal
+
+Staging mein full cutover + rollback rehearse karein: data lag,
+feature-flag flip, rollback ya roll-forward decision, aur runbook ke
+steps. Go/no-go criteria measurable rakhein (error rate, reconciliation
+mismatch = 0 ya agreed threshold, latency).
+
+------------------------------------------------------------------------
+
+# 8. Non-functional testing
+
+## Load / performance
+
+Phase 8 ke capacity estimates ko load test se validate karein. Realistic
+traffic mix, ramp-up, peak factor, aur dependency latency model karein.
+Metrics: p95/p99 latency, error rate, saturation (CPU, DB connections,
+queue depth). Production-like data volume ke saath test karein.
+
+## Resilience / chaos
+
+Controlled experiments: dependency down, slow responses, packet loss,
+instance kill, queue backlog. Verify karein: timeouts, circuit breaker,
+bulkhead, graceful degradation, aur alerts. Pehle non-prod mein, phir
+chhote blast radius ke saath production-like environment mein.
+
+## Security testing
+
+Authn/authz negative tests (expired token, wrong audience, missing
+scope, cross-tenant access), dependency/vulnerability scanning, container
+image scanning, secrets scanning, aur IaC policy checks CI mein.
+
+------------------------------------------------------------------------
+
+# 9. Testing in production (safely)
+
+Pre-production environment production ko poori tarah replicate nahi
+karta. Isliye complement mein:
+
+-   **Synthetic monitoring:** critical business journeys (login → create
+    order → confirm) ko periodic automated probe se chalayein.
+-   **Canary + SLO gates:** Phase 7 ke canary release mein error rate,
+    latency aur business metrics par automatic halt.
+-   **Feature flags / dark launch:** code deploy ho, behavior gradually
+    enable ho.
+-   **Observability as test oracle:** traces, metrics aur logs
+    (Phase 5) se failures jaldi detect karein.
+
+Test data ke liye real PII use na karein; synthetic ya masked data
+rakhein, aur synthetic transactions ko reports/billing se alag tag karein.
+
+------------------------------------------------------------------------
+
+# 10. Testing in CI/CD pipeline
+
+  ------------------------------------------------------------------------
+  Stage              Gate
+  ------------------ -----------------------------------------------------
+  Pull request       Build, unit tests, static analysis, dependency scan
+
+  Merge to main      Integration tests (Testcontainers), contract
+                     verification, container image scan
+
+  Pre-prod           Smoke + critical-path E2E, migration scripts dry run,
+                     load test (scheduled/nightly or pre-release)
+
+  Production         Canary with SLO gates, synthetic checks, automated
+                     halt/rollback rules
+  ------------------------------------------------------------------------
+
+Tips: flaky tests ko quarantine karke fix karein (ignore nahi), tests
+independent aur parallel-safe rakhein, aur pipeline time budget maintain
+karein --- fast feedback sabse zaroori hai.
+
+------------------------------------------------------------------------
+
+# 11. Common anti-patterns
+
+-   Sirf E2E tests par depend karna (slow, flaky, late feedback).
+-   Database ko mock karke "integration" test kehna.
+-   Shared long-lived test environment jo sab teams ke tests ko
+    corrupt kare.
+-   Contract/schema change ko bina consumer check ke deploy karna.
+-   Migration ke baad sirf row count compare karna (values check nahi).
+-   Happy path hi test karna; retries, duplicates aur compensation
+    ignore karna.
+-   Coverage percentage ko goal bana dena, risk ko nahi.
+
+------------------------------------------------------------------------
+
+# 12. Interview questions and model answers
+
+**Q1. Microservices ke liye aap testing strategy kaise design karenge?**
+Risk-based layered strategy: fast unit tests, real-dependency
+integration tests, consumer-driven contract tests, limited E2E for
+critical journeys, plus load/resilience tests aur production synthetic
+monitoring. Pipeline gates ke saath.
+
+**Q2. Contract test aur integration test mein kya farak hai?**
+Integration test ek service ko real dependencies (DB/broker) ke saath
+check karta hai. Contract test do services ke beech API/event agreement
+verify karta hai, bina dono ko ek saath deploy kiye.
+
+**Q3. Event schema safely kaise evolve karenge?**
+Backward-compatible additions (optional fields), schema compatibility
+checks CI mein, breaking changes ke liye new versioned event type aur
+consumers migrate hone tak dono support.
+
+**Q4. Migration ke baad data sahi hai yeh kaise prove karenge?**
+Count + checksum + aggregate reconciliation, sampled field-level
+compare, edge-case tests, shadow reads, aur cutover rehearsal. Mismatch
+threshold pehle se define karke go/no-go decide karein.
+
+**Q5. Flaky E2E tests ka kya karenge?**
+Quarantine, root cause (shared state, timing, env), lower layer par
+coverage shift (contract/integration), aur E2E ko minimum critical set
+tak rakhna.
+
+**Q6. Idempotent consumer ko kaise test karenge?**
+Same message dobara aur concurrently deliver karke assert karein ki side
+effect ek hi baar hua; DB unique constraint ke saath real DB par test.
+
+**Q7. Saga compensation kaise test karenge?**
+Har step par failure inject karke expected compensation sequence aur
+final terminal state verify karein; compensation khud bhi retry/idempotent
+honi chahiye.
+
+**Q8. Production mein testing kyun zaroori hai?**
+Pre-prod mein real traffic mix, data volume aur dependency behavior
+reproduce nahi hota. Canary, synthetic checks aur feature flags risk ko
+controlled tareeqe se kam karte hain.
+
+------------------------------------------------------------------------
+
+# 13. Scenario drills
+
+**Scenario A --- Inventory API field rename.**
+Inventory team `vin` ko `vehicleIdentificationNumber` rename karna chahti
+hai. Answer: pehle consumer contracts check karein; additive change
+(dono fields) → consumers migrate → purani field deprecate → remove.
+Provider CI contract verification se breakage block karein.
+
+**Scenario B --- Backfill ke baad 0.02% rows mismatch.**
+Answer: mismatch categorize karein (timezone, precision, soft-delete,
+in-flight writes during backfill); CDC/delta sync se gap close karein;
+reconciliation dobara chalayein; threshold aur business impact ke basis
+par go/no-go.
+
+**Scenario C --- Black Friday se pehle load readiness.**
+Answer: traffic model, production-like data, ramp + spike tests,
+dependency limits (DB connections, queue consumers), autoscaling
+validation, aur failure injection; results ko SLO se compare karein.
+
+------------------------------------------------------------------------
+
+# 14. Quick revision checklist
+
+-   [ ] Test pyramid aur har layer ka purpose.
+-   [ ] Real DB/broker ke saath integration tests (Testcontainers).
+-   [ ] Consumer-driven contracts + event schema compatibility.
+-   [ ] Duplicate, out-of-order, poison, compensation tests.
+-   [ ] Characterization tests before extraction.
+-   [ ] Reconciliation (counts, checksums, aggregates, sampling).
+-   [ ] Shadow reads and cutover rehearsal with go/no-go criteria.
+-   [ ] Load, chaos aur security testing.
+-   [ ] Canary + SLO gates + synthetic monitoring.
+-   [ ] CI/CD stage-wise gates; flaky tests fix, ignore nahi.
+
+------------------------------------------------------------------------
+
+## Phase 10 --- Key Interview Message
+
+> **"Main testing ko layers mein risk ke hisaab se design karta hoon:
+> fast unit tests, real-dependency integration tests, consumer-driven
+> contracts, aur limited E2E. Migration mein characterization tests,
+> reconciliation aur shadow reads se equivalence prove karta hoon,
+> failure paths (duplicates, sagas, DLQ) explicitly test karta hoon, aur
+> production mein canary, SLO gates aur synthetic checks se residual
+> risk control karta hoon."**
+
+------------------------------------------------------------------------
+
+<a id="phase-11"></a>
+
+# Phase 11 --- Resume Deep-Dive
+
+## Phase 11: Resume Deep-Dive --- Parteek Arora (Staff Engineer)
+
+> **Purpose:** Resume ke har major claim ko interview-ready story mein
+> convert karna.\
+> **Source:** Resume (Nagarro DMS, Common Integration Platform,
+> CSRconnect, EY Connected Apps, IGT, Infosys).\
+> **Note:** Neeche ke model answers resume ke claims par based hain. Jo
+> details resume mein nahi hain (design choices, incidents, exact
+> numbers) wahan `[apna actual detail]` placeholder hai --- sirf wahi
+> bolein jo aapne sach mein kiya. Interviewer kisi bhi number ka "kaise
+> measure kiya?" follow-up poochega.
+
+------------------------------------------------------------------------
+
+# 1. Resume ka narrative (60-second pitch)
+
+> "Main 10 saal se enterprise .NET mein hoon --- C#, ASP.NET Core,
+> .NET 8, SQL Server, DynamoDB aur AWS. Pehle EY mein ek monolith se
+> microservices migration ka hissa raha. Nagarro mein main Staff Engineer
+> hoon, 5 engineers ki team lead karta hoon, aur Dealership Management
+> System ke integration platform par kaam karta hoon jo third-party
+> DMS aur in-house DMS ke beech deals translate karta hai --- 100K+
+> transactions per month, 99.9% availability. Maine Spec-Driven
+> Development introduce kiya aur CI/CD automation se release cycle 5
+> din se 3 din kiya."
+
+Tip: Har claim ke peeche ek *problem → decision → trade-off → result*
+story ready rakhein.
+
+------------------------------------------------------------------------
+
+# 2. DMS integration platform (Nagarro)
+
+**Resume claim:** Middle layer jo third-party DMS platforms aur in-house
+DMS ke beech deals import/export translate karta hai; dealer-specific
+transformations aur state-specific rules (tax calculation); 3 core
+services; AWS Lambda, DynamoDB, SQL Server.
+
+## 2.1 Architecture ko kaise explain karein
+
+``` mermaid
+flowchart LR
+    T[Third-party DMS] -->|inbound deal| I[Integration service]
+    I --> X[Dealer-specific translation]
+    X --> R[State rules / tax calculation]
+    R --> D[In-house DMS]
+    D -->|outbound| X
+    I --> L[(Logs / audit)]
+    U[Dashboard] --> L
+    U -->|script changes| S[(Script store)]
+    S --> X
+```
+
+Interview mein yeh cheezein ready rakhein:
+
+-   **Idempotency:** same deal dobara aaye (retry/duplicate) to double
+    processing na ho (Phase 3: Inbox/idempotency key).
+-   **Failure handling:** third-party down ho to retry with backoff, DLQ,
+    aur "integration pending" state --- completed business transaction
+    ko rollback na karein (Phase 8).
+-   **Ordering:** same deal ke multiple updates --- version/sequence se
+    stale update ignore.
+-   **Observability:** correlation ID per deal across inbound → translate
+    → outbound (Phase 5). Aapka dashboard log viewer isi ka part hai.
+-   **Multi-tenancy:** dealer-level isolation aur dealer-specific
+    configuration (Phase 4/8).
+
+## 2.2 Q&A
+
+**Q. Dealer-specific logic ko code mein hardcode kyun nahi kiya?**
+Har dealer ka mapping alag aur frequently badalta hai. Code mein
+hardcode karne par har change ke liye full release chahiye. Database-
+stored scripts se turnaround kam hota hai. Trade-off: runtime code
+execution ka security aur testability risk --- isliye controls chahiye
+(Section 3).
+
+**Q. 99.9% availability across 12 platform services kaise measure hui?**
+`[apna actual detail]` Structure: SLI define karein (successful
+requests / valid requests, ya successful end-to-end transactions),
+measurement window (monthly), data source (CloudWatch/New Relic), aur
+exclusions (planned maintenance, client-caused errors). Samjhayein ki
+99.9% ka matlab ~43 minutes/month downtime budget hai (30 din ke
+mahine mein), aur committed SLA 99.5% (~3.6 hours) se zyada tight hai.
+
+**Q. 100K+ transactions/month ka scale kaisa hai?**
+Yeh average ~0.04 transactions/second hai (100,000 / 2.59M seconds),
+yaani throughput challenge nahi, correctness/reliability challenge hai:
+duplicates, partial failures, data translation errors, aur auditability.
+Isse honestly bolna maturity dikhata hai --- scale inflate na karein.
+
+**Q. Agar ek third-party DMS slow ho jaye to?**
+Timeouts, circuit breaker, bulkhead (us dealer ka traffic dusron ko na
+roke), queue buffering, aur alert. Retry bounded aur jittered
+(Phase 3).
+
+------------------------------------------------------------------------
+
+# 3. Roslyn runtime scripting (sabse distinctive feature)
+
+**Resume claim:** Dealer-specific mapping logic database scripts ke roop
+mein store hota hai aur runtime par Roslyn se compile hota hai; bina
+full deployment ke mapping change.
+
+## 3.1 Concept
+
+Roslyn .NET compiler platform hai. Aap C# source ko runtime par parse
+aur compile karke executable delegate bana sakte hain (Microsoft.CodeAnalysis
+scripting/compilation APIs).
+
+``` csharp
+// Illustrative sketch --- package versions aur API details verify karein.
+using Microsoft.CodeAnalysis.CSharp.Scripting;
+using Microsoft.CodeAnalysis.Scripting;
+
+var options = ScriptOptions.Default
+    .WithReferences(typeof(DealMapper).Assembly)   // sirf allowed assemblies
+    .WithImports("System", "System.Linq");
+
+var script = CSharpScript.Create<DealDto>(
+    scriptSource, options, globalsType: typeof(MappingGlobals));
+
+var compiled = script.Compile();             // diagnostics check karein
+var result = await script.RunAsync(new MappingGlobals { Input = deal });
+```
+
+## 3.2 Risks aur controls (interview ka core)
+
+  --------------------------------------------------------------------------
+  Risk                       Control
+  -------------------------- -----------------------------------------------
+  Arbitrary code execution   Allow-listed references/imports; scripts ko
+  (file/network/process      sirf pure mapping functions tak limit karein;
+  access)                    least-privilege runtime identity
+
+  Infinite loop / heavy      Execution timeout + cancellation token; resource
+  CPU / memory               limits; separate worker/process jahan possible
+
+  Bad script production      Validation on save: compile diagnostics, test
+  tod de                     cases, dry-run against sample payloads
+
+  Un-audited changes         Version history, who/when/why, approval workflow,
+                             audit log
+
+  Rollback                   Previous script version ek click mein restore
+
+  Compile cost / latency     Compiled delegate ko cache karein (key: script
+                             id + version/hash); invalidate on update
+
+  Memory leak (dynamic       Roslyn script assemblies unload nahi hoti jab
+  assemblies)                tak `AssemblyLoadContext` collectible na ho;
+                             versions/recompilation ko bound karein
+
+  Multi-instance             Cache invalidation across instances (version
+  inconsistency              check ya event) --- sab instances ek hi
+                             version use karein
+  --------------------------------------------------------------------------
+
+**Important honest point:** Roslyn scripting *sandbox nahi hai*.
+Allow-listing se risk kam hota hai, lekin untrusted code ke liye strong
+isolation (alag process/container, restricted permissions) chahiye. Agar
+scripts sirf trusted internal users likhte hain (dashboard access
+controlled), to threat model alag hai --- yeh clearly bolein.
+
+## 3.3 Q&A
+
+**Q. Is design ka alternative kya hai?**
+(1) Configuration-driven mapping (JSON/rules engine) --- safer, kam
+flexible. (2) Plugin assemblies --- strongly typed lekin deployment
+chahiye. (3) Expression engines (e.g. limited DSL) --- safer. Roslyn
+sabse flexible hai par security/ops cost sabse zyada. Choose karne ka
+reason: `[apna actual detail: flexibility vs release speed]`.
+
+**Q. Script ko production mein promote kaise karte hain?**
+Draft → validate (compile + sample tests) → review/approve → versioned
+publish → cache invalidate → monitor error rate → rollback agar spike.
+Yeh canary/feature-flag idea ka hi version hai (Phase 7).
+
+**Q. Script runtime error aaye to transaction ka kya?**
+Deal ko failed/pending state mein rakhein, error + script version log
+karein (traceability), retry/manual-review queue, aur dusre deals ko
+affect na hone dein.
+
+**Q. Script testing kaise karein?**
+Golden input/output samples per dealer, regression suite, aur "new
+script vs current script" comparison (shadow run) --- Phase 10 ke
+characterization/shadow ideas ka reuse.
+
+------------------------------------------------------------------------
+
+# 4. Common Integration Platform (CI/CD & deployment dashboard)
+
+**Resume claims:** ~40% Deployment Dashboard UI; Terraform/CDKTF +
+GitHub Actions; deployment efficiency 40%; release cycle 5 → 3 din;
+JFrog Artifactory, SonarQube, Husky, Lighthouse, New Relic.
+
+**Q. Release cycle 5 se 3 din kaise hua?**
+`[apna actual detail]` Typical structure: bottleneck identify kiya
+(manual steps, environment promotion, approvals, rollback) → automate
+kiya (pipeline, artifact promotion, infra as code) → measure kiya
+(lead time before/after). "Kaun sa step hataya" aur "kya manual gate
+rakha aur kyun" batayein.
+
+**Q. Artifact promotion ka principle?**
+Build once, deploy the same artifact across environments (Artifactory
+mein immutable versioned artifact); environment-specific config
+alag. Isse "staging mein chala, prod mein alag binary" risk khatam hota
+hai.
+
+**Q. Rollback kaise handle hota tha?**
+Dashboard se previous artifact version redeploy; lekin DB/schema changes
+ho chuke ho to blind rollback unsafe --- expand-and-contract aur
+backward compatibility (Phase 6/7).
+
+**Q. SonarQube, Husky, Lighthouse ka role?**
+SonarQube: quality gates (code smells, coverage, vulnerabilities).
+Husky: Git hooks (lint/test pre-commit). Lighthouse: frontend
+performance/accessibility checks. New Relic: runtime APM/observability.
+Gates ko enforce karne ka rule batayein (kya build fail karta hai).
+
+**CDKTF flag:** CDKTF Dec 2025 mein deprecated/archived hai. Interviewer
+puche to: "Hamare existing stack CDKTF par hai; maine plan banaya hai
+`cdktf synth --hcl` se plain Terraform HCL (ya OpenTofu) par migrate
+karne ka, taaki unmaintained dependency na rahe." `[apna actual plan
+ho to hi bolein]`. Resume mein bhi "Terraform/CDKTF" ko "Terraform
+(CDKTF → HCL migration)" ya sirf "Terraform" karne par vichar karein.
+
+------------------------------------------------------------------------
+
+# 5. Spec-Driven Development (SDD) aur AI-assisted delivery
+
+**Resume claims:** SDD introduce kiya; ~25% feature delivery time kam;
+manual unit-test authoring 40% kam; 80%+ coverage maintained.
+
+## 5.1 Kaise explain karein
+
+SDD: code se pehle specification (behavior, acceptance criteria,
+edge cases) → plan → task breakdown → review gates → implementation
+(AI assistant ke saath) → tests. Spec single source of truth hoti hai
+jo AI ko structured context deti hai.
+
+## 5.2 Interviewer ke tough follow-ups
+
+**Q. 25% aur 40% kaise measure kiya?**
+`[apna actual detail]` Batayein: baseline (pehle ke N features ka
+average cycle time), comparison (SDD ke baad ke N features), kya
+count hua (ticket start → merge/deploy), aur confounders (feature
+size, team change). Agar rough estimate hai to "approximately" aur
+sample size honestly bolein. Unmeasurable claim defend na karein.
+
+**Q. AI-generated code ki quality kaise ensure karte ho?**
+Spec + tests pehle, human code review mandatory, static analysis
+(SonarQube), coverage gates, security review, aur small PRs. "Coverage
+80% ka matlab quality nahi" --- mutation testing/meaningful assertions
+par bhi baat karein.
+
+**Q. Risks?**
+Plausible-but-wrong code, security/licensing issues, over-reliance,
+data leakage (sensitive code/data prompts mein na daalein), aur
+reviewers ka skill erosion. Mitigation: policy, review standards,
+approved tools.
+
+**Q. Team ne adopt kaise kiya?**
+Pilot → template (spec/plan/tasks) → review checklist → retro se
+iterate. Resistance kaise handle ki: `[apna actual detail]`.
+
+------------------------------------------------------------------------
+
+# 6. Data stores: SQL Server, DynamoDB, Cosmos DB
+
+## 6.1 DynamoDB (resume mein 3 projects)
+
+Key concepts jo poochhe jaate hain:
+
+-   **Access-pattern-first modelling:** pehle queries decide karein,
+    phir partition key (PK) + sort key (SK) design.
+-   **Hot partition:** skewed key (e.g. ek dealer ka bahut traffic) →
+    key sharding/high-cardinality keys.
+-   **GSI/LSI:** alternate access patterns; GSI eventually consistent.
+-   **Consistency:** reads default eventually consistent; strongly
+    consistent read option (GSI par nahi).
+-   **Transactions:** `TransactWriteItems` limited (item count/size
+    limits --- current docs verify karein).
+-   **Capacity:** on-demand vs provisioned; throttling; retries.
+-   **No joins:** denormalization; single-table design ka trade-off
+    (readability vs efficiency).
+-   **Idempotency:** conditional writes (`attribute_not_exists`) se
+    dedup --- Inbox pattern ka DynamoDB version.
+
+**Q. SQL Server vs DynamoDB kab?**
+Relational integrity, ad-hoc queries, complex joins/reporting → SQL
+Server. Predictable key-based access, scale/latency, flexible schema →
+DynamoDB. Aapke projects mein dono kyun use hue: `[apna actual
+detail]`.
+
+## 6.2 Cosmos DB aur Azure Blob (EY)
+
+-   **Cosmos DB:** partition key choice, RU (request unit) based cost,
+    consistency levels (strong → eventual), cross-partition query cost.
+-   **Blob Storage:** large files (e.g. Excel exports/bulk data) DB se
+    bahar; metadata DB mein, file blob mein; SAS tokens/pre-signed
+    access.
+-   **Q. 100,000+ tax records bulk retrieval/Excel export kaise
+    efficient banaya?** `[apna actual detail]` Possible points:
+    pagination/streaming, async job + status polling (long request na
+    rakhein), chunked processing, avoid loading everything in memory,
+    background export + download link.
+
+------------------------------------------------------------------------
+
+# 7. EY: Monolith → microservices story
+
+Resume mein migration ka experience hai; isko Phase 1-3, 6 ke
+framework se bolein:
+
+1.  **Why:** `[apna actual detail]` (scaling, release independence,
+    team autonomy).
+2.  **How:** incremental (Strangler Fig), pehle low-risk capability.
+3.  **Data:** monolith DB se service-owned data (Cosmos DB/Blob) ki
+    taraf; backfill + reconciliation.
+4.  **Trade-offs:** operational complexity, distributed failures,
+    eventual consistency.
+5.  **Result:** `[apna actual detail]`.
+
+**Honest framing:** agar aap migration *team ka hissa* the (lead nahi),
+to "main X component par kaam kiya" kahein --- resume bhi "worked ... as
+part of the migration" kehta hai. Overclaim se bachein.
+
+------------------------------------------------------------------------
+
+# 8. Leadership (5 engineers)
+
+**Resume claim:** 3 saal team lead --- task allocation, sprint planning,
+estimation, code review, technical direction, interview participation,
+client/Product Owner collaboration.
+
+Prepare stories (STAR format):
+
+-   **Underperformer / skill gap** ko kaise handle kiya.
+-   **Technical disagreement** (aap vs senior/peer) kaise resolve hua.
+-   **Production incident** mein leadership (Phase 5 postmortem
+    framework).
+-   **Estimation miss** aur client expectation management.
+-   **Mentoring:** kisi engineer ki growth ka concrete example.
+-   **Code review standards:** kya enforce karte ho (tests, naming,
+    security, small PRs).
+-   **Staff-level scope:** team ke bahar influence --- SDD adoption,
+    release automation, standards.
+
+**Q. Staff Engineer aur Senior Engineer mein farak?**
+Scope aur leverage: Senior apne tasks/features ko deliver karta hai;
+Staff multiple teams/systems ke technical direction, standards, risk
+aur long-term decisions par impact karta hai, aur doosron ko
+effective banata hai.
+
+------------------------------------------------------------------------
+
+# 9. Frontend (Angular/TypeScript) aur dashboard
+
+Dashboard ke liye interview angles:
+
+-   **State management:** component state vs RxJS/store; subscriptions
+    ka cleanup (memory leaks).
+-   **Log viewer:** pagination/virtual scroll, server-side filtering,
+    time-range queries --- millions of log lines browser mein na
+    load karein.
+-   **Script editor risk:** role-based access, audit, confirmation,
+    validation feedback before publish.
+-   **Security:** XSS (log content sanitize), token handling, CSRF/CORS
+    (Phase 4).
+-   **Performance:** lazy loading, change detection strategy
+    (`OnPush`), bundle size, Lighthouse metrics.
+
+------------------------------------------------------------------------
+
+# 10. Earlier roles --- kya poochha ja sakta hai
+
+-   **Infosys (trading order entry):** financial correctness, 10,000+
+    accounts, order idempotency, audit trail, transactions.
+-   **IGT (voucher, refunds via SOAP/ODS):** SOAP integration, refund
+    to original payment, bulk Excel-driven workflow, error handling.
+-   **EY Market Price Reference Guide:** calculation correctness,
+    decimal precision, data modelling.
+
+Inke liye 1-2 line ka "kya seekha jo ab staff-level decisions mein kaam
+aata hai" ready rakhein.
+
+------------------------------------------------------------------------
+
+# 11. Resume gaps / honest answers
+
+  ----------------------------------------------------------------------
+  Topic                    Honest, strong answer pattern
+  ------------------------ ---------------------------------------------
+  Kubernetes               "Mera focus Lambda/ECS-style AWS services par
+                           raha; K8s concepts (Phase 7) jaanta hoon,
+                           production ownership `[apna actual level]`."
+
+  Event streaming (Kafka)  SQS/SNS-style messaging ka experience batayein;
+                           Kafka ke trade-offs conceptually explain karein.
+
+  Azure depth              AZ-900 + EY project; deeper Azure services par
+                           honest level batayein.
+
+  Formal system design     Phase 8 ke framework (requirements → capacity
+  at huge scale            → components → failures) se approach dikhayein;
+                           DMS ka scale (100K/month) honestly bolein.
+  ----------------------------------------------------------------------
+
+------------------------------------------------------------------------
+
+# 12. Resume improvement suggestions
+
+-   Metrics ke saath **measurement method** ek line mein add karein
+    (e.g. "measured over last 10 features").
+-   "Terraform/CDKTF" → "Terraform" (ya migration plan ke saath).
+-   Roslyn scripting ko ek separate bullet mein highlight karein
+    (security controls ke saath) --- yeh differentiator hai.
+-   "Contributed to ..." jaise vague verbs ko ownership-clear verbs se
+    replace karein jahan aapne actually lead kiya.
+-   Summary mein ek impact line add karein (availability, release
+    time, team size).
+
+------------------------------------------------------------------------
+
+# 13. Practice questions (resume-based)
+
+1.  DMS integration platform ka end-to-end flow whiteboard par samjhao.
+2.  Roslyn scripts ko secure aur reliable kaise banaoge?
+3.  99.9% availability ka SLI/SLO aur measurement kaise define kiya?
+4.  Release cycle 5 → 3 din: bottleneck kya tha, kya automate kiya?
+5.  SDD ke 25%/40% numbers ka evidence kya hai?
+6.  DynamoDB mein hot partition kaise pehchanoge/fix karoge?
+7.  EY migration mein aapka exact role aur ek failure/learning?
+8.  Team ke ek low performer ko kaise handle kiya?
+9.  CDKTF deprecated hai --- aapka plan?
+10. Agar aapko DMS platform dobara design karna ho to kya alag
+    karoge?
+
+------------------------------------------------------------------------
+
+## Phase 11 --- Key Interview Message
+
+> **"Mera experience integration-heavy enterprise systems mein hai:
+> reliable deal translation across third-party platforms, runtime-
+> configurable dealer logic with guardrails, aur automated, measurable
+> delivery pipelines. Main numbers ko measurement method ke saath bolta
+> hoon, trade-offs honestly batata hoon, aur team ko technical direction
+> deta hoon."**
 
 ------------------------------------------------------------------------
 

@@ -268,8 +268,10 @@ Non-idempotent operation without an idempotency mechanism.
 
 Retries ko bounded rakhein, exponential backoff aur jitter use karein.
 Multiple layers par retries multiply ho sakti hain: API Gateway 3
-retries, service 3 retries, client 3 retries = potentially 27 downstream
-attempts in a naive chain.
+retries, service 3 retries, client 3 retries (yaani har layer par 3
+attempts) = 3 x 3 x 3 = 27 downstream attempts. Agar har layer 3
+*retries* (4 total attempts) kare, to yeh 4 x 4 x 4 = 64 ho jata hai.
+Naive chain mein yeh amplification dependency ko aur gira sakta hai.
 
 ## 3.2 Exponential backoff and jitter
 
@@ -344,34 +346,16 @@ service communication ke liye useful ho sakte hain.
 
 ## 4.2 Comparison
 
-  -----------------------------------------------------------------------
-  Dimension               REST/JSON               gRPC/Protobuf
-  ----------------------- ----------------------- -----------------------
-  Human readability       High                    Binary payload, less
-                                                  directly readable
-
-  Browser/client support  Broad                   Browser support often
-                                                  needs gRPC-Web/proxy
-                                                  considerations
-
-  Contract                OpenAPI commonly used   `.proto` schema
-
-  Payload size            Often larger JSON       Often smaller binary
-                                                  encoding
-
-  Streaming               Possible, but           First-class streaming
-                          implementation varies   patterns
-
-  Tooling                 Very broad              Strong code
-                                                  generation/tooling
-
-  Compatibility           Careful API evolution   Careful protobuf field
-                          needed                  evolution needed
-
-  Good fit                Public APIs, broad      Internal typed RPC,
-                          integrations            low-latency/streaming
-                                                  needs
-  -----------------------------------------------------------------------
+| Dimension | REST/JSON | gRPC/Protobuf |
+|---|---|---|
+| Human readability | High | Binary payload, less directly readable |
+| Browser/client support | Broad | Browser support often needs gRPC-Web/proxy considerations |
+| Contract | OpenAPI commonly used | `.proto` schema |
+| Payload size | Often larger JSON | Often smaller binary encoding |
+| Streaming | Possible, but implementation varies | First-class streaming patterns |
+| Tooling | Very broad | Strong code generation/tooling |
+| Compatibility | Careful API evolution needed | Careful protobuf field evolution needed |
+| Good fit | Public APIs, broad integrations | Internal typed RPC, low-latency/streaming needs |
 
 gRPC automatically faster in every workload nahi hota. Network, payload,
 serialization, call count, connection reuse, and server behavior
@@ -739,8 +723,20 @@ public sealed class SaleConfirmedHandler(AppDbContext db)
             ProcessedUtc = DateTime.UtcNow
         });
 
-        // A unique constraint on MessageId protects against concurrent duplicates.
-        await db.SaveChangesAsync(cancellationToken);
+        try
+        {
+            // Unique constraint on MessageId concurrent duplicates ko rokta hai.
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            // Production mein verify karein ki yeh specifically unique-key
+            // violation hai (provider-specific error number). Agar haan, to
+            // dusra consumer already process kar chuka hai -> duplicate treat
+            // karke ack karein. Baaki errors rethrow karein.
+            // Note: failed SaveChanges ke baad is DbContext ko reuse na karein.
+            return;
+        }
     }
 }
 
@@ -752,7 +748,7 @@ public sealed record SaleConfirmed(
 
 public sealed class ProcessedMessage
 {
-    public string MessageId { get; set; } = "";
+    public Guid MessageId { get; set; }   // unique index/primary key
     public DateTime ProcessedUtc { get; set; }
 }
 
@@ -765,10 +761,11 @@ public sealed class SaleProjection
 
 ### Important production notes
 
--   Example mein `EventId` GUID hai, lekin `ProcessedMessage.MessageId`
-    string dikhaya gaya hai; actual implementation mein consistent type
-    use karein. Is code ko production use se pehle type alignment ke
-    saath correct karein.
+-   `EventId` aur `ProcessedMessage.MessageId` dono `Guid` hain; dono
+    jagah consistent type rakhein.
+-   `catch (DbUpdateException)` blanket hai; production mein sirf
+    unique-constraint violation ko duplicate maanein, baaki errors retry/
+    DLQ path par jaane dein.
 -   Deduplication table par unique constraint/index required hai.
 -   Concurrent duplicate deliveries ke liye database
     uniqueness/concurrency handling implement karein; sirf initial

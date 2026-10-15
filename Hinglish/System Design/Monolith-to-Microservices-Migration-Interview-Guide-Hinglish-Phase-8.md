@@ -317,15 +317,22 @@ reason about because the order has explicit states and compensations.
 stateDiagram-v2
     [*] --> Pending
     Pending --> InventoryReserved
-    InventoryReserved --> PaymentAuthorized
+    Pending --> Failed: Nothing to undo
+    InventoryReserved --> PaymentPending
+    InventoryReserved --> CompensationPending: Step failed
+    PaymentPending --> PaymentAuthorized
+    PaymentPending --> CompensationPending: Payment failed
     PaymentAuthorized --> CompliancePending
     CompliancePending --> Confirmed
-    InventoryReserved --> Failed
-    PaymentAuthorized --> CompensationPending: Compliance rejected
-    CompensationPending --> PaymentVoided
-    PaymentVoided --> InventoryReleased
-    InventoryReleased --> Failed
+    CompliancePending --> CompensationPending: Compliance rejected
+    CompensationPending --> Cancelled: Payment voided, inventory released
+    Confirmed --> Completed
 ```
+
+Yeh diagram neeche wale "Workflow state model" ke saath consistent hai:
+`Failed` sirf tab jab undo karne ko koi side effect nahi hai (e.g. Pending
+validation reject); jahan side effects ho chuke hain wahan
+`CompensationPending` se hoke `Cancelled` terminal state aati hai.
 
 ## Compensation examples
 
@@ -534,16 +541,19 @@ customization and recovery requirements.
 
 # 13. Capacity estimation
 
-Assume for interview illustration: - 250,000 requests per month during
-business hours. - Business hours: 10 AM--7 PM, 9 hours/day. - 22 working
-days/month. - Traffic is uneven; peak factor assumed 5× average. - Each
-order request may generate several internal calls/events.
+Assume for interview illustration: - 250,000 order-creation requests
+per month, all during business hours. - Business hours: 10 AM--7 PM,
+9 hours/day. - 22 working days/month. - Traffic is uneven; peak factor
+assumed 5× average. - Each order request may generate several internal
+calls/events (fan-out, estimated separately below).
 
 Average business-hours request rate:
 
 -   Total seconds in business hours = 22 × 9 × 3600 = 712,800 seconds.
--   Average rate = 250,000 / 712,800 ≈ 0.35 requests/second.
--   At an illustrative 5× peak factor ≈ 1.76 requests/second.
+-   Average rate = 250,000 / 712,800 ≈ 0.35 order requests/second.
+-   At an illustrative 5× peak factor ≈ 1.75 order requests/second.
+-   Agar har order ~10 internal calls/events generate kare (assumption),
+    to peak internal load ≈ 17.5 calls/second.
 
 This is a simple average over assumed working days. Actual peak can be
 much higher, so use real traffic distribution and load tests. Internal
@@ -675,13 +685,14 @@ complete; document semantics clearly.
 stateDiagram-v2
     [*] --> Pending
     Pending --> InventoryReserved
-    Pending --> Failed
+    Pending --> Failed: Nothing to undo
     InventoryReserved --> PaymentPending
+    InventoryReserved --> CompensationPending: Step failed
     PaymentPending --> PaymentAuthorized
-    PaymentPending --> Failed
+    PaymentPending --> CompensationPending: Payment failed
     PaymentAuthorized --> CompliancePending
     CompliancePending --> Confirmed
-    CompliancePending --> CompensationPending
+    CompliancePending --> CompensationPending: Compliance rejected
     CompensationPending --> Cancelled
     Confirmed --> Completed
 ```
@@ -913,13 +924,3 @@ and load tests, define SLOs, and prepare recovery procedures for
 provider outages, duplicate events, queue backlog and partially
 completed orders. I'd choose a modular monolith instead if the team and
 operational needs don't justify the distributed-system complexity."
-
-------------------------------------------------------------------------
-
-## Suggested next phase
-
-**Phase 9 --- Advanced Interview Scenarios, Architecture Trade-offs &
-Mock Interviews** - Migration strategy decision cases. - Deep-dive
-architecture questions. - Trade-off discussions for senior/staff
-roles. - .NET/AWS design follow-ups. - Mock interview rounds with model
-answers.

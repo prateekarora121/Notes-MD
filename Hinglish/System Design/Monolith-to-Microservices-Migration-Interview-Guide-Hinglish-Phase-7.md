@@ -5,7 +5,7 @@
 **Audience:** Senior Software Engineer, Staff Engineer, Tech Lead,
 Solution Architect\
 **Technology context:** .NET 8, C#, Docker, GitHub Actions,
-Terraform/CDKTF, AWS ECS/Fargate, Kubernetes\
+Terraform/OpenTofu (or AWS CDK), AWS ECS/Fargate, Kubernetes\
 **Style:** Hinglish (Roman Hindi + English technical terminology)
 
 ------------------------------------------------------------------------
@@ -111,7 +111,12 @@ hain.
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
+# Restore layer cache ke liye saare referenced .csproj (aur
+# Directory.Build.props / Directory.Packages.props / nuget.config) pehle copy karein.
+COPY ["Directory.Build.props", "Directory.Packages.props", "nuget.config", "./"]
 COPY ["Sales.Api/Sales.Api.csproj", "Sales.Api/"]
+COPY ["Sales.Domain/Sales.Domain.csproj", "Sales.Domain/"]
+COPY ["Sales.Infrastructure/Sales.Infrastructure.csproj", "Sales.Infrastructure/"]
 RUN dotnet restore "Sales.Api/Sales.Api.csproj"
 
 COPY . .
@@ -126,6 +131,8 @@ WORKDIR /app
 COPY --from=build /app/publish .
 ENV ASPNETCORE_HTTP_PORTS=8080
 EXPOSE 8080
+# Non-root user (.NET 8 images mein APP_UID defined hai); port 8080 non-root ke liye theek hai.
+USER $APP_UID
 ENTRYPOINT ["dotnet", "Sales.Api.dll"]
 ```
 
@@ -264,25 +271,11 @@ flowchart TD
 
 ## 5.4 Strategy comparison
 
-  -------------------------------------------------------------------------------
-  Strategy       Resource cost  Detection      Rollback            Good fit
-                                speed          characteristics     
-  -------------- -------------- -------------- ------------------- --------------
-  Rolling        Usually lower  Depends on     Rollout/redeploy;   Routine
-                                batch/gates    mixed versions      compatible
-                                                                   releases
-
-  Blue/green     Higher during  Can validate   Traffic switch may  High-risk
-                 overlap        full candidate be quick; data      releases
-                                environment    rollback still      needing
-                                               complex             parallel
-                                                                   environment
-
-  Canary         Variable       Good if        Halt/shift traffic  Gradual
-                                metrics and    back if data        exposure and
-                                traffic are    compatibility       SLO-based
-                                sufficient     allows              gates
-  -------------------------------------------------------------------------------
+| Strategy | Resource cost | Detection speed | Rollback characteristics | Good fit |
+|---|---|---|---|---|
+| Rolling | Usually lower | Depends on batch/gates | Rollout/redeploy; mixed versions | Routine compatible releases |
+| Blue/green | Higher during overlap | Can validate full candidate environment | Traffic switch may be quick; data rollback still complex | High-risk releases needing parallel environment |
+| Canary | Variable | Good if metrics and traffic are sufficient | Halt/shift traffic back if data compatibility allows | Gradual exposure and SLO-based gates |
 
 No strategy guarantees zero downtime automatically. Health checks, load
 balancing, compatible contracts, capacity, connection draining and
@@ -452,8 +445,12 @@ preserve evidence and follow the rehearsed recovery strategy.
 
 # 10. Infrastructure as Code and release governance
 
-Terraform/CDKTF or another IaC tool can version infrastructure changes
-alongside application delivery.
+Terraform/OpenTofu, AWS CDK ya Pulumi jaise IaC tool infrastructure
+changes ko application delivery ke saath version kar sakte hain.
+Note: CDK for Terraform (CDKTF) ko HashiCorp ne Dec 2025 mein deprecate/
+archive kar diya; naye projects mein use na karein. Existing CDKTF code
+ko `cdktf synth --hcl` se plain Terraform HCL mein migrate kiya ja sakta
+hai, ya OpenTofu/Pulumi/AWS CDK ki taraf move karein.
 
 Good practices:
 
@@ -704,14 +701,3 @@ roll-forward plan follow karta hoon."
 -   [ ] IaC reviews, state protection and least privilege.
 -   [ ] Rollback vs roll-forward.
 -   [ ] A real release incident with investigation and mitigation.
-
-------------------------------------------------------------------------
-
-## Next phase
-
-**Phase 8 --- Microservices Architecture Patterns & System Design** -
-API Gateway, BFF and service discovery. - Saga, Outbox, CQRS and Event
-Sourcing trade-offs. - Caching, rate limiting and idempotency. -
-Multi-tenancy and security boundaries. - Designing a
-DMS/order-processing system end to end. - Capacity estimates,
-bottlenecks, failure modes and interview walkthrough.

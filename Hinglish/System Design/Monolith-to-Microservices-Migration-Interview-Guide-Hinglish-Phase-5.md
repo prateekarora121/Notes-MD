@@ -301,7 +301,7 @@ Example dashboard:
   Error rate            4.5% Failure level
   p50 latency          80 ms Typical request
   p95 latency         900 ms Slow tail
-  p99 latency          2.8 s Worst tail among most requests
+  p99 latency          2.8 s Slowest-1% threshold
 
 Average latency akela misleading ho sakta hai. 99 requests 50 ms mein
 aur 1 request 5 seconds mein complete ho, to average normal lag sakta
@@ -481,6 +481,7 @@ verify karein.
 ## 6.2 Example `Program.cs`
 
 ``` csharp
+using OpenTelemetry;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
@@ -598,12 +599,15 @@ verify karein.
 
 ## 7.2 AWS X-Ray and OpenTelemetry
 
-AWS X-Ray distributed trace analysis ke liye use ho sakta hai.
-OpenTelemetry instrumentation ke saath OTLP-compatible collector/export
-path use karke telemetry ko supported backend tak route kiya ja sakta
-hai. AWS integrations and recommended instrumentation time ke saath
-evolve kar sakte hain; deployment se pehle current AWS guidance and
-supported SDK/exporter compatibility verify karein.
+AWS X-Ray *service* distributed trace analysis ke liye abhi bhi
+supported hai, lekin X-Ray SDKs aur X-Ray Daemon 25 Feb 2026 se
+maintenance mode mein hain (sirf security fixes; end of support
+Feb 2027 ke aas-paas). AWS ab OpenTelemetry (ADOT / OTel SDK + collector)
+ko primary instrumentation path recommend karta hai. Isliye naye
+services mein OTel se instrument karein aur X-Ray ko trace *backend* ke
+roop mein use karein; purane X-Ray SDK par bane services ke liye
+migration plan rakhein. Deployment se pehle current AWS guidance verify
+karein.
 
 ## 7.3 Practical selection
 
@@ -613,8 +617,8 @@ supported SDK/exporter compatibility verify karein.
   AWS infrastructure metrics and      CloudWatch
   alarms                              
 
-  AWS-centric distributed trace       AWS X-Ray-compatible tracing setup
-  analysis                            
+  AWS-centric distributed trace       OpenTelemetry (ADOT) instrumentation
+  analysis                            + X-Ray as backend
 
   Vendor-neutral instrumentation      OpenTelemetry
 
@@ -982,7 +986,7 @@ flowchart TD
     W -. Logs, metrics, traces .-> O
     O --> C[Collector / exporter]
     C --> CW[CloudWatch logs and metrics]
-    C --> X[Trace backend / X-Ray-compatible setup]
+    C --> X[Trace backend, e.g. AWS X-Ray via OTel]
     CW --> A[Dashboards, alerts, runbooks]
     X --> A
 ```
@@ -1190,14 +1194,3 @@ Incident ke waqt pehle customer impact aur metrics establish karta hoon,
 traces se bottleneck locate karta hoon, correlated logs se context
 validate karta hoon, safely mitigate karta hoon, aur blameless
 postmortem ke through systemic improvements track karta hoon."
-
-------------------------------------------------------------------------
-
-## Next phase
-
-**Phase 6 --- Data Migration, Database Decomposition & Zero-Downtime
-Cutover** - Legacy schema and service-owned data boundaries. -
-Expand-and-contract database changes. - Backfill, CDC, dual writes and
-their risks. - Shadow reads, reconciliation and cutover. - Rollback
-strategy and data consistency. - SQL Server / EF Core / AWS-oriented
-examples. - Interview questions and migration scenarios.

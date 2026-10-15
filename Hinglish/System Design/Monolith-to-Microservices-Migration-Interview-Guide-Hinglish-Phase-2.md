@@ -97,47 +97,18 @@ rehti hai.
 
 ## 1.4 Comparison table
 
-  -----------------------------------------------------------------------
-  Dimension               Shared DB with          Separate DB per service
-                          uncontrolled access     
-  ----------------------- ----------------------- -----------------------
-  Ownership               Ambiguous ho sakti hai  Clear ownership define
-                                                  karna easier
-
-  Cross-module joins      Easy                    APIs, events, read
-                                                  models ya analytics
-                                                  layer chahiye
-
-  Schema changes          Multiple consumers      Mostly service-local,
-                          affect ho sakte hain    contracts phir bhi
-                                                  compatible hone chahiye
-
-  Local ACID transaction  Cross-module writes     Service boundary ke
-                          easy                    bahar distributed
-                                                  workflow chahiye
-
-  Independent deployment  Database coupling ki    Better potential, but
-                          wajah se limited        contract compatibility
-                                                  required
-
-  Fault isolation         Shared database         Better isolation
-                          bottleneck common       possible, not automatic
-
-  Operational cost        Lower initially         Higher: backups,
-                                                  monitoring, capacity,
-                                                  credentials
-
-  Reporting               Direct joins convenient Reporting/read
-                                                  model/warehouse may be
-                                                  needed
-
-  Security                Broad access ka risk    Least-privilege
-                                                  boundaries easier
-
-  Migration effort        Lower initial effort    Data movement and
-                                                  consistency planning
-                                                  required
-  -----------------------------------------------------------------------
+| Dimension | Shared DB with uncontrolled access | Separate DB per service |
+|---|---|---|
+| Ownership | Ambiguous ho sakti hai | Clear ownership define karna easier |
+| Cross-module joins | Easy | APIs, events, read models ya analytics layer chahiye |
+| Schema changes | Multiple consumers affect ho sakte hain | Mostly service-local, contracts phir bhi compatible hone chahiye |
+| Local ACID transaction | Cross-module writes easy | Service boundary ke bahar distributed workflow chahiye |
+| Independent deployment | Database coupling ki wajah se limited | Better potential, but contract compatibility required |
+| Fault isolation | Shared database bottleneck common | Better isolation possible, not automatic |
+| Operational cost | Lower initially | Higher: backups, monitoring, capacity, credentials |
+| Reporting | Direct joins convenient | Reporting/read model/warehouse may be needed |
+| Security | Broad access ka risk | Least-privilege boundaries easier |
+| Migration effort | Lower initial effort | Data movement and consistency planning required |
 
 ### Interview point
 
@@ -190,16 +161,65 @@ rakhna valid ho sakta hai.
 
 ## 2.4 Direct database access kyun avoid karna chahiye?
 
-Agar Sales Service `InventoryDB.Vehicles` table ko directly query karti
-hai: - Inventory schema change Sales ko break kar sakta hai. - Inventory
-service apne internal model ko independently evolve nahi kar sakti. -
-Access control aur audit difficult ho sakte hain. - Service contract
-invisible ho jata hai. - Database availability shared runtime dependency
-ban sakti hai.
+Suppose Sales Service vehicle select karne ke liye
+`InventoryDB.Vehicles` table ko directly query karti hai. Yeh convenient
+lag sakta hai, lekin Sales ab Inventory Service ke supported contract
+ke bajay uske storage design par depend kar rahi hai. Isse kuch problems
+paida hoti hain:
+
+- **Schema coupling:** Inventory team column rename kare, table split
+  kare, data normalize kare ya index/query behavior badle, toh Sales
+  query fail ya unexpectedly slow ho sakti hai. Database migration ab
+  ek service ka internal change nahi rehta; har direct consumer ko
+  coordinate karna padta hai.
+- **Independent deployment ka loss:** Inventory apna schema safely
+  evolve nahi kar sakti jab tak Sales aur doosre consumers update na
+  hon. Teams ke releases aur rollback ek doosre se bandhne lagte hain.
+- **Business rules bypass hona:** Database se rows padhne par Sales
+  Inventory ke validation, authorization, availability rules ya
+  reservation workflow ko skip kar sakti hai. Table ka data padhna
+  supported business operation perform karne ke barabar nahi hota.
+- **Hidden aur unstable contract:** SQL query, table names, joins aur
+  assumed meanings code mein chhupe hue contracts ban jaate hain.
+  Inventory team ko in consumers ka pata na ho, toh change ka impact
+  assess karna mushkil hota hai.
+- **Security aur audit ka risk:** Shared credentials ya broad read
+  permissions least-privilege access ko mushkil bana sakte hain.
+  Database audit se query dikh sakti hai, lekin business intent (jaise
+  kis sale ke liye vehicle check hua) trace karna aasaan nahi hota.
+- **Availability aur load coupling:** Sales ka database connection,
+  connection pool, query load aur database outage Inventory ke saath
+  share hota hai. Sales ki heavy query Inventory workload ko impact kar
+  sakti hai, aur database issue dono services ko affect kar sakta hai.
+- **Data ownership unclear hona:** Agar Sales direct writes bhi karti
+  hai, toh Inventory apne invariants aur authoritative state ko reliably
+  enforce nahi kar pati. Direct reads bhi internal schema ko consumers
+  ke liye de facto public API bana sakti hain.
+
+Iske bajay Sales ko Inventory ke supported API ya event se wahi business
+operation/data lena chahiye jo usse chahiye. Misal ke liye, current
+availability ya vehicle reserve karna Inventory API se poochhein;
+Inventory apne rules apply karke stable response de. Agar Sales ko
+historical sale ke liye vehicle ka naam ya agreed price preserve karna
+hai, toh required values ka snapshot Sales ke apne record mein rakh
+sakti hai. Isse current availability ka ownership Inventory ke paas
+hi rehta hai.
 
 Agar transitional period mein shared database unavoidable hai, explicit
-ownership, separate credentials, permissions, schema boundaries aur
-migration roadmap establish karein.
+ownership aur exit plan define karein:
+
+- Har table/schema ka authoritative owner document karein; doosri
+  services ke writes block karke sirf required read permissions dein.
+- Har service ke liye alag database identity/credentials rakhein; shared
+  admin ya application credentials use na karein.
+- Schema boundaries aur migration process define karein. Breaking
+  changes ke liye backward-compatible rollout rakhein: pehle additive
+  change, phir consumers migrate, aur aakhir mein purana schema remove.
+- Direct queries, owners, consumers aur data freshness expectations
+  document karein; critical access ke liye monitoring aur audit add
+  karein.
+- Shared DB ko permanent service contract na banne dein. API/event ya
+  owned read-model par move karne ka roadmap aur target date rakhein.
 
 ------------------------------------------------------------------------
 
@@ -407,37 +427,41 @@ participants ko commands bhejta hai. Complex business processes aur
 explicit recovery logic ke liye clearer ho sakta hai, lekin orchestrator
 ko carefully design karna padta hai.
 
-  -----------------------------------------------------------------------
-  Dimension               Choreography            Orchestration
-  ----------------------- ----------------------- -----------------------
-  Coordination            Events ke through       Central workflow
-                          decentralized           coordinator
-
-  Simple workflows        Often straightforward   Extra component ho
-                                                  sakta hai
-
-  Complex workflows       Event chains hard to    State and transitions
-                          follow ho sakti hain    clearer
-
-  Coupling                Event contracts par     Orchestrator
-                          coupling                participant contracts
-                                                  par depend
-
-  Failure visibility      Distributed correlation Workflow state
-                          required                centralized ho sakti
-                                                  hai
-
-  Risk                    Hidden event chains     Orchestrator becoming
-                                                  overly central
-  -----------------------------------------------------------------------
+| Dimension | Choreography | Orchestration |
+|---|---|---|
+| Coordination | Events ke through decentralized | Central workflow coordinator |
+| Simple workflows | Often straightforward | Extra component ho sakta hai |
+| Complex workflows | Event chains hard to follow ho sakti hain | State and transitions clearer |
+| Coupling | Event contracts par coupling | Orchestrator participant contracts par depend |
+| Failure visibility | Distributed correlation required | Workflow state centralized ho sakti hai |
+| Risk | Hidden event chains | Orchestrator becoming overly central |
 
 ## 4.4 Saga design checklist
 
-Har step ke liye define karein: - Command/input. - Successful outcome. -
-Timeout behavior. - Retry policy. - Idempotency key. - Local transaction
-boundary. - Event produced. - Compensation action, if possible. -
-Terminal failure handling. - Manual intervention path. -
-Correlation/trace ID. - Workflow state persistence.
+Har saga step ke liye yeh details define karein:
+
+- **Command/input:** Step ko kaunsa request ya data milega?
+- **Successful outcome:** Success ko kaise identify aur persist karenge?
+- **Timeout behavior:** Response na aaye toh status unknown hai ya failed;
+  next action kya hoga?
+- **Retry policy:** Kya retry hoga, kitni baar, kis backoff ke saath, aur
+  kaunse errors retryable hain?
+- **Idempotency key:** Duplicate command/retry se wahi operation dobara
+  apply toh nahi hoga?
+- **Local transaction boundary:** Step ke kaunse state changes ek atomic
+  local transaction mein commit honge?
+- **Event produced:** Success ya failure par kaunsa event publish hoga,
+  aur uski delivery kaise reliable hogi?
+- **Compensation action:** Step ke baad saga fail ho toh business effect
+  ko kaise reverse ya offset karenge? Har action reversible nahi hota.
+- **Terminal failure handling:** Retries khatam ya compensation fail ho
+  toh workflow ki final state kya hogi?
+- **Manual intervention path:** Operator ko kya context, action aur
+  recovery instructions milengi?
+- **Correlation/trace ID:** Is step ko poore workflow aur logs/traces
+  mein kaise trace karenge?
+- **Workflow state persistence:** Saga ka current step, attempts aur
+  outcome process restart ke baad kaise recover honge?
 
 **Critical nuance:** Timeout ke baad blind compensation mat karein.
 Payment authorization request ka response timeout hua ho sakta hai jab
@@ -450,8 +474,14 @@ idempotent retry ya reconciliation required ho sakti hai.
 
 ## 5.1 Problem: database write + event publish
 
-Suppose Inventory Service: 1. SQL database mein vehicle reserve karti
-hai. 2. Broker par `VehicleReserved` event publish karti hai.
+Short answer: **SQL database update aur broker par event publish aam
+taur par ek hi atomic transaction mein nahi hote.** Database aur message
+broker alag systems hain; dono ke apne transaction managers hote hain.
+Database transaction commit hone ke baad broker publish fail ho sakta
+hai, aur broker publish hone ke baad database rollback ho sakta hai.
+
+Suppose Inventory Service vehicle reserve karke `VehicleReserved` event
+publish karna chahti hai:
 
 Agar DB commit successful ho, lekin publish se pehle process crash ho
 jaye, vehicle reserved hai lekin downstream services ko event nahi
@@ -463,10 +493,23 @@ source database mein commit hi nahi hua.
 
 ## 5.2 Outbox solution
 
-Business data aur outbox event record ko **same local database
-transaction** mein save karein. Separate background publisher outbox se
-event broker tak publish kare. Publisher crash ke baad same event dobara
-publish kar sakta hai, isliye consumers ko idempotent hona chahiye.
+Outbox mein **event ko broker par same transaction mein publish nahi
+karte**. Uske badle business data aur event ka record (outbox row) ek hi
+database mein **same local transaction** ke andar save hota hai:
+
+1. Database transaction shuru karein.
+2. Reservation/business tables update karein.
+3. Outbox table mein `VehicleReserved` event ka type aur payload insert
+   karein.
+4. Transaction commit karein. Dono writes commit hongi, ya dono rollback
+   hongi.
+
+Alag background publisher committed outbox rows padhta hai aur broker
+par event bhejta hai. Publish ke baad row ko published mark karta hai.
+Is tarah application crash hone par committed event outbox mein rehta
+hai aur publisher baad mein retry kar sakta hai. Publish aur
+`PublishedUtc` update ke beech crash hua toh event dobara publish ho
+sakta hai; isliye consumer ko idempotent/deduplicate karna chahiye.
 
 ``` mermaid
 flowchart TD
@@ -479,9 +522,11 @@ flowchart TD
     BUS --> CON[Consumer]
 ```
 
-Outbox database aur broker ke beech ek distributed ACID transaction
-provide nahi karta. Yeh reliable publication ke liye local atomic write
-plus retryable delivery design deta hai.
+Outbox database aur broker ke beech distributed ACID transaction ya
+exactly-once delivery provide nahi karta. Yeh database mein state aur
+event-intent ko atomically save karta hai, phir retryable, aam taur par
+at-least-once delivery deta hai. Isliye duplicate-safe consumer zaroori
+hai.
 
 ### Simplified SQL schema
 
@@ -495,35 +540,97 @@ CREATE TABLE dbo.OutboxMessages
     PublishedUtc DATETIME2 NULL,
     Attempts INT NOT NULL DEFAULT 0
 );
+
+-- Publisher sirf unpublished rows poll karta hai; index ke bina table
+-- grow hone par har poll full scan karega.
+CREATE INDEX IX_OutboxMessages_Unpublished
+    ON dbo.OutboxMessages (OccurredUtc)
+    WHERE PublishedUtc IS NULL;
 ```
 
-Production design mein indexing, retention, lease/locking strategy,
-poison event handling, schema version, partitioning aur cleanup job
-consider karna hoga.
+Production mein in concerns ko explicitly design karein:
+
+- **Indexing:** Publisher ko pending rows baar-baar scan na karni
+  padein. Status aur ordering/filter ke hisaab se index banayein, jaise
+  unpublished rows ko `OccurredUtc` ke order mein fetch karna. Index
+  actual polling query se match hona chahiye; extra indexes har insert
+  ko mehnga karte hain.
+- **Retention:** Decide karein ki successfully published event records
+  kitne din rakhne hain. Debugging, replay, compliance aur recovery ki
+  zaroorat retention period ko affect karti hai. Failed/unpublished
+  events ko normal published-event policy ke tahat delete na karein.
+- **Lease/locking strategy:** Agar multiple publisher instances chal
+  rahe hon, toh rows ko atomically claim karein, taaki do publishers ek
+  hi row ko concurrently process na karein. Lease mein owner aur expiry
+  rakhein; publisher crash ho toh expiry ke baad doosra worker row claim
+  kar sake. Claim chhote batches mein karein aur broker call ke dauran
+  lamba database transaction/lock hold na karein.
+  **Example:** `Worker-A` event `E123` ko claim karta hai. Row par
+  `LockedBy = Worker-A` aur `LockExpiresUtc = 10:05` set hota hai.
+  `Worker-B` us waqt tak is unexpired lease wali row ko skip karta hai.
+  Agar `Worker-A` crash ho jaye aur 10:05 tak lease renew na kare, toh
+  10:05 ke baad `Worker-B` atomically owner/expiry update karke event
+  claim aur publish kar sakta hai. Successful publish ke baad worker row
+  ko published mark kare, aur update `LockedBy` se match bhi kare, taaki
+  purana worker kisi naye owner ki claim ko overwrite na kar de. Lease
+  publish ke expected time se lambi rakhein ya long publish par renew
+  karein. Lease duplicate publish ko poori tarah nahi rokta: broker ne
+  event accept kar liya ho par worker ko acknowledgement na mila ho, toh
+  retry duplicate bhej sakta hai; consumer idempotency phir bhi zaroori
+  hai.
+- **Poison event handling:** Jo event repeated attempts ke baad bhi
+  publish nahi hota, woh poison event ho sakta hai (invalid payload,
+  incompatible schema ya permanent broker rejection). Attempts/error
+  record karein, alert dein, aur event ko inspectable failed/dead-letter
+  state mein rakhein. Root cause fix aur controlled replay/manual
+  remediation ke bina usse silently drop na karein.
+- **Schema version:** Event ke saath explicit event type aur schema
+  version store karein, jaise `VehicleReserved.v1`. Consumers ko
+  backward-compatible changes support karne dein; incompatible change
+  ke liye naya version aur migration plan rakhein. Sirf current code se
+  purane outbox payloads ko deserialize karna assume na karein.
+- **Partitioning:** Bahut high volume par, outbox ko time ya workload ke
+  hisaab se partition karna scans aur purane data removal ko manageable
+  bana sakta hai. Partition key, indexes aur primary/unique keys ko
+  database ki partitioning restrictions ke saath design karein; chhote
+  outbox ke liye partitioning unnecessary complexity ho sakti hai.
+- **Cleanup job:** Published aur retention period se purane rows ko
+  scheduled job se chhote batches mein delete/archive karein, taaki
+  transaction log, locks aur database load control mein rahen. Active
+  leases, unpublished/failed rows aur replay ke liye required records ko
+  protect karein; cleanup metrics aur failures monitor karein.
 
 ### Simplified C# transactional outline
 
 ``` csharp
-await using var transaction =
-    await dbContext.Database.BeginTransactionAsync(cancellationToken);
+// Agar EF Core retrying execution strategy enabled hai (jaise
+// EnableRetryOnFailure), to user-initiated transaction ko execution
+// strategy ke andar wrap karna zaroori hai; warna runtime exception aata hai.
+var strategy = dbContext.Database.CreateExecutionStrategy();
 
-reservation.Status = ReservationStatus.Reserved;
-
-dbContext.Reservations.Update(reservation);
-dbContext.OutboxMessages.Add(new OutboxMessage
+await strategy.ExecuteAsync(async () =>
 {
-    Id = Guid.NewGuid(),
-    EventType = "VehicleReserved.v1",
-    Payload = JsonSerializer.Serialize(new
-    {
-        ReservationId = reservation.Id,
-        VehicleId = reservation.VehicleId
-    }),
-    OccurredUtc = DateTime.UtcNow
-});
+    await using var transaction =
+        await dbContext.Database.BeginTransactionAsync(cancellationToken);
 
-await dbContext.SaveChangesAsync(cancellationToken);
-await transaction.CommitAsync(cancellationToken);
+    reservation.Status = ReservationStatus.Reserved;
+
+    dbContext.Reservations.Update(reservation);
+    dbContext.OutboxMessages.Add(new OutboxMessage
+    {
+        Id = Guid.NewGuid(),
+        EventType = "VehicleReserved.v1",
+        Payload = JsonSerializer.Serialize(new
+        {
+            ReservationId = reservation.Id,
+            VehicleId = reservation.VehicleId
+        }),
+        OccurredUtc = DateTime.UtcNow
+    });
+
+    await dbContext.SaveChangesAsync(cancellationToken);
+    await transaction.CommitAsync(cancellationToken);
+});
 ```
 
 Yeh illustrative code hai. Entity configuration, serialization contract,
@@ -641,37 +748,16 @@ reconciliation ya forward-fix plan chahiye ho sakta hai.
 
 # 8. Data Strategy Decision Matrix
 
-  -----------------------------------------------------------------------
-  Requirement             Candidate approach      Main trade-off
-  ----------------------- ----------------------- -----------------------
-  User needs immediate    Synchronous command/API Caller availability and
-  authoritative                                   latency dependency
-  reservation                                     
-
-  Multiple services need  Integration event       Eventual consistency
-  notification                                    and duplicate handling
-
-  UI needs fast combined  Local read model / CQRS Projection lag and
-  read                                            operational complexity
-
-  Cross-domain            Reporting store /       Data freshness and
-  dashboard/reporting     warehouse               pipeline management
-
-  Legacy DB changes must  CDC, with explicit      Database schema
-  be replicated           contract strategy       coupling if used
-                                                  carelessly
-
-  Related steps span      Saga                    Compensation and
-  service databases                               workflow state
-                                                  complexity
-
-  DB write and event must Transactional Outbox    Duplicate publication
-  not diverge                                     and publisher
-                                                  operations
-
-  Consumer must safely    Idempotency / Inbox     Deduplication storage
-  handle redelivery                               and retention
-  -----------------------------------------------------------------------
+| Requirement | Candidate approach | Main trade-off |
+|---|---|---|
+| User needs immediate authoritative reservation | Synchronous command/API | Caller availability and latency dependency |
+| Multiple services need notification | Integration event | Eventual consistency and duplicate handling |
+| UI needs fast combined read | Local read model / CQRS | Projection lag and operational complexity |
+| Cross-domain dashboard/reporting | Reporting store / warehouse | Data freshness and pipeline management |
+| Legacy DB changes must be replicated | CDC, with explicit contract strategy | Database schema coupling if used carelessly |
+| Related steps span service databases | Saga | Compensation and workflow state complexity |
+| DB write and event must not diverge | Transactional Outbox | Duplicate publication and publisher operations |
+| Consumer must safely handle redelivery | Idempotency / Inbox | Deduplication storage and retention |
 
 ------------------------------------------------------------------------
 

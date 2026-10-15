@@ -1,6 +1,5 @@
 # Monolith to Microservices Migration --- Interview Guide (Hinglish)
 
-> **Document status:** Phase 1 of a multi-phase guide\
 > **Audience:** Senior Software Engineer, Staff Engineer, Tech Lead,
 > Solution Architect\
 > **Technology focus:** .NET 8, C#, ASP.NET Core, SQL Server, AWS,
@@ -15,12 +14,12 @@ explanations simple Roman Hinglish mein hain. Har phase mein concept,
 DMS example, diagrams, trade-offs, interview answers aur practical
 checks diye gaye hain.
 
-Is guide ko intentionally phases mein develop kiya ja raha hai. **Phase
-1** foundations, migration assessment, decomposition, DDD aur
-incremental migration strategy cover karta hai. Aage ke phases database
-ownership, communication, distributed transactions, UI integration,
-observability, deployment, security, testing aur interview question bank
-ko expand karenge.
+Yeh guide 10 phases mein organized hai. **Phase 1** foundations,
+migration assessment, decomposition, DDD aur incremental migration
+strategy cover karta hai. Baaki phases database ownership, communication,
+security, observability, data migration, deployment, architecture
+patterns, mock interviews aur testing strategy (Phase 10) cover karte
+hain.
 
 ------------------------------------------------------------------------
 
@@ -76,33 +75,17 @@ frequency aur operational needs se define hoti hai.
 
 ### 1.5 Architecture comparison
 
-  --------------------------------------------------------------------------------------
-  Dimension         Monolith          Modular Monolith      Microservices
-  ----------------- ----------------- --------------------- ----------------------------
-  Deployment        One deployable    One deployable unit   Multiple independent
-                    unit                                    deployables
-
-  Code boundaries   Weak ya strong ho Explicit modules      Service boundaries
-                    sakti hain                              
-
-  Data              Usually shared    Often shared,         Ideally service-owned
-                                      module-owned          
-
-  Network failures  Mostly in-process Mostly in-process     First-class concern
-
-  Transactions      Easier local ACID Easier local ACID     Cross-service consistency is
-                    transactions      transactions          harder
-
-  Scaling           Often whole app   Often whole app       Per-service scaling possible
-
-  Operations        Simpler           Simpler-to-moderate   More complex
-
-  Team autonomy     Limited by        Better code ownership Strong when boundaries are
-                    coupling                                good
-
-  Best fit          Small/medium      Many systems needing  Systems needing independent
-                    systems           modularity            scale/deployment/ownership
-  --------------------------------------------------------------------------------------
+| Dimension | Monolith | Modular Monolith | Microservices |
+|---|---|---|---|
+| Deployment | One deployable unit | One deployable unit | Multiple independent deployables |
+| Code boundaries | Weak ya strong ho sakti hain | Explicit modules | Service boundaries |
+| Data | Usually shared | Often shared, module-owned | Ideally service-owned |
+| Network failures | Mostly in-process | Mostly in-process | First-class concern |
+| Transactions | Easier local ACID transactions | Easier local ACID transactions | Cross-service consistency is harder |
+| Scaling | Often whole app | Often whole app | Per-service scaling possible |
+| Operations | Simpler | Simpler-to-moderate | More complex |
+| Team autonomy | Limited by coupling | Better code ownership | Strong when boundaries are good |
+| Best fit | Small/medium systems | Many systems needing modularity | Systems needing independent scale/deployment/ownership |
 
 ### 1.6 Diagram: Monolith vs. target architecture
 
@@ -188,7 +171,7 @@ migrate karunga. Main big-bang rewrite avoid karunga."
 
 ------------------------------------------------------------------------
 
-## 2. Migration Phase 1 --- Assessment and Planning
+## 2. Migration Part A --- Assessment and Planning
 
 Migration ka pehla step code ko services mein split karna nahi hai.
 Pehla step system aur business constraints ko samajhna hai.
@@ -319,7 +302,7 @@ metric nahi maanunga.
 
 ------------------------------------------------------------------------
 
-## 3. Migration Phase 2 --- Service Decomposition
+## 3. Migration Part B --- Service Decomposition
 
 Service decomposition ka goal code ko chhote folders ya deployables mein
 todna nahi hai. Goal hai business responsibilities ko aise boundaries

@@ -670,10 +670,12 @@ Before the interview, practise speaking aloud about:
 
 ## End of Phase 9
 
-You now have a nine-phase interview-preparation series covering
+You now have a ten-phase interview-preparation series covering
 migration foundations, data ownership, communication, security,
-observability, database migration, deployment, architecture patterns and
-mock interviews.
+observability, database migration, deployment, architecture patterns,
+mock interviews and testing strategy.
 
-**Suggested next step:** Consolidate the phases into a single master
-guide and use the scenario sections as mock-interview drills.
+**Next step:** Scenario sections ko mock-interview drills ki tarah use
+karein, aur **Phase 10 --- Testing Strategy** se testing/verification
+questions cover karein (microservices interviews mein yeh aksar follow-up
+hota hai).
