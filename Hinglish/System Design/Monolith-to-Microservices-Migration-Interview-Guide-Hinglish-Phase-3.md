@@ -105,33 +105,14 @@ consistency tolerate karni hoti hai.
 
 ## 1.3 Decision rule
 
-  -----------------------------------------------------------------------
-  Requirement             Commonly suitable       Caveat
-                          approach                
-  ----------------------- ----------------------- -----------------------
-  User ko immediate       Synchronous API/command Timeout and retry
-  reservation result                              semantics define karein
-  chahiye                                         
-
-  Multiple systems ko     Integration event       Consumers eventual
-  completed sale ke baare                         consistency handle
-  mein inform karna                               karein
-
-  Dashboard ko            Local read model        Projection lag monitor
-  high-volume combined                            karein
-  data dikhana                                    
-
-  Long-running business   Async workflow/Saga     Durable state and
-  workflow                                        recovery required
-
-  Large file or batch     Queue/event-driven      Idempotency and
-  processing              processing              back-pressure design
-                                                  karein
-
-  Tiny internal call with REST or gRPC            Operational context aur
-  low latency budget                              contract stability
-                                                  evaluate karein
-  -----------------------------------------------------------------------
+| Requirement | Commonly suitable approach | Caveat |
+| --- | --- | --- |
+| User ko immediate reservation result chahiye | Synchronous API/command | Timeout and retry semantics define karein |
+| Multiple systems ko completed sale ke baare mein inform karna | Integration event | Consumers eventual consistency handle karein |
+| Dashboard ko high-volume combined data dikhana | Local read model | Projection lag monitor karein |
+| Long-running business workflow | Async workflow/Saga | Durable state and recovery required |
+| Large file or batch processing | Queue/event-driven processing | Idempotency and back-pressure design karein |
+| Tiny internal call with low latency budget | REST or gRPC | Operational context aur contract stability evaluate karein |
 
 **Interview point:** Asynchronous communication ka matlab automatically
 faster system nahi. Isse caller wait kam kar sakta hai, lekin total work
@@ -390,28 +371,33 @@ mirror nahi.
 
 ## 5.3 Queue vs. pub-sub vs. event stream
 
-  -----------------------------------------------------------------------
-  Concept                 Typical behavior        Example use
-  ----------------------- ----------------------- -----------------------
-  Queue                   Message generally one   Background job or work
-                          competing consumer      distribution
-                          instance/group process  
-                          karta hai               
+| Concept | Typical behavior | Example use |
+| --- | --- | --- |
+| Queue | Message generally ek competing consumer instance/group process karta hai | Background job or work distribution |
+| Pub-sub topic/event bus | Multiple subscriptions same event ko independently receive kar sakti hain | Sale confirmed par Compliance and Reporting react |
+| Event stream/log | Ordered, append-oriented retained event history; consumer offsets/positions track kar sakte hain | High-volume event processing and replay |
+| Command queue | Work request deliver karna | Generate report, process payment request |
 
-  Pub-sub topic/event bus Multiple subscriptions  Sale confirmed par
-                          same event ko           Compliance and
-                          independently receive   Reporting react
-                          kar sakti hain          
+### Event stream/log kaise kaam karta hai?
 
-  Event stream/log        Ordered append-oriented High-volume event
-                          retained event history; processing and replay
-                          consumer                
-                          offsets/positions track 
-                          kar sakte hain          
+Producer naye events ko stream ke end mein append karta hai; purane events
+usually wahi rehte hain jab tak retention period khatam na ho. Har consumer
+apni position, yaani **offset**, track karta hai, isliye alag consumers
+apni speed se events padh sakte hain. Consumer failure ke baad saved offset
+se processing resume ki ja sakti hai; zaroorat par retained events ko
+dobara read karke replay bhi kar sakte hain.
 
-  Command queue           Work request deliver    Generate report,
-                          karna                   process payment request
-  -----------------------------------------------------------------------
+Example: `SaleConfirmed` event stream mein append hua. Reporting consumer
+offset 120 tak process kar chuka hai, jabki Analytics consumer apni speed
+se offset 95 par hai. Dono apni position se aage ke events independently
+read karte hain. Queue ke unlike, ek consumer ke message process karne se
+event aam taur par doosre consumer ke liye stream se delete nahi hota.
+
+Ordering aam taur par **partition/shard ke andar** guaranteed hoti hai,
+poore stream mein globally zaroori nahi. Isliye related events ko same
+partition key (jaise `SaleId`) dena useful ho sakta hai. Kafka aur Amazon
+Kinesis event-streaming ke examples hain; exact retention, ordering aur
+replay behavior product/configuration par depend karta hai.
 
 Exact semantics product ke hisaab se vary karte hain; queue/topic naming
 se delivery guarantees infer na karein---provider documentation aur
@@ -427,15 +413,43 @@ SQS managed message queue hai. Common use cases: - Background
 processing. - Work buffering. - Decoupling producer and worker. - Load
 spikes absorb karna.
 
-Important concepts: - Visibility timeout. - Message retention. - Redrive
-policy and dead-letter queue. - Long polling. - Standard vs. FIFO
-queue. - At-least-once processing assumptions for Standard queues. -
-FIFO ordering/deduplication features ke exact scope aur limitations.
+### Important concepts
 
-**Visibility timeout** message ko temporarily other consumers se hide
-karta hai while consumer processes it. Agar processing timeout se zyada
-lambi ho, message redeliver ho sakta hai. Processing duration, extension
-strategy, idempotency aur acknowledgement behavior align karein.
+- **Visibility timeout:** Consumer jab message receive karta hai, SQS use
+  visibility timeout ke dauran doosre consumers se temporarily hide karta
+  hai. Consumer ko is waqt mein message process karke delete karna chahiye.
+  Agar processing timeout se lambi ho ya consumer message delete na kare,
+  toh message dobara visible hokar redeliver ho sakta hai. Long-running
+  processing mein timeout ko extend karna pad sakta hai; handler
+  idempotent rakhein, kyunki duplicate delivery possible hai.
+- **Message retention:** SQS message ko delete hone ya retention period
+  khatam hone tak store karta hai. Retention period ke andar process na
+  hua message expire ho sakta hai, isliye queue age/backlog monitor karein
+  aur retention ko expected outage/recovery window ke mutabiq set karein.
+- **Redrive policy and dead-letter queue (DLQ):** Source queue ki redrive
+  policy mein `maxReceiveCount` set hota hai. Message baar-baar receive
+  hokar process na ho, toh SQS use DLQ mein move karta hai. DLQ poison
+  messages ko inspect aur troubleshoot karne mein madad karti hai; cause
+  fix karne ke baad controlled redrive karein. DLQ ko source queue ke
+  suitable type ke saath configure karein aur uski message age/alarms
+  monitor karein.
+- **Long polling:** Consumer `ReceiveMessage` ke waqt kuch samay tak wait
+  karta hai, taaki message aane par turant response mile. Isse empty
+  responses aur unnecessary polling kam ho sakti hai. Wait duration aur
+  HTTP/client timeout ko compatible rakhein.
+- **Standard vs. FIFO queue:** Standard queue high throughput aur flexible
+  scaling ke liye hoti hai; message ordering guaranteed nahi hoti aur
+  duplicate delivery possible hai. FIFO queue ordering ko har
+  `MessageGroupId` ke andar preserve karti hai. Same group ke messages
+  order mein process hote hain, jabki alag groups parallel process ho
+  sakte hain. FIFO deduplication duplicate sends ko deduplication scope
+  aur time window ke andar suppress kar sakti hai; yeh har downstream
+  side effect ke liye end-to-end exactly-once guarantee nahi hai.
+- **At-least-once processing (Standard):** Standard queue mein message
+  ek se zyada baar deliver ho sakta hai, isliye same work duplicate
+  process hone ka risk hai. Business operation ko idempotent banayein
+  (jaise operation ID ya idempotency key se duplicate effect rokein);
+  successful processing ke baad message delete karein.
 
 ## 6.2 Amazon SNS
 
@@ -475,34 +489,15 @@ hain.
 
 ## 6.4 SQS vs. SNS vs. EventBridge
 
-  --------------------------------------------------------------------------------------
-  Dimension           SQS                      SNS                     EventBridge
-  ------------------- ------------------------ ----------------------- -----------------
-  Primary role        Queue/work buffering     Pub-sub fan-out         Event routing bus
-
-  Consumer model      Queue consumers compete  Multiple subscribers    Rules route
-                      for messages                                     events to targets
-
-  Filtering/routing   Consumer-side or         Subscription filter     Rich
-                      supported filter         policies                event-pattern
-                      patterns in integrations                         rules
-
-  Backlog visibility  Queue depth and age      Depends on              Delivery/target
-                      metrics                  subscriber/endpoint     metrics and
-                                                                       configured
-                                                                       destinations
-
-  Typical use         Background jobs, durable Fan-out                 Event-driven
-                      work queue               notifications/events    AWS/service
-                                                                       integration
-
-  Ordering            Standard/FIFO-specific   Depends on              Do not assume
-                      semantics                protocol/subscription   global ordering
-
-  DLQ/retries         Queue redrive and        Delivery policies vary  Target retry/DLQ
-                      consumer handling        by endpoint             features depend
-                                                                       on configuration
-  --------------------------------------------------------------------------------------
+| Dimension | SQS | SNS | EventBridge |
+| --- | --- | --- | --- |
+| Primary role | Queue/work buffering | Pub-sub fan-out | Event routing bus |
+| Consumer model | Queue consumers compete for messages | Multiple subscribers | Rules route events to targets |
+| Filtering/routing | Consumer-side or supported filter patterns in integrations | Subscription filter policies | Rich event-pattern rules |
+| Backlog visibility | Queue depth and age metrics | Depends on subscriber/endpoint | Delivery/target metrics and configured destinations |
+| Typical use | Background jobs, durable work queue | Fan-out notifications/events | Event-driven AWS/service integration |
+| Ordering | Standard/FIFO-specific semantics | Depends on protocol/subscription | Do not assume global ordering |
+| DLQ/retries | Queue redrive and consumer handling | Delivery policies vary by endpoint | Target retry/DLQ features depend on configuration |
 
 Selection exact requirements aur service quotas/costs ke basis par
 karein. Current AWS behavior implement karte waqt official documentation
@@ -983,55 +978,24 @@ and reconciliation.
 
 # 14. Phase 3 Quick Revision Cheat Sheet
 
-  -----------------------------------------------------------------------
-  Concept                             Remember this
-  ----------------------------------- -----------------------------------
-  REST                                Request-response; caller downstream
-                                      availability/latency par depend
-                                      karta hai
-
-  gRPC                                Typed RPC and streaming; use when
-                                      contract/performance needs justify
-                                      it
-
-  Queue                               Work buffering and competing
-                                      consumers
-
-  Pub-sub                             Multiple subscribers independently
-                                      react
-
-  Command                             Intent/request
-
-  Event                               Past fact
-
-  Retry                               Transient failures; bounded and
-                                      idempotency-aware
-
-  Timeout                             Caller wait limit; remote outcome
-                                      may be unknown
-
-  Circuit breaker                     Repeated failing calls ko
-                                      temporarily stop karta hai
-
-  Bulkhead                            Resource pools isolate karta hai
-
-  At-least-once                       Duplicate delivery possible
-
-  Idempotency                         Repeat request se unintended
-                                      repeated effect na ho
-
-  DLQ                                 Failed messages ke liye owned
-                                      recovery queue
-
-  Event versioning                    Contracts evolve without breaking
-                                      consumers
-
-  Correlation ID                      Related workflow operations connect
-                                      karta hai
-
-  Trace ID                            Distributed trace identify karta
-                                      hai
-  -----------------------------------------------------------------------
+| Concept | Remember this |
+| --- | --- |
+| REST | Request-response; caller downstream availability/latency par depend karta hai |
+| gRPC | Typed RPC and streaming; use when contract/performance needs justify it |
+| Queue | Work buffering and competing consumers |
+| Pub-sub | Multiple subscribers independently react |
+| Command | Intent/request |
+| Event | Past fact |
+| Retry | Transient failures; bounded and idempotency-aware |
+| Timeout | Caller wait limit; remote outcome may be unknown |
+| Circuit breaker | Repeated failing calls ko temporarily stop karta hai |
+| Bulkhead | Resource pools isolate karta hai |
+| At-least-once | Duplicate delivery possible |
+| Idempotency | Repeat request se unintended repeated effect na ho |
+| DLQ | Failed messages ke liye owned recovery queue |
+| Event versioning | Contracts evolve without breaking consumers |
+| Correlation ID | Related workflow operations connect karta hai |
+| Trace ID | Distributed trace identify karta hai |
 
 ## Phase 3 checklist
 
