@@ -311,9 +311,82 @@ flowchart TD
     D -- No --> G
 ```
 
+### Starting values: timeout, retry, and breaker
+
+Koi universal “ideal” timeout ya breaker duration nahi hota. Values
+dependency ke observed latency, caller ka end-to-end deadline, operation
+ki criticality, aur service SLO ke basis par tune karein. Neeche ke
+numbers starting points hain, production guarantee nahi.
+
+| Setting | Practical starting point | Tune karne ka rule |
+|---|---|---|
+| **Per-attempt timeout** | Dependency ke normal p95/p99 latency aur caller budget ke andar; kai internal RPCs ke liye roughly `100–300 ms` ek initial range ho sakti hai. | Timeout ko dependency ke healthy latency se bahut neeche rakhne par false timeouts honge; bahut upar rakhne par threads/connections aur caller budget der tak occupied rahenge. Connect timeout aur total request timeout alag configure karein. |
+| **Retry count** | Latency-sensitive synchronous calls mein `1` retry; safe, idempotent calls mein aam taur par maximum `2` retries (`3` total attempts). | Retry ko sirf transient failures par allow karein. Har layer ke retries multiply hote hain, isliye retry ek hi layer own kare ya end-to-end retry budget enforce ho. |
+| **Backoff + jitter** | Exponential backoff: `baseDelay = 50–100 ms`, multiplier `2`, cap `500–1000 ms`; full jitter: har attempt par random delay `[0, min(cap, baseDelay × 2^retryIndex)]`. | Delay hamesha remaining deadline ke andar ho. `429`/`503` ke `Retry-After` ko respect karein, lekin caller deadline aur configured cap se zyada wait na karein. |
+| **Circuit-breaker window/threshold** | Rolling `10–30 s` window; minimum `20–50` calls ke baad, agar failure rate roughly `50%` ya zyada ho to open karna ek reasonable initial setup hai. | Low-traffic service mein minimum-call threshold ke bina ek failure se breaker trip ho sakta hai. Failure ke saath slow-call rate ko bhi measure kar sakte hain. |
+| **Open-state cooldown** | `5–30 s` ke baad half-open probe; baar-baar fail hone par cooldown ko gradually badhaya ja sakta hai. | Bahut chhota cooldown flapping aur repeated load create karta hai; bahut lamba cooldown healthy dependency ko unnecessarily block karta hai. |
+| **Half-open probes** | Ek waqt mein `1–3` limited probe requests. | Probe successful ho to closed; fail ho to open. Probe traffic ko bulkhead aur rate limit se control karein. |
+
+Timeout ko p99 se blindly set na karein: pehle downstream latency
+distribution aur acceptable false-timeout rate dekhein. Connect, TLS
+handshake, response-read aur overall request ke liye available client
+controls ko samajhkar total deadline propagate karein. Har downstream call
+ko caller se chhoti ya equal remaining deadline milni chahiye; parent
+request cancel ho to in-flight call bhi cancel hona chahiye.
+
+**Example: 1-second end-to-end deadline**
+
+Maan lein request ko total `1,000 ms` mile hain. Application apne baaki
+kaam aur response bhejne ke liye `400 ms` reserve karke dependency call
+ko maximum `600 ms` deti hai. Agar policy `150 ms` per attempt aur maximum
+`2` retries rakhti hai, to attempts aur waits ka theoretical budget:
+
+```text
+Attempt 1: up to 150 ms
+Retry wait 1: up to 50 ms (jittered)
+Attempt 2: up to 150 ms
+Retry wait 2: up to 100 ms (jittered)
+Attempt 3: up to 150 ms
+Total maximum: 600 ms
+```
+
+Yeh sirf budget illustration hai: actual retry tabhi schedule ho jab
+remaining deadline mein backoff ke baad ek aur attempt fit ho. Agar nahi,
+turant fallback ya error return karein; deadline cross karne wali retry
+caller ko useful response nahi degi.
+
+Retries sirf transient network errors, selected `5xx`/`503`, ya policy
+ke mutabik throttling ke liye karein. Request body ko safely replay
+karna possible ho aur operation idempotent ho (ya idempotency key use
+hoti ho), tabhi retry karein. Validation/auth/business errors ko retry
+na karein. Client timeout ke baad server ne operation complete kiya ya
+nahi, yeh unknown ho sakta hai—non-idempotent payment/order operation
+ko bina deduplication ke dobara bhejna duplicate side effect bana sakta
+hai.
+
+**Retry aur circuit breaker ka interaction:**
+
+- Retry loop breaker ke through jaye; breaker **open** ho to fail-fast
+  karein, repeated retries se usse bypass na karein.
+- Breaker ko aam taur par har logical operation ka final outcome
+  dikhayein, na ki ek hi operation ke har retry ko alag failure
+  ginke threshold jaldi trip kar dein. Library ka behavior verify karein.
+- Retry budget ko bounded rakhein (jaise traffic ka chhota hissa ya
+  per-request max attempts), aur retry ke dauran bulkhead capacity hold
+  na karein—backoff par worker/thread ko block karne ke bajay async
+  wait use karein, jahan supported ho.
+- Circuit open hone par fallback, cached/stale response, queue, ya
+  explicit error mein se business contract ke mutabik response dein.
+  Fallback bhi bounded aur observable hona chahiye.
+
+Metrics mein timeout count, attempt number, retry reason, breaker state,
+half-open result, downstream latency, aur fallback rate track karein.
+Alert thresholds ko SLO/error budget ke saath align karein; production
+traffic ke patterns dekhkar values revise karein.
+
 **Production rule:** Retry, timeout aur circuit breaker ko individually
-configure karna enough nahi. Unka combined budget end-to-end latency SLO
-ke andar hona chahiye.
+configure karna enough nahi. In sabka combined worst-case time caller ke
+remaining end-to-end deadline ke andar hona chahiye.
 
 ------------------------------------------------------------------------
 

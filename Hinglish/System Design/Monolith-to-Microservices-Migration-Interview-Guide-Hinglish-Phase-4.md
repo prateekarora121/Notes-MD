@@ -107,11 +107,21 @@ Service mein hona chahiye, gateway mein nahi.
 
 ## 1.3 API Gateway failure and scaling
 
-Gateway ko highly available deploy karein, capacity and latency monitor
-karein, rate limits define karein, aur configuration changes test
-karein. Gateway failure ke impact ko load balancers, multiple
-instances/managed service capabilities, health checks and safe rollout
-se reduce karein.
+Gateway availability deployment model par depend karti hai. AWS API
+Gateway managed service hai; uske liye khud EC2/ECS replicas ya load
+balancer deploy nahi karte. Regional outage se bachne ke liye har region
+mein API, Regional custom domain, certificate aur backend separately
+provision karein. Route 53 mein same application hostname ke Primary aur
+Secondary failover Alias records banayein, aur primary health check ko
+backend readiness tak end-to-end verify karein. Dono regions ke data,
+secrets, quotas, deployment configuration aur recovery runbooks bhi
+ready hone chahiye. DNS caching ki wajah se failover instant guaranteed
+nahi hota.
+
+Self-managed gateway use ho to multiple instances ko load balancer ke
+peeche, health checks aur safe rollout ke saath run karein. Dono models
+mein capacity/throttling, latency, errors, upstream health monitor
+karein aur rate limits define karein.
 
 Metrics: - Request rate. - p95/p99 latency. - 4xx/5xx rates. - Throttled
 requests. - Upstream latency. - Upstream timeout rate. -
@@ -154,29 +164,14 @@ chahiye.
 
 ## 2.2 API Gateway vs. BFF
 
-  -----------------------------------------------------------------------
-  Dimension               API Gateway             BFF
-  ----------------------- ----------------------- -----------------------
-  Primary purpose         Common entry point and  Specific client
-                          cross-cutting policies  experience ke liye
-                                                  backend
-
-  Typical scope           Routing, TLS, rate      Aggregation, response
-                          limits, auth            shaping,
-                          integration, telemetry  client-specific
-                                                  workflows
-
-  Client-specific?        Usually common          Yes, by design
-
-  Business rules          Core business rules     Core domain rules nahi
-                          nahi hone chahiye       hone chahiye
-
-  Example                 `/api/sales` route to   Web dashboard summary
-                          Sales Service           API
-
-  Risk                    Becomes "smart" central Duplicate logic across
-                          monolith                BFFs
-  -----------------------------------------------------------------------
+| Dimension | API Gateway | BFF |
+|---|---|---|
+| Primary purpose | Common client entry point; routing and cross-cutting policies. | Backend tailored to a specific client, such as web or mobile. |
+| Typical scope | Routing, TLS where configured, rate limits, authentication integration and telemetry. | Client-specific aggregation, response shaping and presentation workflows. |
+| Client-specific? | Usually shared by multiple clients. | Yes; often one BFF per materially different client experience. |
+| Business rules | Should not own core domain rules. | Should not duplicate authoritative domain rules or invariants. |
+| Example | Routes `/api/sales` to the Sales Service. | Combines Inventory and Sales data into a web dashboard response. |
+| Main risk | Becomes a tightly coupled “smart” central monolith. | Domain logic gets duplicated across BFFs; extra service adds operational cost. |
 
 A system mein gateway aur BFF dono ho sakte hain: browser → gateway →
 web BFF → domain services. Lekin simple application mein dono layers add
@@ -389,10 +384,14 @@ access token treat karna.
 # 7. .NET 8 JWT Authentication Example
 
 Illustrative ASP.NET Core configuration using an identity provider's
-authority and expected audience:
+authority and expected audience. Application mein scope parsing ek
+reusable handler mein rakhein; har endpoint par inline claim parsing
+repeat na karein. Policy ko har distinct permission ke liye ek baar
+register karein, phir jitne endpoints chahen us policy ko reuse karein.
 
 ``` csharp
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -412,19 +411,25 @@ builder.Services
         };
     });
 
+builder.Services.AddSingleton<IAuthorizationHandler, ScopeHandler>();
+
 builder.Services.AddAuthorization(options =>
 {
-    options.AddPolicy("SalesWrite", policy =>
+    options.AddPolicy(Policies.SalesRead, policy =>
         policy.RequireAuthenticatedUser()
-              .RequireAssertion(ctx =>
-                  // OAuth2 "scope" claim aksar space-separated single string
-                  // hota hai ("sales.read sales.write"); kuch providers "scp"
-                  // use karte hain (string ya multiple claims).
-                  ctx.User.Claims
-                     .Where(c => c.Type is "scope" or "scp")
-                     .SelectMany(c => c.Value.Split(' ',
-                         StringSplitOptions.RemoveEmptyEntries))
-                     .Contains("sales.write")));
+              .AddRequirements(new ScopeRequirement("sales.read")));
+
+    options.AddPolicy(Policies.SalesWrite, policy =>
+        policy.RequireAuthenticatedUser()
+              .AddRequirements(new ScopeRequirement("sales.write")));
+
+    options.AddPolicy(Policies.CustomersRead, policy =>
+        policy.RequireAuthenticatedUser()
+              .AddRequirements(new ScopeRequirement("customers.read")));
+
+    options.AddPolicy(Policies.CustomersWrite, policy =>
+        policy.RequireAuthenticatedUser()
+              .AddRequirements(new ScopeRequirement("customers.write")));
 });
 
 var app = builder.Build();
@@ -432,25 +437,90 @@ var app = builder.Build();
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapPost("/sales", () => Results.Accepted())
-   .RequireAuthorization("SalesWrite");
+// Similar read endpoints policy reuse karte hain.
+var salesRead = app.MapGroup("/sales")
+                   .RequireAuthorization(Policies.SalesRead);
+salesRead.MapGet("/", () => Results.Ok("sales list"));
+salesRead.MapGet("/{id:int}", (int id) => Results.Ok($"sale {id}"));
+
+// Similar write endpoints ek alag policy reuse karte hain.
+var salesWrite = app.MapGroup("/sales")
+                    .RequireAuthorization(Policies.SalesWrite);
+salesWrite.MapPost("/", () => Results.Accepted());
+salesWrite.MapPut("/{id:int}", (int id) => Results.NoContent());
+salesWrite.MapDelete("/{id:int}", (int id) => Results.NoContent());
+
+var customersRead = app.MapGroup("/customers")
+                       .RequireAuthorization(Policies.CustomersRead);
+customersRead.MapGet("/", () => Results.Ok("customers list"));
+customersRead.MapGet("/{id:int}", (int id) => Results.Ok($"customer {id}"));
+
+var customersWrite = app.MapGroup("/customers")
+                        .RequireAuthorization(Policies.CustomersWrite);
+customersWrite.MapPost("/", () => Results.Accepted());
+customersWrite.MapPut("/{id:int}", (int id) => Results.NoContent());
 
 app.Run();
+
+public static class Policies
+{
+    public const string SalesRead = "Sales.Read";
+    public const string SalesWrite = "Sales.Write";
+    public const string CustomersRead = "Customers.Read";
+    public const string CustomersWrite = "Customers.Write";
+}
+
+public sealed record ScopeRequirement(string Scope) : IAuthorizationRequirement;
+
+public sealed class ScopeHandler : AuthorizationHandler<ScopeRequirement>
+{
+    protected override Task HandleRequirementAsync(
+        AuthorizationHandlerContext context,
+        ScopeRequirement requirement)
+    {
+        // Providers commonly use one space-separated "scope" value or "scp".
+        var hasRequiredScope = context.User.Claims
+            .Where(claim => claim.Type is "scope" or "scp")
+            .SelectMany(claim => claim.Value.Split(
+                ' ',
+                StringSplitOptions.RemoveEmptyEntries |
+                StringSplitOptions.TrimEntries))
+            .Contains(requirement.Scope, StringComparer.Ordinal);
+
+        if (hasRequiredScope)
+        {
+            context.Succeed(requirement);
+        }
+
+        return Task.CompletedTask;
+    }
+}
 ```
 
-**Important production notes:** - Claim shape and scope representation
-identity provider par depend karti hai;
-`scope` aksar space-separated string hota hai, isliye exact-match
-`RequireClaim("scope", "sales.write")` multi-scope token par fail ho
-sakta hai; example mein scope ko split karke check kiya gaya hai. Provider
-ke actual claim format (`scope` vs `scp`) ke hisaab se adapt karein. - `Authority` and `Audience` correct
-configure karein. - Issuer/audience/lifetime/signature validation
-disable na karein. - Role/scope checks ke saath dealer/tenant-level
-resource authorization bhi enforce karein. - Secrets configuration files
-mein commit na karein. - Production HTTPS, key rotation, clock skew,
-token lifetime and logging/redaction plan define karein. - Gateway token
-validate kare tab bhi downstream service ko trust boundary ke hisaab se
-authentication/authorization enforce karni chahiye.
+**20 endpoints mein yeh kaise scale karein?** Agar 10 GET endpoints
+`sales.read` maangte hain, sabko `Policies.SalesRead` group/policy par
+rakhein. Agar doosre 10 write endpoints `sales.write` maangte hain,
+unko `Policies.SalesWrite` par rakhein. Policy/handler scope ko ek baar
+define karte hain; endpoint count badhne se claim-check code duplicate
+nahi hota. Alag resources hon to `Customers.Read`,
+`Payments.Refund` jaise **distinct business permissions** ke liye alag
+policy add karein. Har URL ke liye unique scope tabhi banayein jab access
+model ko waqai itni granularity chahiye.
+
+**Important production notes:**
+
+- Scope claim ka naam aur format identity provider par depend karta hai.
+  Example `scope`/`scp` mein space-separated scopes handle karta hai;
+  provider ke actual token claims ke mutabik handler adapt karein.
+- `Authority` and `Audience` correct configure karein. Issuer, audience,
+  lifetime and signing-key validation disable na karein.
+- Scope/role checks ke saath dealer/tenant-level resource authorization
+  bhi enforce karein.
+- Secrets configuration files mein commit na karein. Production HTTPS,
+  key rotation, token lifetime and logging/redaction plan define karein.
+- Gateway token validate kare tab bhi downstream service ko trust
+  boundary ke hisaab se authentication/authorization enforce karni
+  chahiye.
 
 ------------------------------------------------------------------------
 
@@ -733,49 +803,23 @@ versioned and documented honge.
 
 # 13. Phase 4 Quick Revision Cheat Sheet
 
-  -----------------------------------------------------------------------
-  Concept                             Remember this
-  ----------------------------------- -----------------------------------
-  API Gateway                         Common entry point and
-                                      cross-cutting policies
-
-  BFF                                 Client-specific
-                                      aggregation/response shaping
-
-  Micro-frontends                     Independent UI areas; not mandatory
-                                      with microservices
-
-  Authentication                      Who are you?
-
-  Authorization                       What may you do?
-
-  OAuth 2.0                           Authorization framework
-
-  OIDC                                Identity/authentication layer over
-                                      OAuth 2.0
-
-  JWT                                 Token format; signature and claims
-                                      must be validated
-
-  Access token                        Intended for API/resource access
-
-  ID token                            Authentication information for
-                                      client
-
-  Least privilege                     Minimum permissions needed
-
-  Resource authorization              Check actual resource/tenant
-                                      ownership
-
-  Gateway resilience                  Redundancy, latency/error metrics,
-                                      safe rollout
-
-  BFF caching                         Only with freshness and
-                                      tenant-aware cache keys
-
-  Business invariants                 Enforce in authoritative domain
-                                      service
-  -----------------------------------------------------------------------
+| Concept | Remember this |
+|---|---|
+| API Gateway | Common client entry point for routing and cross-cutting policies; keep domain rules in domain services. |
+| BFF | Client-specific aggregation and response shaping; add only when client needs justify it. |
+| Micro-frontends | Independent UI areas/releases; microservices do not require micro-frontends. |
+| Authentication | Establishes who the caller is. |
+| Authorization | Decides what action the caller may perform on a resource. |
+| OAuth 2.0 | Authorization framework for delegated/resource access. |
+| OIDC | Identity/authentication layer built on OAuth 2.0. |
+| JWT | Token format; validate signature, issuer, audience, lifetime and relevant claims. |
+| Access token | Intended for API/resource access; validate it at the resource boundary. |
+| ID token | Carries authentication information for the client; do not use it as an API access token. |
+| Least privilege | Grant only the permissions required for the task. |
+| Resource authorization | Check actual resource and tenant/dealer ownership server-side. |
+| Gateway resilience | AWS API Gateway is managed; for regional disaster recovery, provision a Regional API/custom domain per region and use Route 53 Primary/Secondary failover Alias records with a backend-aware health check. Data and backends must also be recovery-ready. |
+| BFF caching | Cache only with explicit freshness, authorization and tenant-aware cache keys. |
+| Business invariants | Enforce in the authoritative domain service. |
 
 ## Phase 4 checklist
 
