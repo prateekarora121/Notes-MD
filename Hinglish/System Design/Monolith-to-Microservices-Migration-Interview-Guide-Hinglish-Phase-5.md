@@ -318,22 +318,12 @@ USE ka focus resources par hai:
 
 Examples:
 
-  -----------------------------------------------------------------------
-  Resource          Utilization       Saturation        Errors
-  ----------------- ----------------- ----------------- -----------------
-  CPU               CPU percentage    Run queue /       Throttling events
-                                      throttling        
-
-  Database pool     Active            Waiters / pool    Connection
-                    connections       exhaustion        failures
-
-  SQS consumer      Consumer          Queue depth and   Processing
-                    throughput        oldest-message    failures
-                                      age               
-
-  ECS tasks         CPU/memory        Pending tasks /   Task restarts
-                                      scaling lag       
-  -----------------------------------------------------------------------
+| Resource | Utilization | Saturation | Errors |
+|---|---|---|---|
+| CPU | CPU percentage | Run queue / throttling | Throttling events |
+| Database pool | Active connections | Waiters / pool exhaustion | Connection failures |
+| SQS consumer | Consumer throughput | Queue depth and oldest-message age | Processing failures |
+| ECS tasks | CPU / memory | Pending tasks / scaling lag | Task restarts |
 
 **Important:** 90% CPU apne aap incident prove nahi karta. Agar latency,
 errors aur saturation normal hain, high CPU expected workload bhi ho

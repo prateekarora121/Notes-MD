@@ -945,6 +945,112 @@ Yeh section original [NET Full Stack Interview Q&A Sheet](<./NET Full Stack Inte
 - **Framework vs modern .NET?** .NET Framework Windows-only legacy runtime/ecosystem; modern .NET cross-platform unified runtime with current releases/features. Migration dependency/hosting/API compatibility test karein.
 - **CLI/CTS/CLS?** CLI standard/runtime model; CTS common type system; CLS cross-language compatibility subset. Interview mein assembly IL aur CLR roles ke saath difference explain karein.
 
+### OOP depth — converted source-question additions
+
+#### Q. Runtime polymorphism, virtual dispatch, overloading aur method hiding mein kya farq hai?
+
+**Direct answer:** Overload resolution compile time par method name aur declared argument types se hoti hai. `virtual`/`override` call ko runtime object type ke implementation tak dispatch karte hain. Runtime conceptually type metadata/virtual method slots se implementation choose karta hai (aksar vtable/dispatch table ke through); exact CLR internals implementation detail hain. `new` method hiding alag member banata hai—base reference se call base member tak ja sakti hai.
+
+**Pitfall:** “Overload runtime type choose karta hai” kehna; `new` ko override samajhna; ya har object ke physical layout mein vtable ka exact shape language guarantee batana.
+
+**Scenario:** `Base x = new Derived(); x.Show()` `Derived.Show()` call karega agar `override` hai; `new` se hide kiya gaya ho to `Base.Show()` call ho sakta hai.
+
+**Follow-ups**
+- **`sealed override`?** Ek virtual override ko current derived class par seal karta hai; further derived types use override nahin kar sakte.
+- **Overload ka return type alag rakh sakte hain?** Return type akela overload distinguish nahin karta; parameter signature differ honi chahiye.
+- **Vtable ka performance impact?** Virtual dispatch cost usually chhota hai; JIT devirtualize/inline kar sakta hai. Design ko speculative micro-optimization se distort na karein.
+
+#### Q. Abstract class constructor, inheritance ke types aur class modifiers kaise explain karenge?
+
+**Direct answer:** Abstract class instantiate nahin hoti, par constructor rakh sakti hai; derived instance create hote waqt base constructor shared state initialize karta hai. C# single class inheritance allow karta hai (single, multilevel, hierarchical forms), multiple interfaces implement kiye ja sakte hain. `static` class instantiate/inherit nahin hoti; `sealed` inherit nahin hoti; `partial` same type declaration ko files mein split karta hai; `abstract` direct instantiation rokta hai aur inheritance ke liye type banata hai.
+
+**Pitfall:** Har modifier combination valid maan lena: `static` class sealed/abstract semantics already carry karti hai aur inherit nahin ho sakti; `abstract sealed` class syntax utility static class ke roop mein use hota hai, ordinary instantiable design nahin. Multiple class inheritance ko C# support nahin karta.
+
+**Scenario:** `ReportBase` constructor shared configuration set karta hai; concrete `PdfReport`/`CsvReport` abstract rendering contract implement karte hain. Unrelated services ko shared capability deni ho to interface use karein, base class force na karein.
+
+**Follow-ups**
+- **Diamond problem?** Multiple base classes same inherited state/member ke conflicting paths de sakti hain; C# class inheritance ko single rakhta hai and interface contracts/composition prefer karta hai.
+- **`partial` class kab?** Generated code aur hand-written code ko same type ke separate files mein organize karne ke liye, often source generators/designer files; use it sparingly.
+
+#### Q. Casting, access modifiers aur Template Method pattern kab relevant hain?
+
+**Direct answer:** Derived-to-base upcast implicit/safe; base-to-derived downcast explicit and runtime-invalid ho sakta hai. `is` type test/pattern variable deta hai, `as` compatible reference ya `null` deta hai. Access: `private` same type, `protected` type/derived types, `internal` same assembly, `protected internal` either derived or same assembly, `private protected` derived type within same assembly. Template Method base class mein algorithm ka stable order rakhta hai aur selected abstract/virtual steps subclasses ko deta hai.
+
+**Pitfall:** Repeated downcasts/type switches polymorphism ka missing signal ho sakte hain. `protected internal` ko “derived AND same assembly” samajhna galat; `private protected` dono constraints lagata hai. Template base ko unrelated implementations par force na karein.
+
+**Scenario:** Report pipeline `Generate()` mein validate → load → format → render order fix karti hai; subclasses sirf `Load`/`Format` customize karte hain. Agar stages frequently vary/combine hon, composition/Strategy behtar ho sakti hai.
+
+**Follow-ups**
+- **`as` value types par?** Nullable value type target ke saath use ho sakta hai; modern code mein `is` pattern matching/`TryParse` often clearer.
+- **Encapsulation aur abstraction?** Encapsulation object state ko controlled access se protect karti hai; abstraction caller ko relevant contract dikhati hai, implementation detail hide karti hai.
+
+#### Q. Project mein OOP apply karne ka interview answer kaise banayenge?
+
+**Direct answer:** Ek actual feature select karein; business variation ko interface/Strategy ya composition se isolate karna, invariants ko encapsulate karna, aur caller ko implementation se decouple karna explain karein. Apna ownership, alternative, trade-off aur verified outcome batayein.
+
+**Pitfall:** Sirf four pillars ki definitions ginaana, invented project/metric, ya class count ko design quality ka proof banana.
+
+**Scenario:** Payment providers badalne wale system mein checkout `IPaymentGateway` par depend karta hai, provider-specific adapter credentials/HTTP handle karta hai, aur payment state transition domain object apne methods se validate karta hai. Retry/idempotency boundary explicitly define karein.
+
+**Follow-ups**
+- **Kaise pata design useful tha?** Provider add/change karne ke impact, test seams, defects, deployment constraints and maintenance evidence se; “future-proof” ka unsupported claim nahin.
+- **Inheritance use ki?** Sirf stable substitutable “is-a” relation par; otherwise composition. Concrete real example dein.
+
+#### Q. C# mein palindrome aur second-highest salary/grouping kaise solve karenge?
+
+**Direct answer:** Palindrome ke liye two pointers se ends compare karte hue center ki taraf badhein; normalization (punctuation, case, Unicode/graphemes) requirement ke mutabik define karein. Distinct second-highest salary ke liye distinct values descending sort karke second item lein; department-wise grouping ke liye `GroupBy`.
+
+```csharp
+static bool IsPalindrome(string value)
+{
+    if (value is null)
+        throw new ArgumentNullException(nameof(value));
+
+    var left = 0;
+    var right = value.Length - 1;
+
+    while (left < right)
+    {
+        while (left < right && !char.IsLetterOrDigit(value[left])) left++;
+        while (left < right && !char.IsLetterOrDigit(value[right])) right--;
+
+        if (char.ToLowerInvariant(value[left]) !=
+            char.ToLowerInvariant(value[right]))
+            return false;
+
+        left++;
+        right--;
+    }
+
+    return true;
+}
+
+var secondHighestSalary = employees
+    .Select(employee => employee.Salary)
+    .Distinct()
+    .OrderByDescending(salary => salary)
+    .Skip(1)
+    .Select(salary => (decimal?)salary)
+    .FirstOrDefault();
+
+var departmentSummaries = employees
+    .GroupBy(employee => employee.Department)
+    .Select(group => new
+    {
+        Department = group.Key,
+        Count = group.Count(),
+        AverageSalary = group.Average(employee => employee.Salary)
+    });
+```
+
+**Pitfall:** Empty collection/only one distinct salary par result define karein; `FirstOrDefault` numeric zero ko “no value” samjha sakta hai unless nullable result use ho. LINQ-to-Objects vs EF `IQueryable` translation alag ho sakti hai; DB query server-side execute karna ho to materialize se pehle compose karein. Unicode grapheme palindromes ke liye `char`/UTF-16 code units enough nahin.
+
+**Scenario:** Payroll report ko second distinct salary chahiye: no second value ho to `null`; department summary ko database par aggregate karne ke liye query provider-compatible expression, projection and appropriate null/empty handling.
+
+**Follow-ups**
+- **Complexity?** Two-pointer palindrome O(n) time, O(1) extra space; LINQ sorting second-highest O(n log n) time/O(n) materialized space, streaming one-pass alternative O(n)/O(1).
+- **Palindrome ignore spaces/case?** Example punctuation/whitespace skip aur invariant lowercase karta hai; locale/user-language rules required hon to normalization/`StringComparison` policy specify karein.
+
 ### ASP.NET MVC 4/Web API 2 aur legacy hosting — converted additions
 
 #### Q. Classic ASP.NET MVC request lifecycle, filters aur routing kaise kaam karte hain?
@@ -1159,7 +1265,36 @@ Yeh section original [NET Full Stack Interview Q&A Sheet](<./NET Full Stack Inte
 - **Moq example?** Setup async repository return; construct SUT with mock; await method; assert result and only verify call if interaction is contract.
 - **Test MVC/API controller?** Direct unit test for action result/view model; separate integration test for route, binding, filters, auth, serialization and middleware.
 - **Reqnroll/SpecFlow?** Gherkin feature + C# step definitions over business language; keep steps not tightly coupled to UI click implementation.
-- **Coverage target?** Critical business paths and branch risk; use coverage as gap detector, not a universal 100% quota.
+- **Frameworks/tools?** .NET mein xUnit, NUnit ya MSTest; mocks ke liye Moq/NSubstitute/FakeItEasy; readable assertions ke liye FluentAssertions; test data ke liye AutoFixture/Bogus. Angular/Node mein Jest ya Jasmine/Karma. Team ke existing runner/ecosystem ko prefer karein.
+- **Deterministic time/file/random tests?** `TimeProvider`/`IClock`, filesystem abstraction and injected random source use karke fixed fake values dein; global clock, real filesystem ya nondeterministic seed par depend na karein.
+- **Async errors test?** Test `async Task` ho, method `await` karein, expected exception assert karein; `.Result`/`.Wait()` se deadlock ya wrapped exceptions ka risk hai.
+- **BDD tool/pipeline?** Gherkin feature + C# step definitions Reqnroll/SpecFlow runner se execute karein; CI mein build, unit tests, static analysis, package; integration/smoke tests staging par, phir approval ya automated production promotion.
+- **Coverage/mutation?** Coverage gaps identify karne ka signal hai, target universal nahin. Critical branches test karein; Stryker.NET mutation testing se pata chalega ki tests meaningful code changes detect karte hain ya nahin.
+
+```csharp
+[Fact]
+public async Task GetOrder_WhenNotFound_ReturnsNull()
+{
+    var repository = new Mock<IOrderRepository>();
+    repository.Setup(r => r.GetByIdAsync(42)).ReturnsAsync((Order?)null);
+    var service = new OrderService(repository.Object);
+
+    var result = await service.GetOrderAsync(42);
+
+    Assert.Null(result);
+    repository.Verify(r => r.GetByIdAsync(42), Times.Once);
+}
+```
+
+BDD ka declarative example:
+
+```gherkin
+Feature: Order discount
+  Scenario: Loyalty customer gets a discount
+    Given a loyalty customer with a cart total of 200
+    When the customer checks out
+    Then the payable amount should be 190
+```
 
 #### Q. GDPR, HIPAA, OWASP, access-control models?
 
@@ -1171,6 +1306,9 @@ Yeh section original [NET Full Stack Interview Q&A Sheet](<./NET Full Stack Inte
 
 **Follow-ups**
 - **GDPR vs HIPAA?** Different jurisdictional scope, covered entities/data and obligations; confirm applicability with counsel/compliance—not interchangeable checklists.
+- **GDPR rights/incident?** Access, rectification, erasure, restriction, portability, objection and certain automated-decision rights; applicable breach notification deadlines (often 72 hours to supervisory authority where GDPR requires it) privacy/legal incident process ke saath handle karein.
+- **GDPR implementation?** Purpose/version/timestamp ke saath consent records where consent is the lawful basis; access/export, correction, erasure workflows; retention/purge; privacy-by-design, processors/data lineage and transfer/residency review. Soft-delete alone deletion request satisfy nahin karta; backups/logs ka policy-governed treatment define karein.
+- **HIPAA safeguards?** Unique identities, least-privilege access, authentication, audit controls, integrity and transmission security; PHI encryption in transit/at rest, timeout, backup/DR, vendor BAA and only eligible services. Applicability and implementation compliance/privacy owner verify kare.
 - **RBAC/claims/ABAC?** Roles group permissions; claims describe subject/resource facts; ABAC evaluates attributes/context. Authorization must be enforced server-side at each resource boundary.
 - **Sensitive logging?** Redact tokens/secrets/PII, restrict access, retention and audit; incident response follows organization policy.
 
@@ -1188,6 +1326,58 @@ Yeh section original [NET Full Stack Interview Q&A Sheet](<./NET Full Stack Inte
 - **EC2 vs Beanstalk vs Lambda vs ECS/Fargate?** Control and OS-level customization vs managed app deployment vs event-driven bounded execution vs long-lived container service; cost/ops/runtime fit decide.
 - **Shared responsibility?** AWS secures cloud infrastructure; customer secures workload configuration/data/identity/network settings according to service model.
 - **IaC kyun?** Reviewable reproducible environment and drift control; state/secrets/plan, module versioning and rollback require governance.
+- **AWS network/security controls?** App/data private subnets, security groups as stateful allow-list, NACLs as stateless subnet layer, TLS via ACM, KMS encryption, private VPC endpoints, CloudTrail audit and GuardDuty/Security Hub detection; avoid public SSH/RDP (use SSM). Service-specific responsibility—EC2 OS patching vs managed RDS/Lambda—explicitly assess karein.
+- **CloudFormation vs CDK vs Terraform?** CloudFormation AWS-native templates; CDK code (for example C#/TypeScript) synthesize karke CloudFormation deploy karta hai; Terraform provider-based IaC and state management use karta hai. Team expertise, multi-cloud needs, state/secrets and drift governance decide karein.
+
+#### Q. .NET se S3 upload/pre-signed URL aur Lambda handler kaise implement karenge?
+
+**Direct answer:** AWS SDK for .NET use karein; ECS task/Lambda/EC2 ke IAM role se temporary credentials SDK default credential chain resolve kare. Upload key ko controlled bucket/prefix tak limit karein; browser ko short-lived pre-signed URL dekar direct upload/download karwa sakte hain.
+
+```csharp
+using Amazon;
+using Amazon.S3;
+using Amazon.S3.Model;
+using Amazon.S3.Transfer;
+
+var client = new AmazonS3Client(RegionEndpoint.APSouth1);
+var transfer = new TransferUtility(client);
+await transfer.UploadAsync(stream, "my-bucket", $"docs/{id}.pdf");
+
+var url = client.GetPreSignedURL(new GetPreSignedUrlRequest
+{
+    BucketName = "my-bucket",
+    Key = $"docs/{id}.pdf",
+    Verb = HttpVerb.GET,
+    Expires = DateTime.UtcNow.AddMinutes(10)
+});
+```
+
+**Pitfall:** Access key source/config mein rakhna, bucket public karna, untrusted client ko arbitrary key dena, pre-signed URL ko permanent credential jaisa treat karna, ya large upload ke liye multipart/cancellation/size limits ignore karna. Encryption, versioning and lifecycle policy workload ke mutabik set karein.
+
+**Scenario:** User API se authorized object key ke liye short-lived upload URL leta hai; browser S3 par upload karta hai; S3 event SQS ko notify karta hai; idempotent worker object metadata/status update karta hai.
+
+```csharp
+using Amazon.Lambda.Core;
+using Amazon.Lambda.SQSEvents;
+using System.Threading.Tasks;
+
+public class Function
+{
+    public Task Handler(SQSEvent evt, ILambdaContext context)
+    {
+        foreach (var record in evt.Records)
+            context.Logger.LogInformation($"Processing message {record.MessageId}");
+
+        return Task.CompletedTask;
+    }
+}
+```
+
+**Follow-ups**
+- **Lambda trigger/handler?** API Gateway, S3, SQS, SNS, EventBridge schedules or DynamoDB Streams invoke handler (`SQSEvent` example above); package/dependencies small, reusable SDK clients handler ke bahar, timeout/memory tune, bounded concurrency and DLQ configure karein. Business processing failure ko surface karein so configured retry/DLQ behavior can run.
+- **Example production-ready hai?** Yeh handler shape/logging ka minimal example hai; actual business processing add karein, PII/body secrets log na karein, and failure ko catch karke success return na karein.
+- **SQS event par retry?** Delivery at-least-once assume karein; record ID/object version/idempotency key se duplicate-safe processing, partial batch failure semantics and poison-message DLQ test karein.
+- **S3 security?** Block public access, bucket/prefix-scoped role policy, SSE-S3/SSE-KMS, TLS, versioning/lifecycle and access logging as required; pre-signed expiry and upload content/type/size validation enforce karein.
 
 #### Q. AWS incident, high availability, monitoring aur cost kaise approach?
 
@@ -1238,16 +1428,16 @@ Source mein **184 prompts** hain: 18 OOP questions (Q1.1–Q1.18), 17 middleware
 
 | Original sheet IDs | Converted destination in this guide |
 |---|---|
-| Q1.1–Q1.18; C# Q1–Q20 | Sections 1, 2, and 19 C#/.NET/runtime additions |
-| C# Q21–Q22; SQL challenges | Sections 7 and 17; coding challenges are summarized in Section 17 |
-| Middleware/DI Q2.1–Q2.17 | Section 4; Section 19 legacy MVC/Web API and C# runtime additions |
+| OOP Q1.1–Q1.18 | Sections 1, 2, and 19 OOP depth, polymorphism and coding examples |
+| Middleware/DI Q2.1–Q2.17 | Section 4 and Section 19 legacy MVC/Web API, runtime and DI coverage |
+| C#/.NET Q1–Q22 | Sections 1, 2, 7, and 19 C#/.NET/runtime plus palindrome and LINQ examples |
 | MVC/Web API Q23–Q49; REST Q87–Q89 | Sections 4, 6, and 19 legacy MVC, REST, file operations and incident additions |
-| SQL Q50–Q69 | Section 7 and Section 19 SQL advanced additions |
-| Angular Q70–Q86 | Section 12 and Section 19 Angular 19 additions |
+| SQL Q50–Q69; SQL challenges | Section 7 and Section 19 SQL advanced/query challenges |
+| Angular Q70–Q86 | Section 12 and Section 19 Angular architecture, RxJS, security and testing |
 | Patterns/architecture Q90–Q100 | Sections 2, 8, 9, and 19 LLD/legacy scenarios |
-| Testing/BDD Q101–Q113 | Section 15 and Section 19 testing additions |
-| Compliance/security Q114–Q123 | Section 6, Section 15 and Section 19 compliance additions |
-| AWS Q124–Q138 | Section 11 and Section 19 AWS architecture/ops additions |
+| Testing/BDD Q101–Q113 | Section 15 and Section 19 frameworks, deterministic tests, BDD/CI and coverage |
+| Compliance/security Q114–Q123 | Sections 6, 15 and Section 19 GDPR/HIPAA safeguards and access control |
+| AWS Q124–Q138 | Section 11 and Section 19 architecture, S3/Lambda, IAM, network, IaC and ops |
 | Scenarios/behavioral Q139–Q149 | Sections 9, 18 and Section 19 production/leadership additions |
 
 ---

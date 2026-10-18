@@ -159,21 +159,12 @@ table ko write karte hain, ownership abhi establish nahi hui.
 
 ## 3.3 Build an ownership matrix
 
-  ----------------------------------------------------------------------------
-  Data/table     Current        Proposed owner  Cross-service   Migration risk
-                 writers                        consumers       
-  -------------- -------------- --------------- --------------- --------------
-  Orders         Sales API,     Sales           Inventory,      High
-                 batch job                      reporting       
-
-  Vehicles       Inventory,     Inventory       Sales,          High
-                 Sales                          compliance      
-
-  Payments       Payment module Payments        Sales, finance  High
-
-  Dealer         Multiple       Dealer          All services    Medium
-  settings       modules        Configuration                   
-  ----------------------------------------------------------------------------
+| Data/table | Current writers | Proposed owner | Cross-service consumers | Migration risk |
+|---|---|---|---|---|
+| Orders | Sales API, batch job | Sales | Inventory, reporting | High |
+| Vehicles | Inventory, Sales | Inventory | Sales, compliance | High |
+| Payments | Payment module | Payments | Sales, finance | High |
+| Dealer settings | Multiple modules | Dealer Configuration | All services | Medium |
 
 Risk table size alone se determine nahi hota. Write frequency,
 transaction coupling, business criticality, hidden consumers and
@@ -185,33 +176,15 @@ recovery options bhi matter karte hain.
 
 Har migration same technique se nahi karni chahiye.
 
-  -----------------------------------------------------------------------
-  Pattern                 Useful when             Main risk
-  ----------------------- ----------------------- -----------------------
-  Stop-the-world          Small app, accepted     Downtime
-  migration               maintenance window      
-
-  Big-bang cutover        Strong test coverage    High blast radius
-                          and coordinated release 
-                          possible                
-
-  Strangler/incremental   Large legacy system,    Temporary dual paths
-  extraction              continuous delivery     and complexity
-                          needed                  
-
-  Expand-and-contract     Old and new application Compatibility gaps
-  schema change           versions overlap        
-
-  Backfill + CDC          Large dataset with      Lag and reconciliation
-                          ongoing writes          complexity
-
-  Shadow reads            Validate new path       Extra load and
-                          before switching user   mismatched results
-                          traffic                 
-
-  Blue/green cutover      Infrastructure supports Data compatibility and
-                          parallel environments   routing complexity
-  -----------------------------------------------------------------------
+| Pattern | Useful when | Main risk |
+|---|---|---|
+| Stop-the-world migration | Small app; accepted maintenance window. | Downtime. |
+| Big-bang cutover | Strong test coverage and coordinated release are possible. | High blast radius. |
+| Strangler/incremental extraction | Large legacy system needs continuous delivery. | Temporary dual paths and complexity. |
+| Expand-and-contract schema change | Old and new application versions overlap. | Compatibility gaps. |
+| Backfill + CDC | Large dataset has ongoing writes. | Lag and reconciliation complexity. |
+| Shadow reads | Validate the new path before switching user traffic. | Extra load and mismatched results. |
+| Blue/green cutover | Infrastructure supports parallel environments. | Data compatibility and routing complexity. |
 
 A strong answer explicitly states the choice depends on traffic, dataset
 size, consistency needs, acceptable downtime, team capability and
@@ -573,13 +546,13 @@ missing order plus one duplicate order can still yield the same count.
 
 Example report:
 
-  Check                            Legacy   Destination Result
-  --------------------------- ----------- ------------- -------------------------------
-  Orders in scope               1,250,000     1,250,000 Count matches
-  Active orders                    85,000        84,998 Investigate
-  Sum of eligible totals               ₹X       ₹X+₹500 Investigate
-  Missing dealer references             0             2 Cutover blocker
-  CDC lag                             ---     4 seconds Compare with agreed threshold
+| Check | Legacy | Destination | Result |
+|---|---:|---:|---|
+| Orders in scope | 1,250,000 | 1,250,000 | Count matches |
+| Active orders | 85,000 | 84,998 | Investigate |
+| Sum of eligible totals | ₹X | ₹X+₹500 | Investigate |
+| Missing dealer references | 0 | 2 | Cutover blocker |
+| CDC lag | --- | 4 seconds | Compare with agreed threshold |
 
 Numbers are illustrative only.
 
