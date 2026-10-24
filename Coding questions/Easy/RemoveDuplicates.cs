@@ -1,4 +1,4 @@
-namespace SotiCodingQuestions.Easy;
+[namespace SotiCodingQuestions.Easy;
 
 public static class RemoveDuplicates
 {
