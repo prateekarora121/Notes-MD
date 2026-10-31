@@ -1,0 +1,1111 @@
+Full-Stack .NET Interview Prep Sheet (10 YOE)
+
+Answers to every question from your screenshots, pitched at a senior (10-year) level. Each answer has a short spoken answer you can say in ~30 seconds, then depth to show seniority. Lead with the short answer, go deeper only if asked.
+
+Sections
+
+	1.	C# & .NET
+	2.	ASP.NET Core Web API
+	3.	EF Core & Architecture
+	4.	Angular & TypeScript (Accenture list)
+	5.	Angular Interview Round (Q1–Q17)
+	6.	JavaScript
+	7.	Angular Extras (Zone.js, Signals, Pipes, Scenarios)
+	8.	SQL Server
+	9.	System Design & Real-World Scenarios
+
+1. C# & .NET
+
+1.1 Value types vs reference types
+
+Short: Value types (int, struct, enum, bool) hold their data directly and are copied on assignment. Reference types (class, interface, delegate, string, arrays) hold a reference to an object on the managed heap; assignment copies the reference, not the object.
+
+Depth:
+
+	•	Value types usually live on the stack or inline inside their container (a struct field in a class lives on the heap with that class). "Value types live on the stack" is an oversimplification, so avoid saying it flatly.
+	•	Boxing/unboxing: converting a value type to object/interface allocates on the heap. It is costly in hot paths (e.g. non-generic ArrayList). Generics avoid it.
+	•	string is a reference type but immutable and has value-like semantics. Use StringBuilder for heavy concatenation.
+	•	Use a struct when it is small (~16 bytes), immutable, and short-lived (readonly struct, Span<T>, record struct). Otherwise use a class.
+	•	record (reference) gives value equality; record struct gives value type plus value equality.
+
+struct P { public int X; }
+var a = new P { X = 1 }; var b = a; b.X = 2;   // a.X still 1
+class C { public int X; }
+var c1 = new C { X = 1 }; var c2 = c1; c2.X = 2; // c1.X is 2
+
+1.2 How do async and await work?
+
+Short: async methods are rewritten by the compiler into a state machine. At an await on an incomplete task, the method returns an incomplete Task to the caller, freeing the thread. When the awaited operation completes, a continuation resumes the state machine. No thread is blocked while waiting for I/O.
+
+Depth:
+
+	•	Async is about not blocking threads during I/O waits (scalability), not about creating threads. For CPU-bound work, use Task.Run (or Parallel).
+	•	SynchronizationContext: in UI/legacy ASP.NET the continuation is marshalled back to the original context. ASP.NET Core has no SynchronizationContext, so deadlocks from .Result are rare but still wasteful (thread-pool starvation). Library code should use ConfigureAwait(false).
+	•	Never .Result / .Wait() / .GetAwaiter().GetResult() on async code (sync-over-async). Go async all the way.
+	•	Avoid async void (exceptions can't be observed) except for event handlers. Return Task/ValueTask.
+	•	Pass CancellationToken through all layers (HttpContext.RequestAborted).
+	•	Run independent calls concurrently: await Task.WhenAll(t1, t2).
+	•	Exceptions: awaiting rethrows the first exception; Task.WhenAll aggregates (inspect task.Exception).
+	•	ValueTask for hot paths that frequently complete synchronously. Don't await a ValueTask twice.
+
+1.3 Task vs Thread vs Task.Run()
+
+	Thread	Task	Task.Run
+What	OS-level thread you manage	Abstraction of an asynchronous operation (may not use a thread at all)	Queues a delegate to the thread pool and returns a Task
+Cost	~1 MB stack, expensive to create	Cheap; uses pool threads	Cheap
+Result/exception/cancel	Manual	Built in (Task<T>, AggregateException, CancellationToken, continuations)	Same
+
+Depth:
+
+	•	A Task represents work or a promise of completion. I/O tasks use completion ports and hold no thread.
+	•	Use new Thread rarely: long-lived dedicated threads, custom priority/apartment state. Even then prefer TaskCreationOptions.LongRunning or BackgroundService.
+	•	Task.Run in ASP.NET Core to "make it async" is an anti-pattern: it just moves work to another pool thread and adds overhead. It is valid for offloading CPU-bound work from a UI thread.
+	•	Task.Factory.StartNew has gotchas (default scheduler, no unwrap for async lambdas). Prefer Task.Run.
+
+1.4 Delegates vs events
+
+Short: A delegate is a type-safe function pointer (a reference to one or more methods). An event is a delegate field with restricted access: outside the declaring class, subscribers can only += / -=, and cannot invoke it or reassign it.
+
+Depth:
+
+	•	Built-ins: Action, Func<>, Predicate<T>. Multicast delegates call all handlers in order.
+	•	Events enforce encapsulation (publisher-subscriber). Convention: EventHandler<TEventArgs>, raise with Changed?.Invoke(this, args).
+	•	Memory leak risk: a long-lived publisher keeps subscribers alive. Always unsubscribe (or use weak events).
+	•	Delegates are also the basis of LINQ lambdas, callbacks, and middleware (RequestDelegate).
+
+public class Order {
+    public event EventHandler<decimal>? Paid;
+    public void Pay(decimal amt) => Paid?.Invoke(this, amt);
+}
+
+1.5 IEnumerable vs IQueryable
+
+	IEnumerable<T>	IQueryable<T>
+Namespace	System.Collections.Generic	System.Linq
+Executes	In memory (LINQ to Objects), Func<> delegates	Provider translates expression trees (Expression<Func<>>) into SQL
+Filtering	After data is loaded	Pushed to the database
+Use for	In-memory collections	EF Core / remote data sources
+
+Depth:
+
+	•	db.Users.Where(...) on IQueryable builds SQL: WHERE. Casting to IEnumerable early (or .ToList()) pulls the whole table, then filters in memory. A classic performance bug.
+	•	Deferred execution: the query runs at enumeration (ToList, foreach, Count, First).
+	•	Don't return IQueryable from repositories across layers carelessly: leaks persistence concerns and defers execution beyond the DbContext lifetime.
+
+1.6 How does Garbage Collection work?
+
+Short: .NET uses a generational, tracing, compacting GC. It finds objects unreachable from roots (stack, statics, registers, handles), frees them, and compacts memory.
+
+Depth:
+
+	•	Generations: Gen0 (new, short-lived, collected most often), Gen1 (buffer), Gen2 (long-lived). Most objects die young, so Gen0 collections are cheap. LOH (≥85,000 bytes) is collected with Gen2 and is not compacted by default; large arrays and strings fragment it. Use ArrayPool<T> to reduce churn.
+	•	Modes: Workstation vs Server GC (per-core heaps, higher throughput; ASP.NET Core default is Server on multi-core), concurrent/background GC for lower pauses.
+	•	Finalizers (~Class) delay reclamation (object survives one extra GC via the finalization queue). Prefer IDisposable + using/await using; use SafeHandle for native resources; implement the Dispose pattern only when owning unmanaged resources.
+	•	Leaks in managed code: event handlers not unsubscribed, statics/caches that grow, Timers, captured closures, HttpClient created per request (socket exhaustion; use IHttpClientFactory).
+	•	Diagnostics: dotnet-counters, dotnet-gcdump, dotnet-dump, PerfView, Visual Studio memory profiler, and watching % Time in GC and Gen2 size.
+
+1.7 SOLID principles
+
+	•	S: Single Responsibility: a class has one reason to change. (Split OrderService into pricing, persistence, notification.)
+	•	O: Open/Closed: open for extension, closed for modification. (Add a new IDiscountStrategy instead of editing an if/else chain.)
+	•	L: Liskov Substitution: subtypes must be usable wherever the base is expected without breaking behaviour. (Classic violation: Square : Rectangle, or an override that throws NotSupportedException.)
+	•	I: Interface Segregation: many small, client-specific interfaces beat one fat one. (IReader/IWriter vs IRepository with 20 methods.)
+	•	D: Dependency Inversion: depend on abstractions, not concretions; high-level modules don't depend on low-level ones. (Constructor-inject IEmailSender; the DI container wires the implementation.)
+
+Senior angle: SOLID is a set of heuristics, not laws. Over-applying causes interface explosion. I apply it where change is likely and keep simple things simple (YAGNI/KISS).
+
+1.8 Transient vs Scoped vs Singleton
+
+Lifetime	Instance	Typical use
+Transient	New every time it's requested	Lightweight, stateless services
+Scoped	One per scope (one per HTTP request)	DbContext, unit-of-work, per-request state
+Singleton	One for the app lifetime	Config, caches, HttpClient factory, stateless shared services
+
+Depth:
+
+	•	Captive dependency: a singleton must not depend on a scoped service (it would capture it forever). ValidateScopes flags this in Development. Fix: inject IServiceScopeFactory and create a scope, or change the lifetime.
+	•	Singletons must be thread-safe.
+	•	In BackgroundService (a singleton) create scopes manually to use a DbContext.
+	•	DbContext is not thread-safe: never share across parallel tasks (use IDbContextFactory<T> for that).
+	•	Keyed services (.NET 8+) let you register multiple implementations of one interface.
+
+2. ASP.NET Core Web API
+
+2.9 The middleware pipeline
+
+Short: Each request flows through an ordered chain of middleware. Each component can do work before calling next(), then do work after the response comes back. It can also short-circuit.
+
+Depth:
+
+	•	Configured in Program.cs via app.Use*, Map, Run. Order matters. A typical order:
+ExceptionHandler → HSTS → HttpsRedirection → StaticFiles → Routing → CORS → Authentication → Authorization → RateLimiter/ResponseCaching → Endpoints.
+	•	Authentication must come before Authorization; CORS must come before auth for preflight to work; Exception handling first so it catches everything after it.
+	•	Custom middleware:
+
+app.Use(async (ctx, next) => {
+    var sw = Stopwatch.StartNew();
+    await next();                       // downstream
+    logger.LogInformation("{Path} took {Ms}ms", ctx.Request.Path, sw.ElapsedMilliseconds);
+});
+
+	•	Or a class with InvokeAsync(HttpContext, RequestDelegate) (conventional) / IMiddleware (factory-activated, supports scoped deps).
+
+2.10 Authentication vs authorization; how does JWT work?
+
+	•	Authentication (AuthN): who are you? Verifies identity (password, token, OIDC).
+	•	Authorization (AuthZ): what are you allowed to do? Policies, roles, claims.
+
+JWT: a signed token with three Base64URL parts, header.payload.signature.
+
+	1.	Client logs in with credentials; the server validates them and issues a JWT containing claims (sub, exp, iss, aud, roles).
+	2.	Client sends it in Authorization: Bearer <token>.
+	3.	The API validates the signature (HMAC secret or RSA/ECDSA public key), issuer, audience, expiry (with small clock skew), then builds the ClaimsPrincipal.
+
+Depth:
+
+	•	JWTs are signed, not encrypted: don't put secrets in them.
+	•	Short-lived access token (5–15 min) + rotating refresh token (stored HttpOnly/Secure cookie or server-side, revocable). Stateless access tokens can't be revoked before expiry, so keep them short or maintain a deny-list.
+	•	Prefer asymmetric signing (RS256/ES256) when multiple services validate tokens, or delegate to an IdP (Entra ID, Auth0, IdentityServer/Duende, Keycloak) via OIDC/OAuth 2.0 (Authorization Code + PKCE for SPAs).
+	•	Storage in Angular: in-memory + HttpOnly refresh cookie beats localStorage (XSS exposure).
+	•	Authorization in ASP.NET Core: [Authorize(Roles="Admin")], policy-based (RequireClaim, custom IAuthorizationHandler), resource-based authorization.
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+  .AddJwtBearer(o => o.TokenValidationParameters = new() {
+      ValidateIssuer = true, ValidateAudience = true, ValidateLifetime = true,
+      ValidateIssuerSigningKey = true, ClockSkew = TimeSpan.FromMinutes(1),
+      ValidIssuer = cfg["Jwt:Issuer"], ValidAudience = cfg["Jwt:Audience"],
+      IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(cfg["Jwt:Key"]!))
+  });
+builder.Services.AddAuthorization(o => o.AddPolicy("CanApprove", p => p.RequireClaim("scope", "invoice.approve")));
+
+2.11 How do you handle global exceptions?
+
+Short: Centralise it so controllers don't need try/catch. Use the built-in exception-handling middleware with IExceptionHandler (.NET 8+) returning RFC 7807 ProblemDetails.
+
+public class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> log) : IExceptionHandler {
+    public async ValueTask<bool> TryHandleAsync(HttpContext ctx, Exception ex, CancellationToken ct) {
+        log.LogError(ex, "Unhandled: {TraceId}", ctx.TraceIdentifier);
+        var (status, title) = ex switch {
+            ValidationException   => (400, "Validation failed"),
+            NotFoundException     => (404, "Not found"),
+            UnauthorizedAccessException => (403, "Forbidden"),
+            _                     => (500, "Server error")
+        };
+        ctx.Response.StatusCode = status;
+        await ctx.Response.WriteAsJsonAsync(new ProblemDetails {
+            Status = status, Title = title, Extensions = { ["traceId"] = ctx.TraceIdentifier } }, ct);
+        return true;
+    }
+}
+// Program.cs
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+builder.Services.AddProblemDetails();
+app.UseExceptionHandler();
+
+Depth: Map domain exceptions to status codes; never leak stack traces in production; log with correlation/trace ID (Serilog + OpenTelemetry); exception filters only cover MVC, while middleware covers the whole pipeline. For expected failures consider the Result pattern instead of exceptions (exceptions are slow and a poor fit for control flow).
+
+2.12 Middleware vs filters
+
+	Middleware	Filters (MVC/Minimal API)
+Scope	Whole pipeline, every request (static files, health, etc.)	Only requests that reach MVC/endpoint
+Context	HttpContext only	Rich: model binding, action args, ActionResult, ModelState
+Use for	Cross-cutting infra: logging, CORS, auth, exception handling, compression	Action-specific logic: validation, caching of results, auditing, authorization on actions
+
+Filter types and order: Authorization → Resource → Action → Exception → Result. Minimal APIs have endpoint filters (AddEndpointFilter). Rule of thumb: if it needs MVC context, use a filter; otherwise middleware.
+
+2.13 API versioning and validation
+
+Versioning (Asp.Versioning.Http/Mvc):
+
+	•	Strategies: URL segment (/api/v1/orders, most explicit and cache-friendly), query string (?api-version=1.0), header (X-Api-Version), media type.
+	•	Mark versions [ApiVersion("1.0")], [ApiVersion("2.0")], deprecate with Deprecated = true, report supported versions in headers. Integrate with Swagger (one doc per version). Avoid breaking changes: add fields rather than change/remove; version only when you must.
+
+Validation:
+
+	•	[ApiController] auto-returns 400 ProblemDetails for invalid ModelState.
+	•	Data annotations for simple rules; FluentValidation for complex/business rules (validators per request DTO, registered via DI, run in an endpoint filter or MediatR pipeline behaviour).
+	•	Validate at the edge (DTO shape), enforce invariants in the domain, and enforce constraints in the DB. Never trust the client or the Angular form validation alone.
+
+2.14 How do you secure REST APIs?
+
+Checklist:
+
+	•	Transport: HTTPS everywhere, HSTS, TLS 1.2+.
+	•	AuthN/AuthZ: OAuth2/OIDC + JWT bearer; least-privilege policies; check resource ownership (prevent IDOR/BOLA).
+	•	Input handling: validate/sanitise; parameterised queries (EF/Dapper params) against SQLi; limit payload size; model-binding over-posting protection (use DTOs, not entities).
+	•	CORS: explicit origins, never * with credentials.
+	•	Rate limiting/throttling: built-in AddRateLimiter (fixed/sliding window, token bucket) to blunt brute force and DoS; WAF/API gateway in front.
+	•	Secrets: Key Vault / user-secrets / env, never in source; rotate keys.
+	•	Headers/hardening: no server version leakage, security headers, antiforgery for cookie-based auth.
+	•	Data protection: encrypt sensitive data at rest and in transit; don't log PII/tokens.
+	•	Observability: audit logs, alerting, dependency scanning (OWASP Top 10 / API Security Top 10), pen-tests.
+	•	Errors: generic messages to clients, details in logs.
+
+2.15 In-memory caching vs Redis
+
+	IMemoryCache	Redis (IDistributedCache)
+Location	Inside the app process	External shared cache server
+Speed	Fastest (no network, no serialisation)	Network hop + serialisation
+Multi-instance	Each instance has its own copy (inconsistent)	Shared by all instances, consistent
+Survives restart	No	Yes (with persistence) / independent of app lifecycle
+Capacity	Limited by app memory	Scales independently
+Extras	Eviction/size limits	Pub/sub, TTL, atomic ops, locks, data structures
+
+Use in-memory for small, rarely-changing, per-node-tolerant data (reference data, config). Use Redis for scaled-out apps: sessions, shared caches, rate-limit counters, distributed locks, SignalR backplane. A hybrid (L1 + L2) approach (HybridCache, .NET 9) gives speed plus consistency and stampede protection.
+Other points: define TTL (absolute/sliding), cache-aside pattern, invalidation strategy, stampede protection (single-flight/lock), serialisation cost, and don't cache user-specific data under a shared key.
+
+2.16 How do you troubleshoot a slow API?
+
+Work top-down and measure before changing anything:
+
+	1.	Reproduce and scope: which endpoint, which percentile (p95/p99), since when, which users/data? Check recent deployments.
+	2.	Observe: distributed tracing / APM (Application Insights, OpenTelemetry, Datadog), logs with correlation IDs, metrics (RPS, latency, error rate, CPU, memory, GC, thread-pool queue length).
+	3.	Find the layer: network/gateway → app → downstream calls → database.
+	4.	Database (most common culprit): slow query log, execution plan, missing/unused index, N+1, SELECT *, parameter sniffing, locking/blocking, large result sets, missing pagination.
+	5.	Application: sync-over-async/thread-pool starvation, excessive allocations/GC, serialisation of large payloads, chatty downstream HTTP calls (parallelise, cache, batch), no HttpClientFactory, missing compression.
+	6.	Infra: under-provisioned resources, cold starts, noisy neighbours, connection pool exhaustion.
+	7.	Fix and verify: add index/rewrite query, cache, async/parallel, pagination, projection (Select DTOs, AsNoTracking), then load test (k6/JMeter/NBomber) to confirm the improvement, and add an alert so regressions are caught.
+
+3. EF Core & Architecture
+
+3.17 EF Core vs Dapper
+
+	EF Core	Dapper
+Type	Full ORM	Micro-ORM (maps SQL results to objects)
+Productivity	High: LINQ, change tracking, migrations, relationships	You write SQL and map manually
+Performance	Good; tracking overhead (mitigate with AsNoTracking, compiled queries)	Near raw ADO.NET
+Control	Less control over generated SQL	Full control
+Best for	CRUD, domain models, rapid development	Hot read paths, complex reports, bulk, stored procs
+
+Senior answer: use both (CQRS-style): EF Core for writes and domain-driven transactional work; Dapper (or raw SQL/views) for performance-critical reads and reporting. They can share the same connection/transaction (context.Database.GetDbConnection()).
+
+3.18 Eager vs lazy vs explicit loading
+
+	•	Eager: load related data up front with Include/ThenInclude (single query or split with AsSplitQuery).
+	•	Lazy: related data loads automatically on first navigation access (needs proxies + virtual navigation properties, or ILazyLoader). Convenient but a main source of N+1. Usually avoided in APIs.
+	•	Explicit: you load on demand: context.Entry(order).Collection(o => o.Items).LoadAsync().
+
+Depth: Prefer projections (Select into DTOs) which fetch only needed columns and avoid tracking altogether. Use AsSplitQuery to avoid cartesian explosion with multiple collection includes. AsNoTracking for read-only queries.
+
+3.19 What is the N+1 query problem?
+
+One query loads N parent rows, then N more queries run (one per parent) to fetch each child: 1 + N round trips. Typical cause: lazy loading or lazily accessing navigation properties inside a loop.
+
+// N+1
+var orders = await db.Orders.ToListAsync();
+foreach (var o in orders) total += o.Items.Count;   // query per order with lazy loading
+
+// Fix 1: eager load        db.Orders.Include(o => o.Items)
+// Fix 2: project           db.Orders.Select(o => new { o.Id, ItemCount = o.Items.Count })
+// Fix 3: batch             one query for children where OrderId IN (...), group in memory
+
+Detect via SQL logging (LogTo), MiniProfiler, Application Insights, or an EF interceptor with a query-count threshold in tests.
+
+3.20 Repository Pattern
+
+An abstraction between the domain/business layer and data access that exposes collection-like operations (Add, GetById, Find) so business code doesn't depend on the persistence technology, and makes unit testing easier.
+
+Senior nuance (be honest in interviews): DbContext already is a Unit of Work and DbSet<T> already behaves like a repository. A generic repository on top of EF is often an unnecessary leaky abstraction (it hides Include, projections, and so on). It still has value when you need: a domain-driven aggregate-root repository with intention-revealing methods (GetOpenInvoicesForCustomer), the ability to swap persistence, or strict layering. Alternatives: the Specification pattern, or injecting the DbContext directly into query handlers (CQRS). Pair repositories with a Unit of Work (SaveChangesAsync) for transactional consistency.
+
+3.21 What is CQRS?
+
+Command Query Responsibility Segregation: separate the model for writes (commands) that change state from the model for reads (queries) that return data.
+
+	•	Commands: validated, run domain logic, transactional, return little/nothing.
+	•	Queries: no side effects, optimised for reads (projections, Dapper, read replicas, denormalised views/search index).
+
+Why: independent scaling and optimisation of reads vs writes, simpler handlers, clear intent. Implementation in .NET: MediatR (or hand-rolled handlers) with IRequest<T> and pipeline behaviours (validation, logging, transaction). Levels: same DB with separate models, then separate read store with sync via events (eventual consistency), and optionally Event Sourcing. Trade-off: more code and complexity; don't use it for simple CRUD. (Note: MediatR became commercial for new major versions, so mention alternatives like Wolverine/Mediator source generators or plain handlers.)
+
+3.22 Clean Architecture
+
+Concentric layers with the dependency rule: dependencies point inward only.
+
+	1.	Domain (centre): entities, value objects, domain events, business rules; no dependencies.
+	2.	Application: use cases (commands/queries/handlers), interfaces (IOrderRepository, IEmailSender), DTOs, validation.
+	3.	Infrastructure: EF Core, repositories, external APIs, email, file storage; implements Application interfaces.
+	4.	Presentation / API: controllers, minimal APIs, Angular client; composition root (DI wiring).
+
+Benefits: testable business logic, framework/DB independence, maintainability. Costs: more projects, mapping and boilerplate. Practical advice: adopt it for long-lived, complex domains; for small CRUD apps use a simpler vertical-slice architecture. Combine it with DDD (aggregates), CQRS, and architecture tests (NetArchTest) to enforce layer rules.
+
+4. Angular & TypeScript (Accenture list)
+
+4.23 Explain OnPush change detection
+
+See also §5 Q2–Q3 for the full comparison. In short:
+
+	•	ChangeDetectionStrategy.Default: the component is checked on every change-detection cycle triggered by Zone.js (any event, timer, XHR).
+	•	OnPush: the component (and its subtree) is checked only when: (1) an @Input reference changes, (2) an event originates in the component or its template, (3) an async pipe emits / a signal read in the template changes, or (4) markForCheck() / detectChanges() is called.
+	•	Needs immutable data updates. Result: far fewer checks, big performance win in large trees. It is the recommended default for all components.
+
+4.24 Promises vs Observables
+
+See §5 Q5 for the full table. Summary: Promises are eager, single-value, non-cancellable. Observables are lazy, can emit multiple values over time, cancellable (unsubscribe), and come with a rich operator library (map, switchMap, debounceTime, retry...).
+
+4.25 switchMap vs mergeMap vs concatMap vs exhaustMap
+
+All map each source value to an inner observable and flatten the result. They differ in how they handle overlapping inner observables:
+
+Operator	Behaviour	Order	Use case
+switchMap	Cancels the previous inner when a new value arrives	latest wins	Typeahead search, route-param driven loads, "get latest"
+mergeMap	Runs all inners concurrently	not guaranteed	Independent parallel calls, fire-and-forget logging, file uploads
+concatMap	Queues; runs one at a time in order	preserved	Sequential saves where order matters (e.g. updating the same record)
+exhaustMap	Ignores new values while an inner is active	first wins	Login/submit button (prevent double-submit), refresh
+
+search$.pipe(switchMap(q => this.http.get(`/api/s?q=${q}`)));      // cancel stale
+clicks$.pipe(exhaustMap(() => this.http.post('/api/pay', body)));  // ignore double click
+
+Gotchas: switchMap on writes (POST/PUT) can cancel a request that already reached the server, so use concatMap/exhaustMap for mutations. mergeMap accepts a concurrent limit parameter.
+
+4.26 Interceptors and route guards
+
+HTTP interceptors sit between the app and the network: they can clone/modify every request and response. Uses: attach the JWT, global error handling (401 → refresh token/redirect, 5xx → toast), loading spinner, logging, caching, retry, correlation IDs. Modern Angular uses functional interceptors:
+
+export const authInterceptor: HttpInterceptorFn = (req, next) => {
+  const token = inject(AuthService).token();
+  return next(token ? req.clone({ setHeaders: { Authorization: `Bearer ${token}` } }) : req);
+};
+provideHttpClient(withInterceptors([authInterceptor]));
+
+Careful with the refresh-token flow: queue concurrent 401s so only one refresh happens (exhaustMap/shared observable).
+
+Route guards decide whether navigation is allowed: canActivate, canActivateChild, canDeactivate (unsaved changes), canMatch (controls lazy route matching/loading), plus resolve for pre-fetching data. Functional guards:
+
+export const authGuard: CanActivateFn = (route, state) =>
+  inject(AuthService).isLoggedIn() || inject(Router).createUrlTree(['/login'], { queryParams: { returnUrl: state.url } });
+
+Remember: client-side guards are UX only, so real security is enforced on the API.
+
+4.27 How do you optimise Angular performance?
+
+	•	Change detection: OnPush everywhere, signals, avoid function calls in templates (use pure pipes/computed), consider zoneless.
+	•	Rendering: @for with track (or trackBy), virtual scrolling (CDK), pagination, @defer blocks for lazy template sections.
+	•	Loading: lazy-load routes/components, preloading strategies, NgOptimizedImage, SSR/hydration for first paint, code splitting.
+	•	Bundle: production builds with AOT + tree-shaking, analyse with source-map-explorer/webpack-bundle-analyzer, import only what you use (e.g. lodash-es), budgets in angular.json, remove unused deps.
+	•	RxJS: unsubscribe (takeUntilDestroyed, async pipe), shareReplay to avoid duplicate HTTP calls, debounce inputs.
+	•	Network: HTTP caching headers, compression (brotli), pagination/filters on the server, CDN.
+	•	Diagnose first: Angular DevTools profiler, Chrome Performance tab, Lighthouse, Core Web Vitals.
+	•	Run heavy computation in Web Workers; run non-UI event listeners outside the Angular zone (runOutsideAngular).
+
+4.28 Reactive forms vs template-driven forms
+
+See §5 Q6 for the full table. Summary: reactive forms define the model in TypeScript (FormGroup/FormControl, typed forms), are explicit, scalable, testable, and ideal for complex/dynamic forms. Template-driven forms rely on ngModel in the template; fine for tiny, simple forms.
+
+4.29 How do you manage shared state?
+
+Choose the lightest tool that works:
+
+	1.	@Input/@Output for parent–child only.
+	2.	Service with signals (or BehaviorSubject) scoped to a feature or root: the default for most apps.
+	3.	NgRx (Store, Effects, Selectors, Entity) or NgRx SignalStore for large apps with complex cross-feature state, time-travel debugging, and strict unidirectional flow. Alternatives: NGXS, Akita, TanStack Query for server state.
+	4.	Router state/query params for shareable state (filters, pagination); URL as the source of truth.
+	5.	Browser storage for persistence (with care).
+
+Principles: single source of truth, immutable updates, derived state via computed/selectors, keep server state (cache, refetch, invalidation) separate from UI state. Don't introduce NgRx before you feel the pain.
+
+4.30 How do you prevent memory leaks in Angular?
+
+Causes: un-unsubscribed Observables (interval, fromEvent, WebSocket, store selects, valueChanges), manual event listeners/setInterval, retained references in singleton services, detached DOM, un-destroyed dynamic components.
+
+Prevention:
+
+	•	Prefer the async pipe (auto-unsubscribes) or toSignal.
+	•	takeUntilDestroyed() (Angular 16+; pass DestroyRef outside injection context):
+
+constructor() { this.data$.pipe(takeUntilDestroyed()).subscribe(...); }
+
+	•	Older pattern: private destroy$ = new Subject<void>(), takeUntil(this.destroy$), complete in ngOnDestroy.
+	•	Finite streams (HTTP) complete on their own; infinite ones don't.
+	•	Clear timers; remove listeners (Renderer2.listen return fn); destroy dynamic ComponentRefs.
+	•	Detect with Chrome DevTools heap snapshots (look for detached DOM nodes and growing listener counts) and Angular DevTools.
+
+5. Angular Interview Round (Q1–Q17)
+
+Q1. Introduce yourself
+
+Template (≈60–90 sec). Adapt the bracketed parts:
+
+"I'm [Name], a full-stack engineer with about 10 years of experience, primarily on the .NET and Angular stack. I currently work at [Company] as [Senior/Lead Engineer] where I [own/lead] [domain, e.g. logistics/finance platform]. On the backend I build ASP.NET Core Web APIs with EF Core/Dapper and SQL Server, using Clean Architecture, CQRS and async messaging [Azure Service Bus/RabbitMQ]. On the frontend I build Angular apps (standalone components, RxJS, signals, NgRx) with a focus on performance and maintainability.
+Recent highlights: [one measurable win, e.g. reduced a report API from 12 s to 800 ms through indexing and caching], [led a migration from .NET Framework to .NET 8 / from AngularJS to Angular], [set up CI/CD with Azure DevOps and Docker/Kubernetes].
+Beyond code I mentor developers, run code reviews, and take part in design decisions. I'm now looking for a role where I can [own architecture and deliver scalable products], which is why this opportunity interests me."
+
+Tips: present → past → why this role; always attach numbers; end with a hook they can ask about.
+
+Q2. Default vs OnPush change detection
+
+Short: Angular must keep the view in sync with data. With Default, it re-checks the entire component tree after every async event (via Zone.js). With OnPush, a component is checked only when its inputs change by reference, an event fires inside it, an observable bound with async emits (or a signal it reads changes), or it is explicitly marked dirty.
+
+	Default	OnPush
+Checked	Every CD cycle	Only when "dirty"
+Input change detection	Any mutation visible	Reference change only
+Performance	Fine for small apps	Much better for large trees
+Data style	Mutable OK	Immutable updates / signals / observables
+
+@Component({ changeDetection: ChangeDetectionStrategy.OnPush, ... })
+
+Depth: OnPush plus immutability plus async pipe/signals is the standard for scalable apps. The subtree below an OnPush component is skipped unless it is itself dirty; markForCheck() marks the component and its ancestors dirty.
+
+Q3. Will modifying a property inside an existing object trigger OnPush?
+
+No. If a parent passes an object to an OnPush child and then mutates a property (this.user.name = 'X'), the reference is unchanged, so Angular doesn't see an input change and the child view won't update (unless another trigger occurs, e.g. an event inside the child).
+
+Fixes:
+
+	•	Replace the reference (immutability): this.user = { ...this.user, name: 'X' }; (arrays: spread/map/filter, not push).
+	•	Use signals (user.update(u => ({ ...u, name: 'X' }))) or async pipe with observables.
+	•	Last resort: cdr.markForCheck() (or detectChanges()).
+
+Nuance: if the mutation happens in an event handler inside the OnPush component itself, the view is refreshed because the event marks it dirty.
+
+Q4. Different ways of sharing data between two components
+
+Parent ↔ child
+
+	•	@Input() (parent → child), @Output() + EventEmitter (child → parent); the modern input(), output(), model() (two-way) signal APIs.
+	•	@ViewChild/@ViewChildren/viewChild() (parent reads the child instance), template reference variables.
+	•	Content projection (<ng-content>).
+
+Unrelated / siblings / across the app
+
+	•	Shared service holding state: BehaviorSubject/Subject (RxJS) or signals.
+	•	State management libs: NgRx / NgRx SignalStore / NGXS.
+	•	Router: route params, query params, route data, state in navigate.
+	•	Browser storage: localStorage/sessionStorage/cookies (persistence, with care).
+	•	Dependency injection with scoped providers (component-level providers), InjectionTokens.
+	•	BroadcastChannel/postMessage across tabs/iframes (special cases).
+
+Rule of thumb: inputs/outputs for direct relations, a service (signals) for siblings/feature-wide, NgRx for complex app-wide state.
+
+Q5. Observable vs Promise
+
+	Promise	Observable (RxJS)
+Values	One value (or error)	0..n values over time
+Execution	Eager: runs immediately	Lazy: runs on subscribe
+Cancellation	No (native)	Yes (unsubscribe, takeUntil, switchMap)
+Operators	then/catch/finally	100+ (map, filter, debounceTime, retry, combineLatest...)
+Multicasting	Always shared	Cold by default; share/shareReplay/Subjects to multicast
+Sync/async	Always async (microtask)	Can be sync or async
+Use	One-shot async ops	Streams: events, WebSockets, form value changes, polling, HTTP in Angular
+
+Interop: firstValueFrom(obs$) / lastValueFrom, from(promise). Angular's HttpClient returns cold observables, so nothing happens until you subscribe and subscribing twice sends two requests.
+
+Q6. Reactive vs template-driven forms
+
+	Reactive	Template-driven
+Model defined in	Component class (FormGroup, FormControl, FormBuilder)	Template (ngModel, directives)
+Data flow	Explicit, synchronous, immutable-ish	Implicit, asynchronous (directives create the model)
+Validation	Functions/validators in code, cross-field, async validators	Directive attributes (required, minlength)
+Dynamic forms	Easy (FormArray, add/remove controls)	Hard
+Testing	Easy without rendering the template	Needs the DOM
+Typed forms	Yes (Angular 14+)	Limited
+Best for	Medium/large, complex, dynamic forms	Small, simple forms/prototypes
+
+form = this.fb.nonNullable.group({
+  email: ['', [Validators.required, Validators.email]],
+  items: this.fb.array<FormGroup>([])
+});
+
+Senior notes: valueChanges + debounceTime for live validation, updateOn: 'blur', custom/async validators, ControlValueAccessor for custom controls, getRawValue() vs value.
+
+Q7. Advantage of lazy loading + syntax
+
+Advantage: the initial bundle contains only what the first route needs; feature code downloads on demand. Result: faster initial load/TTI, smaller main bundle, better caching, and users who never visit a section don't pay for it.
+
+Standalone component (modern, Angular 14+):
+
+// app.routes.ts
+export const routes: Routes = [
+  { path: 'dashboard',
+    loadComponent: () => import('./dashboard/dashboard.component').then(m => m.DashboardComponent) },
+  { path: 'admin',
+    canMatch: [adminGuard],
+    loadChildren: () => import('./admin/admin.routes').then(m => m.ADMIN_ROUTES) }
+];
+
+NgModule-based (legacy):
+
+{ path: 'orders', loadChildren: () => import('./orders/orders.module').then(m => m.OrdersModule) }
+
+Extras: preloading (withPreloading(PreloadAllModules) or a custom strategy), @defer (on viewport) for lazy-loading parts of a template, and canMatch to avoid even downloading a route chunk for unauthorised users.
+
+Q8. Which is the default component in Angular?
+
+AppComponent: the root component generated by the CLI (selector: 'app-root'). It is bootstrapped in main.ts (bootstrapApplication(AppComponent, appConfig), or AppModule's bootstrap: [AppComponent] in older projects), and index.html contains <app-root></app-root>. In newer CLI versions the class may be named App in app.ts, but the role is the same.
+
+Q9. Can I bootstrap a custom dashboard component instead of AppComponent?
+
+Yes, it works. Any component can be the root component as long as it's standalone (or declared in the module), and index.html contains its selector:
+
+bootstrapApplication(DashboardComponent, appConfig);   // main.ts
+
+<app-dashboard></app-dashboard>   <!-- index.html instead of <app-root> -->
+
+You can even bootstrap multiple root components in an NgModule's bootstrap: [A, B], or create components dynamically with createComponent (e.g. Angular Elements/micro-frontends).
+
+Q10. Is it good practice or should we avoid it?
+
+Generally avoid it for normal SPAs.
+
+	•	Convention: AppComponent is a thin shell (layout, header, <router-outlet>); features such as the dashboard are routes (/dashboard) that can be lazy-loaded, guarded, deep-linked, and have resolvers. Bootstrapping the dashboard directly bypasses that structure, makes routing/layout awkward, and surprises teammates and tooling (CLI, tests, docs).
+	•	Hurts: guards and global layout (nav, error handling) have no natural home; harder to add a second page later.
+
+Legitimate exceptions: a single-purpose embeddable widget, micro-frontend remotes, Angular Elements (custom elements) on non-Angular pages, multiple independent Angular apps on one page.
+
+Answer: "It works technically, but I'd keep AppComponent as the shell and route to the dashboard, unless it's a deliberate widget/micro-frontend scenario."
+
+Q11. Search box calls API on every keystroke: prevent it, with code
+
+Use debounceTime + distinctUntilChanged + switchMap:
+
+searchCtrl = new FormControl('', { nonNullable: true });
+
+results$ = this.searchCtrl.valueChanges.pipe(
+  map(v => v.trim()),
+  debounceTime(300),                 // wait for the user to pause typing
+  distinctUntilChanged(),            // skip identical consecutive values
+  filter(v => v.length >= 2),        // optional min length
+  switchMap(q =>
+    this.http.get<Item[]>('/api/items', { params: { q } }).pipe(
+      catchError(() => of([]))       // keep the stream alive on error
+    )),
+);
+
+<input [formControl]="searchCtrl" />
+@for (r of results$ | async; track r.id) { <li>{{ r.name }}</li> }
+
+Why each operator: debounceTime cuts request volume, distinctUntilChanged avoids duplicates, switchMap cancels the in-flight request so stale responses never overwrite newer ones. Mention server-side rate limiting and caching as complements.
+
+Signals version (Angular 17+/RxJS interop):
+
+query = signal('');
+results = toSignal(
+  toObservable(this.query).pipe(debounceTime(300), distinctUntilChanged(),
+    switchMap(q => this.api.search(q))), { initialValue: [] });
+
+(Angular 19+ also offers rxResource/resource for async signal-based loading.)
+
+Q12. What does switchMap do? What is its use?
+
+switchMap maps each emission of the source to a new inner observable and subscribes to the latest one, unsubscribing from the previous inner observable if it hasn't completed. Only results from the most recent inner observable are emitted.
+
+Uses: typeahead/search, loading data when a route param changes (route.paramMap.pipe(switchMap(p => api.get(p.get('id'))))), dependent dropdowns, auto-refresh/polling (restart on trigger). It prevents race conditions and wasted work because the HTTP request is cancelled (browser aborts XHR).
+Don't use for non-idempotent writes where cancelling mid-flight is dangerous; use concatMap/exhaustMap (see §4.25).
+
+Q13. Which is the latest Angular version you have worked with?
+
+There's no universal answer, so state the real version you used and show you know the modern features. Template:
+
+"My most recent project is on Angular 19. I've used standalone components (no NgModules), the new control flow (@if, @for, @switch), @defer blocks, signals (signal, computed, effect, signal inputs/queries), functional guards/interceptors, inject(), the application builder (esbuild/Vite), and SSR with hydration. I follow the release notes and have been evaluating zoneless change detection and the signal-based forms/resource APIs."
+
+Be sure you can explain whichever feature you claim.
+
+Angular 19 talking points (since that's your version):
+
+	•	Standalone by default: components, directives and pipes are standalone unless you opt out (standalone: false); a migration schematic exists for older code.
+	•	Signals maturity: input(), output(), model(), viewChild() are stable; linkedSignal (writable derived state that resets when its source changes) and the resource() / rxResource() APIs for signal-based async loading (experimental in 19, so say so).
+	•	Incremental hydration (developer preview) with @defer triggers for SSR apps, plus event replay for events fired before hydration finishes.
+	•	Zoneless: experimental in 19 via provideExperimentalZonelessChangeDetection(); works best with OnPush + signals.
+	•	Tooling: esbuild/Vite application builder, hot module replacement for styles and templates, route-level render mode (RenderMode.Server/Client/Prerender) for hybrid rendering.
+	•	Control flow: @if, @for (with required track), @switch, @let (template local variables, new in 18.1/19) and @defer.
+	•	Likely follow-up: "Why did you pick signals over RxJS here?" Answer: signals for synchronous state and template reads, RxJS for events, debouncing and cancellation (see §7.2). Check the current stable version at angular.dev before the interview so you can mention how it relates to what you've used.
+
+Q14. What are signals?
+
+A signal is a reactive wrapper around a value that notifies consumers when it changes. Angular tracks which signals a template/computation reads, so it can update only the affected parts (fine-grained reactivity) and enables zoneless change detection.
+
+count = signal(0);                       // writable
+double = computed(() => this.count() * 2); // derived, lazy, memoised, read-only
+constructor() { effect(() => console.log(this.count())); } // side effects
+
+this.count.set(5);
+this.count.update(c => c + 1);
+
+	•	Read by calling it: count().
+	•	computed: automatic dependency tracking, cached until dependencies change.
+	•	effect: for side effects (logging, syncing to storage), not for deriving state (use computed); avoid writing signals inside effects.
+	•	Signal-based APIs: input(), output(), model(), viewChild(), toSignal(), toObservable(), linkedSignal(), resource().
+	•	Always synchronous and always have a value (unlike observables). Equality check by reference (Object.is) → use immutable updates.
+
+Q15. Can we use signals for sharing data between multiple components?
+
+Yes. Put the signal in an injectable service (providedIn: 'root' for app-wide, or component-level providers for scoped state). Every component that injects the service reads the same signal and updates automatically.
+
+@Injectable({ providedIn: 'root' })
+export class CartStore {
+  private _items = signal<Item[]>([]);
+  readonly items = this._items.asReadonly();         // expose read-only
+  readonly total = computed(() => this._items().reduce((s, i) => s + i.price, 0));
+  add(i: Item) { this._items.update(list => [...list, i]); }
+}
+
+Components: cart = inject(CartStore) then {{ cart.total() }} in the template. Keep writes behind service methods (encapsulation). For larger needs, use NgRx SignalStore.
+
+Q16. A value (a signal) in the employee component changes every 10–20 min. Will you prefer signals for sharing that data?
+
+Yes, but how often it changes isn't the deciding factor; where the data comes from is.
+
+	•	10–20 minutes is a very low update frequency, so signals are perfectly fine. Even high-frequency updates are OK because signals notify only dependents.
+	•	If the value is produced in the component/is synchronous UI state: keep it as a signal and share it through a service (don't make other components reach into the employee component).
+	•	If it comes from asynchronous sources (polling, WebSocket/SignalR push, HTTP refresh), keep the stream in RxJS (timer/interval + switchMap, or a SignalR subscription), then convert to a signal for consumption: toSignal(stream$). RxJS is better for time-based and cancellation logic; signals are better for state consumed by the template.
+	•	Place the state in a shared service/store, not in the employee component, so consumers don't depend on a component's lifecycle.
+	•	With OnPush/zoneless apps, signals read in templates refresh the view automatically with no manual markForCheck.
+
+Q17. Difference between let and const in JavaScript
+
+See §6.7. Short version: both are block-scoped and hoisted into the TDZ. let can be reassigned; const cannot be re-assigned and must be initialised at declaration, but a const object/array is still mutable internally (use Object.freeze or immutable patterns for true immutability).
+
+6. JavaScript
+
+6.1 Spread vs Rest operators
+
+Both use ...; the position determines the meaning.
+
+	•	Spread expands an iterable/object into individual elements (call sites, array/object literals).
+	•	Rest collects remaining elements into an array/object (function parameters, destructuring).
+
+// Spread
+const a = [1, 2], b = [...a, 3];              // [1,2,3]
+const o2 = { ...{ x: 1, y: 2 }, y: 9 };       // { x:1, y:9 }  (shallow copy + override)
+Math.max(...a);
+
+// Rest
+function sum(first, ...rest) { return rest.reduce((s, n) => s + n, first); }
+const [head, ...tail] = [1, 2, 3];            // head=1, tail=[2,3]
+const { id, ...others } = { id: 1, a: 2, b: 3 };
+
+Note: spread makes shallow copies only (nested objects keep shared references; use structuredClone for deep copies). The rest parameter must be last.
+
+6.2 Closures: disadvantages and memory leaks
+
+A closure is a function bundled with references to its lexical scope, so it can access outer variables even after the outer function has returned.
+
+function counter() { let c = 0; return () => ++c; }
+const next = counter(); next(); // 1
+
+Uses: data privacy/encapsulation, factories, memoisation, currying, callbacks/event handlers, module pattern.
+
+Disadvantages:
+
+	•	Captured variables stay in memory as long as the closure is reachable. A big captured object/DOM node is retained even if only a small part is used.
+	•	Memory leaks examples: event listeners never removed (the closure keeps the DOM node and its data alive), setInterval/setTimeout callbacks never cleared, closures stored in global caches/maps, detached DOM nodes referenced by closures, RxJS subscriptions holding component references.
+	•	The classic loop bug with var: all callbacks share one variable (let creates a new binding per iteration).
+	•	Slightly harder to debug.
+
+Mitigation: remove listeners (removeEventListener, AbortController), clearInterval, null out references, capture only what's needed, use WeakMap/WeakRef for caches, and profile with the Chrome heap snapshot.
+
+6.3 What is an IIFE? Why use it?
+
+Immediately Invoked Function Expression: a function defined and executed at once.
+
+(function () { const secret = 1; /* ... */ })();
+(() => { /* ... */ })();
+(async () => { await main(); })();      // async IIFE (top-level await alternative)
+
+Why: create a private scope (avoid polluting globals / name collisions), the module pattern with private state (pre-ES modules), run initialisation code once, and capture loop variables (old var fix). Today: ES modules and block scope (let/const) have mostly replaced the need, but async IIFEs are still handy.
+
+6.4 Debouncing vs Throttling
+
+	Debounce	Throttle
+Behaviour	Run after events stop for N ms (the timer resets on each event)	Run at most once every N ms while events keep coming
+Think	"Wait until the user finishes"	"Limit the rate"
+Use cases	Search-as-you-type, auto-save, window-resize end, form validation	Scroll/mousemove handlers, infinite scroll, drag, button spam protection, analytics pings
+
+const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+const throttle = (fn, ms) => { let last = 0; return (...a) => { const now = Date.now(); if (now - last >= ms) { last = now; fn(...a); } }; };
+
+RxJS equivalents: debounceTime, throttleTime, auditTime, sampleTime. Variants: leading/trailing edge execution.
+
+6.5 Hoisting with var, let, const; the Temporal Dead Zone
+
+Hoisting: declarations are processed before code runs (during the creation phase).
+
+	•	var: hoisted and initialised to undefined, function-scoped. Accessing it before the assignment gives undefined.
+	•	let / const: hoisted but not initialised; they sit in the Temporal Dead Zone (TDZ) from the start of the block until the declaration line executes. Accessing them in the TDZ throws ReferenceError.
+	•	Function declarations are hoisted fully (callable before definition); function expressions/arrow functions follow their variable's rule. class declarations are also in the TDZ.
+
+console.log(a); var a = 1;      // undefined
+console.log(b); let b = 2;      // ReferenceError (TDZ)
+typeof c; const c = 3;          // ReferenceError: typeof isn't safe in the TDZ
+foo(); function foo() {}        // works
+bar(); var bar = () => {};      // TypeError: bar is not a function
+
+The TDZ catches use-before-define bugs.
+
+6.6 Output-based questions: execution order
+
+Key model: call stack → microtask queue (Promise .then/.catch/.finally, await continuations, queueMicrotask, MutationObserver) → macrotask queue (setTimeout, setInterval, I/O, UI events). After the synchronous code finishes, the event loop drains all microtasks before taking the next macrotask. (process.nextTick in Node runs even before promise microtasks.)
+
+Q A
+
+console.log('1');
+setTimeout(() => console.log('2'), 0);
+Promise.resolve().then(() => console.log('3'));
+console.log('4');
+
+Output: 1, 4, 3, 2.
+
+Q B (async/await)
+
+async function f() { console.log('a'); await null; console.log('b'); }
+console.log('c'); f(); console.log('d');
+
+Output: c, a, d, b (code after await is a microtask).
+
+Q C (mix)
+
+setTimeout(() => console.log('timeout'), 0);
+Promise.resolve().then(() => console.log('p1')).then(() => console.log('p2'));
+queueMicrotask(() => console.log('micro'));
+console.log('sync');
+
+Output: sync, p1, micro, p2, timeout. (p1 and micro are queued first; p2 is queued when p1 resolves, after micro.)
+
+Q D (var in loops: the classic)
+
+for (var i = 0; i < 3; i++) setTimeout(() => console.log(i), 0);   // 3 3 3
+for (let j = 0; j < 3; j++) setTimeout(() => console.log(j), 0);   // 0 1 2
+
+Q E (this/hoisting)
+
+var x = 1; function t() { console.log(x); var x = 2; } t();        // undefined (local x hoisted)
+
+Approach in the interview: write the three queues on paper, run sync code first, then drain microtasks, then one macrotask, repeat.
+
+6.7 let vs const (also var)
+
+	var	let	const
+Scope	Function	Block	Block
+Hoisting	Yes, initialised to undefined	Yes, TDZ	Yes, TDZ
+Re-declare in same scope	Allowed	No	No
+Re-assign	Yes	Yes	No
+Must initialise	No	No	Yes
+Global object property	Yes (global scope)	No	No
+
+const prevents re-binding, not mutation: const o = {a:1}; o.a = 2; is fine; o = {} throws. Use Object.freeze() (shallow) for immutability. Best practice: default to const, use let when reassigning, avoid var.
+
+7. Angular Extras
+
+7.1 What is Zone.js and how does Angular use it for change detection?
+
+Zone.js monkey-patches async browser APIs (setTimeout, Promises, DOM events, XHR/fetch) to create an execution context ("zone") that can intercept when async work starts and finishes. Angular runs your code inside NgZone; when the zone becomes stable (the task queue is empty after an async task), NgZone.onMicrotaskEmpty fires and Angular runs change detection from the root (ApplicationRef.tick()), checking bindings top-down. That's why the UI updates "magically" after an HTTP response or click.
+
+Implications:
+
+	•	Every async event triggers a CD pass, even if nothing changed, so there's a cost; mitigate with OnPush.
+	•	Frequent events that don't affect UI (scroll, mousemove, setInterval for charts, third-party libs) → run outside the zone: ngZone.runOutsideAngular(() => ...), then re-enter with ngZone.run.
+	•	Zoneless (provideZonelessChangeDetection()): Angular uses signals/markForCheck/events as the notification mechanism instead of Zone.js. Benefits: smaller bundles, better performance and debugging, and compatibility with native async/await. Needs signal/OnPush-friendly code.
+
+7.2 Angular Signals vs RxJS Observables
+
+	Signals	Observables
+Model	State/value (always has a current value)	Stream of events over time
+Reading	Synchronous sig()	subscribe / async pipe
+Initial value	Required	Optional (BehaviorSubject has one)
+Async/time-based ops	Not built in	Excellent (debounceTime, retry, switchMap, combineLatest, ...)
+Cleanup	Automatic (framework-managed graph)	Manual unsubscribe (or async/takeUntilDestroyed)
+Change detection	Fine-grained, glitch-free, enables zoneless	Needs async pipe/markForCheck
+Best for	UI/synchronous state, derived values	Events, HTTP, WebSockets, complex async flows
+
+They complement each other. Observables for async pipelines → convert with toSignal() for templates; toObservable() to feed a signal into an RxJS pipeline. Rule: RxJS for events and async, signals for state.
+
+7.3 Why create a custom Pipe? Pure vs impure
+
+Why: reusable, declarative template transformations (formatting dates/currency/phone numbers, truncating, filtering/sorting display lists, highlighting search text, mapping enum → label) without cluttering components or calling methods in templates (methods run on every CD cycle).
+
+	•	Pure pipe (default, pure: true): re-runs only when its input reference changes (or a primitive value changes). Fast, cached, ideal when it's a deterministic function of its inputs. Use for formatting and transformation; combine with immutable data.
+	•	Impure pipe (pure: false): re-runs on every change-detection cycle. Use only when the result depends on something other than inputs (internal state, mutating arrays, time, async data like AsyncPipe). Performance risk, so keep it light or avoid it.
+
+@Pipe({ name: 'truncate', standalone: true })      // pure by default
+export class TruncatePipe implements PipeTransform {
+  transform(v: string, max = 50) { return v.length > max ? v.slice(0, max) + '…' : v; }
+}
+
+Better than an impure filter pipe: filter in the component with computed()/RxJS and bind the result.
+
+7.4 Scenario: API called repeatedly while the user types in a search box
+
+Same as §5 Q11: debounceTime(300) + distinctUntilChanged() + switchMap (cancels stale requests), plus a minimum length, error handling inside the inner observable, optional client caching (shareReplay / a Map cache), and server-side rate limiting/response caching.
+
+7.5 Scenario: component is slow when rendering thousands of records
+
+Identify:
+
+	•	Angular DevTools profiler (CD cycles per component), Chrome Performance panel (long tasks/scripting vs rendering), check the DOM node count and network payload size.
+	•	Look for method calls in templates, missing trackBy, Default change detection, and heavy pipes.
+
+Improve (in order of impact):
+
+	1.	Don't render thousands: server-side pagination/filtering/sorting; infinite scroll in chunks.
+	2.	Virtual scrolling (cdk-virtual-scroll-viewport) so only visible rows exist in the DOM.
+	3.	OnPush + immutable data/signals.
+	4.	@for (...; track item.id) (stable identity so rows are reused, not re-created).
+	5.	Replace function calls in templates with computed/pure pipes; precompute derived fields.
+	6.	Debounce filtering; run heavy transforms in a Web Worker.
+	7.	Lighter DOM/CSS per row, @defer for expensive child widgets, NgOptimizedImage.
+	8.	Reduce payload: send only needed fields, compress.
+Verify with before/after profiler numbers.
+
+7.6 Scenario: two unrelated components need to share data. Which approach and why?
+
+A shared, injectable service holding the state, using signals (or a BehaviorSubject).
+
+	•	No parent–child relationship, so @Input/@Output don't apply, and bubbling through ancestors is brittle.
+	•	A root (or feature-scoped) service gives one source of truth, decoupling, testability, and it works naturally with OnPush/signals.
+	•	For complex, app-wide state with many actions/side effects → NgRx / SignalStore.
+	•	For shareable/bookmarkable state (filters, selected id) → URL query params; for persistence across reloads → storage.
+Call out trade-offs: keep the service API small, expose read-only signals, avoid a "god service".
+
+8. SQL Server
+
+8.31 Clustered vs non-clustered indexes
+
+	Clustered	Non-clustered
+What	Defines the physical order of the table's data; the leaf level is the data pages	Separate structure with key columns + a row locator (clustering key, or RID for a heap) pointing to the data
+Count per table	One	Many (up to 999)
+Created by default by	PRIMARY KEY	UNIQUE constraint, or explicit CREATE INDEX
+Best for	Range scans, ordered retrieval, narrow/unique/ever-increasing keys (e.g. IDENTITY int/bigint)	Selective lookups, covering queries, filtering/joining on non-key columns
+Lookup cost	Direct	Index seek then key lookup (unless covering)
+
+Depth: Choose a narrow, static, unique, ever-increasing clustered key (random GUIDs cause page splits and fragmentation; use NEWSEQUENTIALID() or UUIDv7-style). Every non-clustered index carries the clustering key, so a wide clustered key bloats all indexes. Use INCLUDE columns to make covering indexes and avoid key lookups, and filtered indexes for subsets. Over-indexing slows writes (INSERT/UPDATE/DELETE maintain every index) and costs storage. Monitor with sys.dm_db_index_usage_stats, sys.dm_db_missing_index_details, and fragmentation (sys.dm_db_index_physical_stats: reorganise 5–30%, rebuild >30%). Columnstore for analytics.
+
+8.1 Primary key vs unique key (from your first screenshot)
+
+	•	Primary key: uniquely identifies each row; no NULLs; one per table; creates a clustered index by default.
+	•	Unique key/constraint: enforces uniqueness on other columns; allows one NULL (SQL Server treats NULLs as equal for uniqueness); many per table; creates a non-clustered index by default. (To allow multiple NULLs, use a filtered unique index WHERE col IS NOT NULL.)
+
+8.2 What is a composite key and why do we use it?
+
+A composite key is a key made of two or more columns that together uniquely identify a row.
+
+Why: when no single column is unique (e.g. a many-to-many junction table), to guarantee the combination is unique and prevent duplicate pairs.
+
+CREATE TABLE StudentCourses (
+    StudentId INT NOT NULL,
+    CourseId  INT NOT NULL,
+    EnrolledOn DATE NOT NULL DEFAULT SYSDATETIME(),
+    CONSTRAINT PK_StudentCourses PRIMARY KEY (StudentId, CourseId),
+    CONSTRAINT FK_SC_Student FOREIGN KEY (StudentId) REFERENCES Students(Id),
+    CONSTRAINT FK_SC_Course  FOREIGN KEY (CourseId)  REFERENCES Courses(Id)
+);
+
+Note: column order matters for index usage (queries filtering on StudentId use the index; filtering only on CourseId won't seek efficiently, so add a separate index if needed). A surrogate single-column key is often simpler when other tables need to reference the row. EF Core: HasKey(x => new { x.StudentId, x.CourseId }).
+
+8.3 EXISTS vs IN
+
+	EXISTS	IN
+Checks	Whether the subquery returns any row (TRUE/FALSE)	Whether a value matches any value in a list/subquery result
+Subquery	Usually correlated; SELECT 1 is conventional (the select list is ignored)	Non-correlated, returns a single column
+Short-circuit	Stops at the first match	Compares against the list (the optimizer may transform it)
+NULL handling	Unaffected by NULLs in the subquery	NOT IN returns no rows if the subquery contains a NULL (three-valued logic trap)
+Use	Existence checks, large subquery results	Small static lists, simple membership
+
+SELECT c.* FROM Customers c
+WHERE EXISTS (SELECT 1 FROM Orders o WHERE o.CustomerId = c.Id);
+
+SELECT * FROM Customers WHERE Id IN (SELECT CustomerId FROM Orders);
+SELECT * FROM Customers WHERE Id IN (1, 2, 3);
+
+Depth: In modern SQL Server the optimizer often produces the same plan (semi-join) for both. Performance depends on indexes, statistics and data, so check the execution plan rather than assume. Prefer NOT EXISTS over NOT IN because of NULL safety.
+
+8.32 Find the Nth-highest salary
+
+-- 1) DENSE_RANK (handles ties; best general answer)
+SELECT DISTINCT Salary FROM (
+  SELECT Salary, DENSE_RANK() OVER (ORDER BY Salary DESC) AS rnk FROM Employees
+) t WHERE rnk = @N;
+
+-- 2) OFFSET/FETCH (distinct salaries)
+SELECT DISTINCT Salary FROM Employees
+ORDER BY Salary DESC OFFSET @N - 1 ROWS FETCH NEXT 1 ROWS ONLY;
+-- note: DISTINCT with ORDER BY needs the column in select; wrap as
+-- SELECT Salary FROM (SELECT DISTINCT Salary FROM Employees) d ORDER BY Salary DESC OFFSET @N-1 ROWS FETCH NEXT 1 ROW ONLY;
+
+-- 3) Correlated subquery (classic, slower)
+SELECT MAX(Salary) FROM Employees e1
+WHERE @N - 1 = (SELECT COUNT(DISTINCT Salary) FROM Employees e2 WHERE e2.Salary > e1.Salary);
+
+-- 4) Per-department Nth
+SELECT * FROM (
+  SELECT *, DENSE_RANK() OVER (PARTITION BY DeptId ORDER BY Salary DESC) rnk FROM Employees
+) x WHERE rnk = @N;
+
+Explain ROW_NUMBER vs RANK vs DENSE_RANK (ties/gaps), and that an index on Salary helps. Return NULL if there are fewer than N distinct salaries (wrap in a scalar subquery).
+
+8.33 How do you analyse execution plans?
+
+	1.	Capture the Actual Execution Plan (SSMS Ctrl+M; or SET STATISTICS IO, TIME ON; Query Store for historical plans; sys.dm_exec_query_stats).
+	2.	Read right-to-left, top-to-bottom; look at operator cost % and the thick arrows (row counts).
+	3.	Red flags:
+	•	Table/Clustered Index Scan on a big table where a Seek is expected → missing/unusable index or non-SARGable predicate (functions on columns, leading-wildcard LIKE, implicit conversions).
+	•	Key/RID Lookup repeated for many rows → make the index covering (INCLUDE).
+	•	Estimated vs actual rows mismatch → stale statistics, parameter sniffing, table variables, or poor cardinality estimation.
+	•	Sort/Hash spills to tempdb, large memory grants, expensive Nested Loops with big outer input, or Hash Match where a Merge/Seek would do.
+	•	Warnings: implicit conversion, missing index hint, no join predicate.
+	4.	Fix: indexes, rewrite the query (SARGable, avoid SELECT *, replace scalar UDFs/cursors with set-based logic), update statistics, OPTION (RECOMPILE) or OPTIMIZE FOR for parameter sniffing, Query Store plan forcing, partitioning.
+	5.	Re-measure (logical reads, CPU, duration) to confirm.
+
+8.34 What causes deadlocks, and how do you resolve them?
+
+Deadlock: two (or more) sessions each hold a lock the other needs, so neither can proceed. SQL Server's deadlock monitor picks a victim (error 1205) and rolls it back.
+
+Common causes: transactions accessing resources in different orders, long-running transactions, missing indexes (scans lock more rows/pages), lock escalation, high isolation levels (SERIALIZABLE/REPEATABLE READ), read-then-update (shared→exclusive upgrade) patterns, and user interaction inside a transaction.
+
+Diagnose: system_health extended events / deadlock graph XML, trace flag 1222, SQL Profiler, sp_whoisactive.
+
+Resolve/prevent:
+
+	•	Access objects in a consistent order; keep transactions short, no user input inside.
+	•	Add proper indexes so queries touch fewer rows.
+	•	Use READ_COMMITTED_SNAPSHOT/Snapshot isolation (row versioning) so readers don't block writers.
+	•	Use UPDLOCK hints on read-then-update patterns; lower lock granularity or use ROWLOCK carefully.
+	•	Retry logic in the app for error 1205 (with backoff) (EF Core EnableRetryOnFailure or Polly).
+	•	Batch large updates; avoid cursors.
+
+8.35 Transactions and isolation levels
+
+Transaction: a unit of work that is ACID: Atomic (all or nothing), Consistent (valid state to valid state), Isolated (concurrent transactions don't interfere improperly), Durable (committed data survives crashes via the write-ahead log).
+
+BEGIN TRY
+  BEGIN TRAN; /* work */ COMMIT;
+END TRY
+BEGIN CATCH
+  IF @@TRANCOUNT > 0 ROLLBACK; THROW;
+END CATCH
+-- SET XACT_ABORT ON recommended
+
+Concurrency problems: dirty read (reading uncommitted data), non-repeatable read (same row read twice gives different values), phantom read (a re-run range query returns new rows), lost update.
+
+Isolation level	Dirty read	Non-repeatable	Phantom	Notes
+READ UNCOMMITTED (NOLOCK)	Yes	Yes	Yes	Fastest, unreliable data
+READ COMMITTED (default)	No	Yes	Yes	Shared locks released after read; with RCSI uses row versions
+REPEATABLE READ	No	No	Yes	Holds shared locks until commit
+SERIALIZABLE	No	No	No	Range locks; highest blocking/deadlock risk
+SNAPSHOT	No	No	No	Row versioning; optimistic; update-conflict errors possible
+
+Senior points: prefer RCSI for read-heavy OLTP; NOLOCK is a smell, not a fix; keep transactions short; distributed transactions (MSDTC) are costly, so prefer Outbox/Saga in microservices. In EF Core: SaveChanges is transactional by default; use BeginTransactionAsync for multi-step work; optimistic concurrency with [Timestamp]/rowversion and DbUpdateConcurrencyException.
+
+9. System Design & Real-World Scenarios
+
+9.36 How would you design a scalable .NET + Angular application?
+
+Approach in an interview: clarify requirements first (users, RPS, data volume, latency/availability targets, consistency needs, budget), then walk through layers.
+
+Architecture (cloud, e.g. Azure):
+
+Browser (Angular SPA, CDN / Static Web Apps)
+   → WAF / API Gateway (YARP/APIM/Front Door): TLS, auth, rate limiting, routing
+   → Load balancer → stateless ASP.NET Core API instances (containers on AKS/App Service, autoscaling)
+        → Cache (Redis)
+        → SQL Server / Azure SQL (primary + read replicas), optional NoSQL/Search (Cosmos, Elasticsearch)
+        → Message broker (Service Bus/RabbitMQ/Kafka) → background workers (BackgroundService / Functions)
+        → Blob storage (files)
+   Cross-cutting: Identity provider (OIDC/JWT), Key Vault, OpenTelemetry + App Insights/Grafana, CI/CD
+
+Key decisions:
+
+	•	Stateless services (no in-memory sessions; JWT; Redis for shared state) → horizontal scaling and zero-downtime deploys.
+	•	Modular monolith first, split into microservices only where scale/team boundaries demand it. Clean Architecture/DDD, CQRS where reads and writes differ.
+	•	Database: indexing, partitioning, read replicas for reporting, connection pooling, avoid N+1, async everywhere; consider sharding only when necessary.
+	•	Caching layers: CDN → HTTP/response cache → Redis → DB. Define invalidation.
+	•	Async processing: queue long tasks (emails, reports, invoice generation), use the Outbox pattern for reliable events, idempotent consumers, dead-letter queues.
+	•	Resilience: Polly (retry with jitter, circuit breaker, timeout, bulkhead), health checks, graceful degradation, rate limiting.
+	•	Frontend: lazy-loaded routes, OnPush/signals, SSR where SEO matters, CDN, bundle budgets.
+	•	Ops: Docker, Kubernetes/App Service autoscale, IaC (Bicep/Terraform), CI/CD with automated tests, blue-green/canary, structured logging + distributed tracing + SLO-based alerts.
+	•	Security: OAuth2/OIDC, least privilege, secrets in Key Vault, OWASP hardening, encryption at rest and in transit.
+	•	Trade-offs: CAP/consistency vs availability, cost vs performance, complexity vs team size.
+
+9.37 Prevent duplicate invoice generation under concurrent requests
+
+The goal is idempotency and mutual exclusion at the data layer, because app-level checks alone race (two requests both check "does it exist?" then both insert).
+
+Layers of defence (use several):
+
+	1.	Database unique constraint (the ultimate guard): unique index on the business key, e.g. (OrderId) or (CustomerId, BillingPeriod). The second insert fails with a unique violation (2627/2601) → catch and return the existing invoice.
+
+CREATE UNIQUE INDEX UX_Invoice_Order ON Invoices(OrderId);
+
+	2.	Idempotency key: client sends an Idempotency-Key header (GUID) per logical operation; the server stores (key → response/invoiceId) with a unique constraint, and replays the stored result for retries/double-clicks. Stripe-style.
+	3.	Transaction + locking for check-then-act: SELECT ... WITH (UPDLOCK, HOLDLOCK) on the order row (or sp_getapplock), or an optimistic rowversion check on the Order (DbUpdateConcurrencyException), or a state transition guard: UPDATE Orders SET Status='Invoiced' WHERE Id=@id AND Status='Ready' and check @@ROWCOUNT = 1 before creating the invoice (atomic compare-and-set).
+	4.	Distributed lock (Redis SET NX PX/RedLock, or a SQL app lock) when multiple app instances must serialise a section; always with a TTL.
+	5.	Messaging: use a queue with a single consumer per order key (Service Bus sessions/partition key), idempotent handlers, and the inbox/outbox pattern to deduplicate.
+	6.	Frontend: disable the button while pending (exhaustMap) as a UX nicety only, never as the protection.
+	7.	Make invoice number generation atomic (SQL SEQUENCE), and add tests that fire parallel requests.
+
+9.38 Optimise pagination for millions of records
+
+Problem with OFFSET/FETCH (or Skip/Take): SQL Server must scan and discard all the skipped rows, so deep pages get slower (page 100,000 is very slow). COUNT(*) on every request is also expensive.
+
+Optimisations:
+
+	•	Keyset (seek) pagination: use the last row's key instead of an offset. Stable and O(log n):
+
+SELECT TOP (@PageSize) Id, CreatedAt, ...
+FROM Orders
+WHERE (CreatedAt < @LastCreatedAt) OR (CreatedAt = @LastCreatedAt AND Id < @LastId)
+ORDER BY CreatedAt DESC, Id DESC;
+
+Supported by an index on (CreatedAt DESC, Id DESC). Return a cursor/continuation token to the client (infinite scroll/next-prev). Limitation: no random jump to page N.
+
+	•	Index the sort/filter columns; make it covering (INCLUDE) so there are no key lookups; always include a unique tiebreaker in ORDER BY for deterministic ordering.
+	•	Project only needed columns (Select DTO), AsNoTracking, no Include of big graphs.
+	•	Avoid exact COUNT(*): use an approximate total (sys.dm_db_partition_stats), cache the count, show "10,000+", or compute it asynchronously.
+	•	If page-number UI is mandatory: limit max pages, use the "deferred join" trick (page over ids from a narrow index then join for the full rows), or move search/listing to a search engine (Elasticsearch/Azure AI Search).
+	•	Cap pageSize server-side; cache hot pages; use read replicas; partition huge tables by date.
+	•	Angular: virtual scroll + server-driven cursor, debounced filters.
+
+9.39 Describe a production issue you solved and how you found the root cause
+
+Use STAR (Situation, Task, Action, Result) plus a blameless RCA mindset. Replace the example with your real story (it must be true and defensible).
+
+Generic full-stack example (slow screen in production, .NET API + Angular 19):
+
+	•	Situation: A week after a release, support reported that the Orders list screen was taking 10–15 seconds to load for some customers, and a few requests were timing out. Application Insights showed the p95 of GET /api/orders had jumped from ~500 ms to 12 s, and DB CPU was spiking.
+	•	Task: I owned the module, so I was responsible for restoring performance and finding the root cause.
+	•	Action:
+	1.	Triage: checked the scope. Only large customers (50k+ orders) were affected, and it started with the last release. We added a temporary page-size cap via config to reduce impact while investigating.
+	2.	Trace the layers: the Angular network tab and App Insights traces showed the API call itself was slow (not rendering). The same request was also being fired twice.
+	3.	Database: SQL logging and Query Store showed one query doing a full scan plus 1 + N follow-up queries per order (EF Core lazy loading of order items). Execution plan: clustered index scan, key lookups, and a non-SARGable WHERE YEAR(CreatedAt) = @y.
+	4.	Frontend: the component subscribed to the same HttpClient observable twice (once with async pipe, once manually in ngOnInit), and the search box had no debounceTime, so each keystroke caused a new request.
+	•	Root cause: a combination of a non-SARGable filter, a missing composite index, N+1 from lazy loading, and duplicate/undebounced requests from the UI.
+	•	Fix:
+	•	API: rewrote the filter as a date range, added a covering index on (CustomerId, CreatedAt) INCLUDE (...), replaced lazy loading with a Select projection to a DTO plus AsNoTracking, and added keyset pagination.
+	•	Angular 19: single rxResource/toSignal source for the list, debounceTime(300) + distinctUntilChanged() + switchMap for search, OnPush and @for (...; track order.id).
+	•	Prevention: added a query-count assertion in integration tests, a k6 load test in the pipeline, and a Query Store regression alert.
+	•	Result: p95 dropped from 12 s to ~300 ms (better than before the release), timeouts disappeared, and we wrote a short blameless postmortem and added the checks to our PR checklist.
+
+Alternative example (API timeouts after a release):
+
+	•	Situation: After a Friday release, our order-search API p95 went from 400 ms to 12 s, and users in checkout saw timeouts. Alerts from App Insights fired.
+	•	Task: I was on call and responsible for restoring service and finding the root cause.
+	•	Action:
+	1.	Mitigate first: rolled the release back to a canary-free state and scaled out; service recovered within 20 minutes. (Stop the bleeding before investigating.)
+	2.	Investigate: compared metrics before/after (CPU normal, DB DTU at 100%, blocking chains). Distributed traces showed one query dominating. Pulled the actual execution plan from Query Store: a plan regression with a clustered index scan and key lookups.
+	3.	Root cause: a new filter added WHERE YEAR(CreatedAt) = @year (non-SARGable) plus an EF Include that made N+1 calls; parameter sniffing made it worse for large tenants.
+	4.	Fix: rewrote the predicate as a range (CreatedAt >= @from AND < @to), added a covering index, replaced Include with a projection, and updated statistics.
+	5.	Prevent: added a load test and a query-count assertion to CI, a Query Store regression alert, and a postmortem with action items.
+	•	Result: p95 dropped to 250 ms (better than before), no recurrence, and the checklist was adopted by the team.
+
+What interviewers look for: calm incident handling (mitigate → diagnose → fix → prevent), data-driven diagnosis (logs, traces, plans, dumps), ownership, communication to stakeholders, and learning.
+
+Appendix: Quick-Fire Cheat Sheet
+
+Topic	One-liner
+Value vs ref	Copy data vs copy reference; boxing costs allocations
+async/await	State machine; frees thread during I/O; never .Result
+Task vs Thread	Task = abstraction over work (pool); Thread = OS thread
+IEnumerable vs IQueryable	In-memory delegates vs expression trees → SQL
+DI lifetimes	Transient new each time; Scoped per request; Singleton one; beware captive deps
+Middleware vs Filters	Pipeline-wide infra vs MVC-context logic
+JWT	Signed (not encrypted) claims; validate sig/iss/aud/exp; short-lived + refresh
+N+1	Query per parent row; fix with Include/projection/batch
+CQRS	Separate write and read models
+OnPush	Checked only on input-reference change, event, async/signal, markForCheck
+switch/merge/concat/exhaust	Cancel old / parallel / queue / ignore new
+Debounce vs throttle	Wait for pause vs limit rate
+Signals vs RxJS	State vs streams; combine with toSignal/toObservable
+Clustered vs non-clustered	Data order (1/table) vs separate lookup structure
+EXISTS vs IN	Existence short-circuit, NULL-safe vs membership; prefer NOT EXISTS
+Deadlock	Circular lock wait; consistent order, short tx, RCSI, retry
+Pagination at scale	Keyset pagination + covering index, avoid COUNT(*)
+Duplicate invoices	Unique constraint + idempotency key + atomic state change
+
+Interview delivery tips: (1) give the 1-line definition first, (2) add a trade-off ("it depends on…, I'd choose X because…"), (3) back it with a real project example and a number, (4) admit what you don't know and say how you'd find out.
