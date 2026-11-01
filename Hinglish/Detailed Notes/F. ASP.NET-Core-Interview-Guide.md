@@ -25,10 +25,27 @@ Audience: 10-year .NET full-stack developer jo senior/lead interviews ke liye pr
    - [[gaps] IStartupFilter — Composing the Middleware Pipeline from a Library](#gaps-istartupfilter--composing-the-middleware-pipeline-from-a-library)
    - [[gaps] CORS Preflight Mechanics — What Actually Triggers an OPTIONS Request](#gaps-cors-preflight-mechanics--what-actually-triggers-an-options-request)
 3. [Dependency Injection](#dependency-injection)
-   - [Service Lifetimes](#service-lifetimes)
-   - [[new content] Captive Dependencies & Lifetime Mismatch Bugs](#new-content-captive-dependencies--lifetime-mismatch-bugs)
-   - [[new content] IOptions vs IOptionsSnapshot vs IOptionsMonitor](#new-content-ioptions-vs-ioptionssnapshot-vs-ioptionsmonitor)
+   - [[di-added] DI Mental Model & Terminology](#di-added-di-mental-model--terminology)
+   - [[di-added] Injection Styles: Constructor, Method/Action, Property](#di-added-injection-styles-constructor-methodaction-property)
+   - [[di-added] Constructor Resolution Rules & Invalid Graphs](#di-added-constructor-resolution-rules--invalid-graphs)
+   - [[di-added] Registration Forms: Type vs Instance vs Factory Delegate](#di-added-registration-forms-type-vs-instance-vs-factory-delegate)
    - [Detecting & Fixing Cyclic Dependencies](#detecting--fixing-cyclic-dependencies)
+   - [Service Lifetimes](#service-lifetimes)
+   - [[di-added] Lifetimes in Depth: Identity, Disposal & Thread Safety](#di-added-lifetimes-in-depth-identity-disposal--thread-safety)
+   - [[new content] Captive Dependencies & Lifetime Mismatch Bugs](#new-content-captive-dependencies--lifetime-mismatch-bugs)
+   - [[di-added] Root Provider, Scope Validation & ValidateOnBuild](#di-added-root-provider-scope-validation--validateonbuild)
+   - [[di-added] Registration Identity, Multiple Registrations & Open Generics](#di-added-registration-identity-multiple-registrations--open-generics)
+   - [[di-added] Service Provider & Resolution APIs](#di-added-service-provider--resolution-apis)
+   - [[di-added] Factories, Factory Delegates & Strategy Pattern](#di-added-factories-factory-delegates--strategy-pattern)
+   - [[di-added] Keyed Services (.NET 8)](#di-added-keyed-services-net-8)
+   - [[di-added] Request Lifecycle & DI Scopes](#di-added-request-lifecycle--di-scopes)
+   - [[new content] IOptions vs IOptionsSnapshot vs IOptionsMonitor](#new-content-ioptions-vs-ioptionssnapshot-vs-ioptionsmonitor)
+   - [[di-added] Decorators, ActivatorUtilities, Collections & Framework Services](#di-added-decorators-activatorutilities-collections--framework-services)
+   - [[di-added] DI Failure Modes: Cause, Symptom, Fix](#di-added-di-failure-modes-cause-symptom-fix)
+   - [[di-added] End-to-End Walkthrough: Ek Request Mein Saari Lifetimes](#di-added-end-to-end-walkthrough-ek-request-mein-saari-lifetimes)
+   - [[di-added] Comparison Tables](#di-added-comparison-tables)
+   - [[di-added] DI Glossary](#di-added-di-glossary)
+   - [[di-added] Practical Design Rules & Common Misconceptions](#di-added-practical-design-rules--common-misconceptions)
 4. [Minimal APIs, MVC & API Design](#minimal-apis-mvc--api-design)
    - [[new content] Minimal APIs vs Controller-based MVC — Full Comparison](#new-content-minimal-apis-vs-controller-based-mvc--full-comparison)
    - [REST API vs MVC App](#rest-api-vs-mvc-app)
@@ -80,6 +97,7 @@ Audience: 10-year .NET full-stack developer jo senior/lead interviews ke liye pr
 14. [Sample Interview Q&A](#sample-interview-qa)
 15. [Summary of Additions](#summary-of-additions)
     - [Summary of \[gaps\] Additions (This Pass)](#summary-of-gaps-additions-this-pass)
+    - [Summary of \[di-added\] Additions (DI Deep-Dive Pass)](#summary-of-di-added-additions-di-deep-dive-pass)
 
 ---
 
@@ -396,7 +414,7 @@ public class GlobalExceptionHandler : IExceptionHandler
     public async ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken ct)
     {
         httpContext.Response.StatusCode = StatusCodes.Status500InternalServerError;
-        await httpContext.Response.WriteAsJsonAsync(new { error = "An unexpected error occurred." }, ct);
+        await httpContext.Response.WriteAsJsonAsync(new { error = "An unexpected error occu][rred." }, ct);
         return true; // true = handled, short-circuits further processing
     }
 }
@@ -413,12 +431,15 @@ app.UseExceptionHandler();
 - Downstream middleware (khaas kar Authorization) us endpoint metadata par depend karta hai jo routing produce karti hai.
 
 **Authentication Middleware**
-- Tokens/cookies/headers padhta hai, credentials validate karta hai, ek `ClaimsPrincipal` build karta hai, aur `HttpContext.User` set karta hai.
-- **Important nuance**: authentication khud requests ko block *nahi* karta — yeh sirf identify karta hai ki caller kaun hai. Ek anonymous request bhi pass through ho jaati hai; Authorization decide karta hai ki identity *sufficient* hai ya nahi.
+- Configured authentication scheme (jaise JWT bearer ya cookie) ke through credentials authenticate karne ki koshish karta hai; successful authentication par ek `ClaimsPrincipal` build karke `HttpContext.User` set karta hai.
+- **Important nuance**: authentication middleware aam taur par anonymous request ko khud reject nahi karta. Credentials absent ya invalid hon to user unauthenticated/anonymous reh sakta hai, aur request pipeline aage continue karti hai.
+- Aage `Authorization Middleware` selected endpoint ke metadata (jaise `[Authorize]`) aur configured policy ko evaluate karta hai. `[AllowAnonymous]` endpoint ko authorization checks se exempt karta hai; otherwise policy failure par authorization **challenge** ya **forbid** kar sakta hai.
+- Challenge usually tab hota hai jab policy authenticated user maangti hai lekin user authenticated nahi hai. Authorization configured authentication scheme ko `ChallengeAsync` ke through response dene ko kehta hai: JWT bearer scheme aam taur par `401 Unauthorized` deta hai; cookie scheme browser ko login page par redirect kar sakti hai, isliye exact response scheme/configuration par depend karta hai.
+- User authenticated hai lekin required role, claim, ya policy requirement satisfy nahi karta, to **forbid** hota hai; aam taur par response `403 Forbidden` hota hai. Scheme response behavior ko customize kar sakti hai.
 
 **Authorization Middleware**
 - Authenticated user aur endpoint ke `[Authorize]` metadata ke against roles/policies evaluate karta hai.
-- Dependency chain: routing (endpoint metadata ke liye) aur authentication (user identity ke liye) pehle se run hone chahiye — isliye `UseRouting` ke bina `UseAuthorization` throw karta hai ya silently kuch useful nahi karta.
+- Dependency chain: routing (endpoint metadata ke liye) aur authentication (user identity ke liye) pehle se run hone chahiye. Isliye explicit middleware pipeline mein `UseRouting()` ke baad aur `UseAuthentication()` ke baad `UseAuthorization()` rakho, taaki authorization endpoint aur authenticated user dono dekh sake.
 
 ### Custom Middleware
 
@@ -619,12 +640,88 @@ public class OrdersController : ControllerBase
 }
 ```
 
+### [di-added] DI Mental Model & Terminology
+
+Pehle ek problem: jab class khud `new SqlOrderRepository()` karti hai, to woh us implementation se chipak jaati hai — testing mein DB chahiye, implementation badalne ke liye class edit karni padti hai, aur collaborator ki **lifetime** (kitni der live karega, kaun dispose karega) class decide kar deti hai, jo centrally manage nahi ho sakta. DI mein class sirf declare karti hai ki use kya chahiye, aur koi aur woh supply karta hai.
+
+Interview mein inn terms ka **distinction** puchha jaata hai:
+
+| Term | Meaning |
+|---|---|
+| **IoC (Inversion of Control)** | Broad principle: flow/construction ka control tumhare code se framework/caller ke paas chala jaata hai. Event handlers, template methods, aur ASP.NET Core ka tumhara controller call karna — sab IoC hain. DI uska ek specific form hai |
+| **DI (Dependency Injection)** | Technique: dependencies bahar se supply karna, object khud obtain nahi karta |
+| **DIP (Dependency Inversion Principle)** | SOLID ka "D": high-level code abstractions par depend kare. DI DIP ko honor karne ka *mechanism* hai, lekin container use karna apne aap mein DIP satisfy nahi karta (har jagah concrete classes inject karoge to coupling waisi ki waisi hai) |
+| **Service** | Koi bhi object jo container supply kar sakta hai |
+| **Registration / `ServiceDescriptor`** | Ek registration ka data object: service type, implementation (type / instance / factory), lifetime, aur .NET 8 mein optional key. `IServiceCollection` essentially descriptors ki list hai |
+| **DI container / `IServiceProvider`** | Registrations se object graphs banane wali machinery. `BuildServiceProvider()` / `builder.Build()` se bana provider **root provider** hai |
+| **Scope (`IServiceScope`)** | Lifetime ki unit: scoped services scope tak live karti hain, aur scope ke andar bani disposables scope dispose hone par dispose hoti hain |
+
+**Composition root** woh single jagah hai jahan object graph assemble hota hai — ASP.NET Core mein `Program.cs` (aur usse call hone wale `AddXyz()` extension methods). Registrations startup par isliye hoti hain kyunki: (1) `IServiceCollection` sirf provider build hone tak mutable hai — `Build()` ke baad collection mein add karna already-built provider par koi effect nahi daalta; (2) wiring ek jagah rehti hai, baaki application ko container ka pata hi nahi hota; (3) startup hi woh point hai jahan `ValidateOnBuild` jaise checks fail-fast kar sakte hain.
+
+**Interview lens:** weak answer "constructor mein cheezein pass karna hai". Strong answer IoC (principle) / DIP (design rule) / DI (technique) alag karta hai, container ko descriptors-driven graph builder batata hai, aur composition root ke saath yeh point deta hai ki collection build ke baad effectively frozen hai.
+
+### [di-added] Injection Styles: Constructor, Method/Action, Property
+
+- **Constructor injection (default)**: dependencies explicit, object construction ke baad valid, `readonly` fields possible, aur bahut zyada parameters (6+) design smell ke roop mein dikh jaate hain.
+- **Method/action injection** — container ka general feature nahi, **ASP.NET Core ka binding layer** parameters container se maangta hai:
+  - Minimal APIs: parameter type registered service ho to automatically infer hota hai (framework `IServiceProviderIsService` se check karta hai), ya `[FromServices]` explicit lagao.
+  - MVC action parameters: `[FromServices]` chahiye, warna model binding assume hoti hai.
+  - Middleware `InvokeAsync(HttpContext, extra...)`: extra parameters request services se resolve hote hain.
+  ```csharp
+  app.MapGet("/orders/{id}", async (int id, IOrderService orders) => await orders.GetAsync(id));
+  ```
+- **Property injection** built-in container mein **nahi hai**. Reasons: required dependencies hide hoti hain, partially-initialized object possible, aur mandatory dependency optional jaisi dikhti hai. Autofac jaise containers support karte hain, built-in nahi. Agar property set karni ho to constructor injection, ya factory delegate mein `init`/`required` property use karo. (Note: Razor components ka `@inject` / `[Inject]` framework ka apna activator hai, general container ka property injection nahi.)
+
+### [di-added] Constructor Resolution Rules & Invalid Graphs
+
+`IOrderService` maangne par container: descriptor dhundta hai → (type registration ho to) implementation ke public constructors dekhta hai → har parameter ko recursively resolve karta hai (har parameter ki apni lifetime hai) → constructor call karke lifetime rule apply karta hai.
+
+| Situation | Kya hota hai |
+|---|---|
+| Constructor parameter ki registration missing | `InvalidOperationException` ("Unable to resolve service for type 'X' while attempting to activate 'Y'"). Yeh **resolution time** par fail hota hai (first use), jab tak `ValidateOnBuild` startup par pakad na le |
+| Multiple constructors | Container woh constructor chunta hai jiske saare parameters resolvable hain aur jiske parameters baaki viable constructors ke **superset** hain (practically, sabse zyada parameters wala resolvable). Agar do viable constructors ek-dusre ke superset nahi, to ambiguity exception. `ActivatorUtilities` mein `[ActivatorUtilitiesConstructor]` se disambiguate hota hai; warna factory delegate |
+| Circular dependency | `InvalidOperationException` ("A circular dependency was detected") — neeche dedicated section |
+| Primitive parameter (`string`, `int`) | Resolve nahi hota jab tak registered na ho. Yeh aksar signal hota hai ki value options object ya factory delegate mein belong karti hai |
+| Default value wala parameter (`IAuditLog? a = null`) | Registration na ho to default use hota hai — optional dependency express karne ka clean tareeka |
+| Invalid lifetime graph (singleton → scoped) | Scope validation ON ho to exception; warna silently captive (neeche) |
+
+### [di-added] Registration Forms: Type vs Instance vs Factory Delegate
+
+```csharp
+services.AddTransient<IReportWriter, CsvReportWriter>();      // (1) interface -> implementation
+services.AddTransient<CsvReportWriter>();                      // (2) concrete type only
+services.AddSingleton<IClock>(new SystemClock());              // (3) prebuilt instance
+services.AddScoped<IReportWriter>(sp =>                        // (4) factory delegate
+    new CsvReportWriter(sp.GetRequiredService<IClock>()));
+```
+[]
+| Form | Kaun construct karta hai | Container dispose karta hai? | Notes |
+|---|---|---|---|
+| Type | Container (constructor graph resolve karke) | Haan | Validation-friendly, default choice |
+| Instance (`AddSingleton<T>(obj)`) | Tum, container se pehle | **Nahi** — tum owner ho | Sirf singleton ke liye hota hai; container-provided dependencies nahi mil sakti; eagerly bana hua |
+| Factory delegate | Tumhara lambda, resolution time par | **Haan** — returned instance track hota hai | Delegate body validation ke liye opaque hai |
+
+Golden rule: **container wo dispose karta hai jo usne create kiya (type ya factory se); jo tum instance ke roop mein dete ho woh nahi.**
+
+### Detecting & Fixing Cyclic Dependencies
+
+ASP.NET Core ka container resolution time par circular constructor dependencies detect karta hai aur throw karta hai:
+
+```
+System.InvalidOperationException: A circular dependency was detected for the service of type 'X'.
+```
+
+Fixes:
+- Cycle ko break karo — concrete class ke bajaye ek side ko ek interface/abstraction depend karne do.
+- Ek factory use karo ek side ke resolution ko construction ke baad tak defer karne ke liye — dedicated factory service ya **explicitly register kiya hua** `Func<T>` (built-in container `Func<T>`/`Lazy<T>` automatically provide nahi karta; neeche factory section dekho).
+- Generally constructor dependency count kam karo — ek cyclic dependency aksar do services ke bahut tightly coupled hone ka symptom hota hai jinko merge karna chahiye ya jinse ek shared collaborator extract karna chahiye.
+
 ### Service Lifetimes
 
 | Lifetime | Description | Typical use case |
 |---|---|---|
 | Transient | Har baar request hone par naya instance | Lightweight, stateless services |
-| Scoped | Har HTTP request (per DI scope) ke liye ek instance | `DbContext`, unit-of-work, per-request state |
+| Scoped | Per DI scope ek instance (ASP.NET Core mein ek request = ek scope, lekin scoped ≠ inherently per-request) | `DbContext`, unit-of-work, per-request state |
 | Singleton | Poori application lifetime ke liye ek instance | Configuration objects, in-memory caches, `IHttpClientFactory` internals |
 
 ```mermaid
@@ -638,6 +735,43 @@ graph TD
     R2 -->|one instance in scope| SC2[Scoped Service #1]
     R2 -->|new instance each resolve| T2a[Transient #1]
 ```
+
+### [di-added] Lifetimes in Depth: Identity, Disposal & Thread Safety
+
+Upar wali table shorthand hai. Precision ke saath:
+
+- **Transient** — har *container resolution* par naya instance. Dhyan do: "resolution" container se request hai. Constructor mein inject hone par resolve ek baar hota hai, phir field mein rehta hai — isliye "transient = har use par naya" galat hai.
+- **Scoped** — **per scope**, per-HTTP-request nahi. ASP.NET Core har request ke liye ek scope banata hai, isliye web mein yeh per-request behave karta hai; lekin `CreateScope()` se manual scope ke apne scoped instances hote hain, aur console/worker/test mein HTTP hota hi nahi. Isko "per request" bolna interview mein ek common imprecision hai.
+- **Singleton** — root provider ki lifetime tak ek instance; lazily first resolution par ban jaata hai (instance registration ho to pehle se). Concurrent requests share karti hain, isliye **thread-safe hona zaroori** hai (immutable state, `ConcurrentDictionary`, locks/`Interlocked`).
+
+**Disposal ownership:**
+
+| Object kaise aaya | Container dispose karta hai? |
+|---|---|
+| Type registration se bana | Haan, jab owning scope/provider dispose ho |
+| Factory delegate se bana | Haan (tracked) |
+| `AddSingleton(instance)` | **Nahi** |
+| Root provider se resolve hui disposable transient | Root dispose hone tak tracked rehti hai → long-running app mein **leak** |
+
+- `IDisposable` aur `IAsyncDisposable` dono honor hote hain; disposal creation ke reverse order mein hota hai (dependents pehle).
+- Agar service sirf `IAsyncDisposable` hai aur scope **synchronously** dispose hota hai, to `InvalidOperationException` aata hai. Isliye `await using var scope = sp.CreateAsyncScope();` prefer karo.
+- Disposal scope/provider dispose hone par hota hai, "last user chhod de" par nahi. Aur injected service par khud `Dispose()` mat call karo — dusre consumers share kar rahe ho sakte hain.
+
+**Transient singleton ke andar**: singleton ka constructor ek baar chalta hai, isliye inject hui transient effectively singleton lifetime tak retain ho jaati hai (aur disposable ho to root tak tracked). Har operation par fresh chahiye to factory ya `IServiceScopeFactory` inject karo.
+
+**Registration lifetime vs object lifetime**: registration sirf batati hai container kya karega. Static field mein stored transient forever live karti hai; `Task.Run` mein capture hui scoped service request scope dispose hone ke baad use hone par `ObjectDisposedException` deti hai. Hamesha puchho: "kaun reference hold kar raha hai, kitni der ke liye?"
+
+**Identity timeline** (teen services: Transient T, Scoped S, Singleton G):
+
+| Scenario | Transient | Scoped | Singleton |
+|---|---|---|---|
+| Same scope mein do resolutions | T1, T2 (alag) | S-A, S-A (same) | G, G |
+| Do alag scopes (A, B) | T1, T2 | S-A, S-B (alag) | G, G (same) |
+| Do HTTP requests | Har injection point par naya | Request ke andar shared; requests ke beech alag | Hamesha same |
+
+Ek hi request ke andar controller aur repository dono `IScopedSvc` maangein to dono ko same S1 milti hai; dono `ITransientSvc` maangein to do alag instances.
+
+**Request data aur singleton**: `HttpContext`, current user, tenant ID singleton field mein kabhi store mat karo — concurrent requests ke beech data leak/overwrite hota hai. Request state ke liye scoped holder (middleware se populated) ya call-time par `IHttpContextAccessor` use karo.
 
 ### [new content] Captive Dependencies & Lifetime Mismatch Bugs
 
@@ -679,6 +813,266 @@ public class BadCacheWarmer   // registered as Singleton
 - Inverse mismatch — ek **Transient/Scoped service jo ek Singleton inject karti hai** — safe aur common hai (jaise `IMemoryCache` ya `IConfiguration` ko ek scoped repository mein inject karna) kyunki singleton simply consumer se zyada der tak live karta hai; us direction mein koi capture problem nahi hai.
 - Yeh bhi jaanna worth hai: `AddHttpContextAccessor()` ka `IHttpContextAccessor` khud ek singleton ke roop mein registered hai lekin `AsyncLocal<T>` ke through safely per-request `HttpContext` expose karta hai — yeh ek singleton se request-scoped ambient state tak pahunchne ka sanctioned tareeka hai bina captive-dependency violation ke.
 
+### [di-added] Root Provider, Scope Validation & ValidateOnBuild
+
+- **Root provider se scoped resolve karna**: `app.Services.GetRequiredService<IScopedThing>()` mein koi scope hai hi nahi. `ValidateScopes` ON ho to exception ("Cannot resolve scoped service from root provider"); OFF ho to instance root par cache ho jaata hai aur "scoped" service silently singleton ban jaati hai. Dono bug hain. Fix: `using var scope = app.Services.CreateScope();` phir `scope.ServiceProvider` se resolve.
+- **`ValidateScopes`** scoped-from-root aur singleton→scoped graphs pakadta hai — lekin sirf un paths par jo actually resolve hue.
+- **`ValidateOnBuild`** provider build par registered graphs ko construct karke missing registrations pehle hi pakad leta hai. Limits: factory delegates ke andar nahi dekh sakta, aur open generics ki har possible closure verify nahi kar sakta. Yeh safety net hai, proof nahi — `WebApplicationFactory` integration tests isse complement karte hain.
+- Default host builder dono ko sirf **Development** mein ON karta hai. Production/CI ke liye explicitly enable karo:
+  ```csharp
+  builder.Host.UseDefaultServiceProvider(o => { o.ValidateScopes = true; o.ValidateOnBuild = true; });
+  ```
+
+### [di-added] Registration Identity, Multiple Registrations & Open Generics
+
+**Service type hi key hai.** Registration sirf apne *service type* (pehla type argument) se resolve hoti hai:
+
+- `AddTransient<IReportWriter, CsvReportWriter>()` → sirf `IReportWriter` maangne par milega. `CsvReportWriter` maangoge to `GetService` null, `GetRequiredService` exception.
+- `AddTransient<CsvReportWriter>()` → sirf `CsvReportWriter`; `IReportWriter` nahi.
+
+**Same implementation, do service types = do independent registrations.** Interface aur concrete dono register karoge to singleton mein bhi **do alag instances** milenge. Ek hi instance share karna ho to forward karo:
+
+```csharp
+services.AddSingleton<CsvReportWriter>();
+services.AddSingleton<IReportWriter>(sp => sp.GetRequiredService<CsvReportWriter>());
+```
+
+(Lifetimes match rakho, warna forwarding se transient-in-singleton promotion ho jaata hai.)
+
+**Multiple registrations, ek service type:**
+
+- Single resolution (`GetService<T>` / constructor parameter `T`) → **last registered** jeetta hai.
+- `IEnumerable<T>` → **saari registrations, registration order mein**. Koi na ho to khaali sequence (null/exception nahi).
+- Order par logic depend karna brittle hai; ordering chahiye to abstraction mein explicit `Priority` property rakho.
+
+**`Add` vs `TryAdd` vs `TryAddEnumerable` vs `Replace`:**
+
+| API | Behavior | Use |
+|---|---|---|
+| `Add...` | Hamesha append, duplicates accumulate | Normal registration |
+| `TryAdd...` | Sirf tab add jab us **service type** ki koi registration na ho | Library author: "default do, app override kar sake" |
+| `TryAddEnumerable` | Sirf tab add jab same **service + implementation pair** na ho | Multi-implementation scenarios, `AddFeature()` do baar call ho to duplicates na bane |
+| `Replace` | Pehli existing registration hata kar nayi daalta hai | Framework/library default override, test setup |
+| `RemoveAll<T>` | Service type ki saari registrations hata deta hai | Cleanup |
+
+**Open generics:**
+
+```csharp
+services.AddScoped(typeof(IRepository<>), typeof(EfRepository<>));
+```
+
+Ek registration `IRepository<Order>`, `IRepository<Customer>` sab serve karti hai. Closed registration (`IRepository<Order>` → `OrderRepository`) saath mein ho sakti hai — last-wins rule ki wajah se open generic pehle, specializations baad mein register karo. Generic constraints respect hoti hain (violate karne wala type argument match nahi karta). Limits: open-generic decorators ya contextual/conditional registrations built-in nahi; `ValidateOnBuild` har closure check nahi kar sakta. Typical uses: `IRepository<T>`, `ILogger<T>`, `IOptions<T>`, `IValidator<T>`, handlers.
+
+**Abstraction choice:** interface tab banao jab real substitution/testing seam chahiye. Ek-implementation-wali interface jo sirf "DI ke liye" bani ho, indirection badhati hai fayda nahi. Interface consumer ki zaroorat ke hisaab se narrow rakho.
+
+### [di-added] Service Provider & Resolution APIs
+
+**Cast of types:**
+
+| Type | Role |
+|---|---|
+| `IServiceProvider` | Ek method `GetService(Type)`; registered na ho to `null` |
+| `IServiceScopeFactory` | Scopes banata hai; khud **singleton** hai, isliye long-lived services mein safely inject hota hai |
+| `IServiceScope` / `AsyncServiceScope` | Ek scope; `ServiceProvider` property deta hai; disposable |
+| `IServiceProviderIsService` | "Yeh type registered service hai?" bina resolve kiye pooch sakte ho (framework minimal API parameter binding mein use karta hai). Registration status batata hai, successful construction ki guarantee nahi |
+| `IKeyedServiceProvider` | .NET 8 keyed resolution ka interface; built-in provider implement karta hai, third-party containers shayad nahi |
+
+**`GetService` vs `GetRequiredService`:**
+
+```csharp
+var audit = sp.GetService<IAuditLog>();            // null agar registered nahi — optional dependency
+audit?.Record("started");
+var repo = sp.GetRequiredService<IOrderRepository>(); // missing ho to InvalidOperationException
+```
+
+- Required missing ho to exception *wahi call site par* aati hai, baad mein confusing `NullReferenceException` nahi.
+- Mandatory dependency ke liye `GetService` use karna error ko null mein badal deta hai.
+- Registered service ki apni missing dependency ho to dono throw karte hain.
+- Keyed: `GetKeyedService<T>(key)` → null; `GetRequiredKeyedService<T>(key)` → exception.
+
+**Service locator pattern kyun risky hai:** class mein `IServiceProvider` inject karke method ke andar `GetRequiredService` call karna:
+
+1. Dependencies hide ho jaati hain (constructor signature jhooth bolta hai).
+2. Failures runtime tak defer hote hain, rare production path par.
+3. Tests ko poora provider banana padta hai.
+4. Lifetime ambiguity: yeh root provider hai ya scoped?
+5. Business code container se couple ho jaata hai.
+
+Legitimate uses limited hain: composition root, factory delegates, framework seams (middleware, filters), scope-creating hosted services, runtime-determined handler dispatch. Application service mein `IServiceProvider` mile to aksar design ko factory / keyed lookup / strategy collection / `IServiceScopeFactory` chahiye hota hai.
+
+**Scope creation aur disposal:**
+
+```csharp
+await using var scope = provider.CreateAsyncScope();
+var repo = scope.ServiceProvider.GetRequiredService<IOrderRepository>(); // scope ke provider se resolve karo
+await repo.SyncAsync();
+```
+
+- Scoped services hamesha `scope.ServiceProvider` se resolve karo, bahar wale provider se nahi.
+- Scoped objects ko `using` block se bahar escape mat hone do.
+- `CreateAsyncScope()` + `await using` prefer karo taaki `IAsyncDisposable` sahi dispose ho.
+
+**Nested scopes hierarchical nahi hote.** `scopeA.ServiceProvider.CreateScope()` ek **sibling independent scope** deta hai: woh `scopeA` ke scoped instances inherit nahi karta, aur `scopeA` dispose hone se dispose nahi hota. Scopes ek flat set hain root ke neeche, tree nahi.
+
+### [di-added] Factories, Factory Delegates & Strategy Pattern
+
+"Factory" shabd .NET DI mein overloaded hai — chaar alag cheezein:
+
+1. **Registration factory delegate** — `AddScoped<T>(sp => ...)`: *container* ko batata hai ek service kaise banani hai.
+2. **Application factory class** — tumhara `IReportWriterFactory.Create("csv")`: callers ke liye runtime par product select/create karta hai.
+3. **Strategy pattern** — common abstraction ke peeche interchangeable behavior + selection. Yeh behavioral pattern hai, construction ka nahi.
+4. **`IServiceProvider` se dynamic resolution** — service locator ka hi doosra naam; default design nahi hona chahiye.
+
+**Factory delegate ka behavior:**
+
+- Delegate **lazily resolution par** chalta hai: singleton → ek baar, scoped → per scope, transient → har resolution.
+- Delegate ko jo `sp` milta hai woh us scope ka provider hai jahan resolve ho raha hai. Singleton factory ko root provider milta hai, to uske andar scoped service maangna lifetime mismatch hai.
+- Delegate jo instance return karta hai woh container-owned hai: lifetime ke hisaab se **dispose hota hai**. Isliye shared static object return mat karo (container usse dispose kar dega).
+- Fayda: runtime config, primitive constructor parameters, conditional construction, ek registration se doosri forward karna. Jab container constructor khud satisfy kar sakta hai, factory sirf lambi aur kam-validated hai.
+
+**Strategy with delegate:**
+
+```csharp
+public delegate decimal DiscountStrategy(decimal subtotal);
+
+services.AddSingleton<IReadOnlyDictionary<string, DiscountStrategy>>(
+    new Dictionary<string, DiscountStrategy>
+    {
+        ["none"] = s => s,
+        ["seasonal"] = s => s * 0.9m,
+    });
+```
+
+**Accuracy point:** built-in container har registration ke liye automatically `Func<T>` ya `Lazy<T>` **nahi** banata. `Func<IReportWriter>` constructor mein maangoge to fail hoga jab tak explicitly register na karo:
+
+```csharp
+services.AddSingleton<Func<IReportWriter>>(sp => () => sp.GetRequiredService<IReportWriter>());
+```
+
+Trap: yeh lambda root `sp` capture karta hai. Isse scoped service resolve karna root-resolution bug hai, aur disposable transients root par track hoti hain. Isliye aise `Func` sirf un services ke liye jahan yeh acceptable ho, warna explicit scope banao.
+
+**Selection approaches ki comparison:**
+
+| Approach | Best for | Weak spot |
+|---|---|---|
+| Registration factory delegate | Ek service runtime inputs se banana | Validation ke liye opaque, locator creep |
+| Factory class | Parameters ke saath runtime creation | `switch` ban jaata hai, ya provider-based ho to locator |
+| Keyed services | Fixed named implementations | Magic strings, key validation zaroori |
+| `IEnumerable<T>` + selector (`CanHandle`) | Self-describing strategies, naya class register karke extend | Collection resolve par saari strategies instantiate hoti hain |
+| Delegate strategy | Pure functions | Dependencies wali behavior ke liye weak, closures long-lived state capture kar sakte hain |
+
+**Selection policy ek jagah rakho** (`PaymentSelector`, `ReportWriterResolver` jaisi application service mein). Agar har caller apni condition ke saath khud `GetRequiredKeyedService` karega to policy scatter ho jaayegi aur drift karegi.
+
+### [di-added] Keyed Services (.NET 8)
+
+.NET 8 se ek hi service type ki multiple implementations ko **key** (koi bhi `object`, typically string/enum/type) se distinguish kar sakte ho. Pehle yeh dictionary, factory ya third-party container se hota tha.
+
+```csharp
+services.AddKeyedSingleton<IPaymentProvider, StripeProvider>("stripe");
+services.AddKeyedSingleton<IPaymentProvider, PayPalProvider>("paypal");
+services.AddKeyedScoped<INotificationSender, EmailSender>("email");
+services.AddKeyedTransient<INotificationSender, SmsSender>("sms");
+```
+
+**Consume karna:**
+
+```csharp
+public class CheckoutService
+{
+    public CheckoutService([FromKeyedServices("stripe")] IPaymentProvider provider) { ... }
+}
+
+app.MapPost("/pay", ([FromKeyedServices("paypal")] IPaymentProvider p, PaymentRequest r) => p.ChargeAsync(r.Amount));
+
+var p1 = sp.GetRequiredKeyedService<IPaymentProvider>("stripe"); // missing ho to exception
+var p2 = sp.GetKeyedService<IPaymentProvider>("adyen");          // missing ho to null
+```
+
+`[FromKeyedServices]` container-activated constructors ke saath-saath ASP.NET Core ke supported binding locations (Minimal API handlers, MVC action/constructor parameters) mein kaam karta hai. Keyed factory delegates ko `(IServiceProvider sp, object? key)` milta hai. Ek `[ServiceKey]` attribute baad ke release (.NET 9) mein aaya — exact availability apne version ke docs se verify kar lo.
+
+**Semantics jo interview mein poochhe jaate hain:**
+
+- **Keyed aur unkeyed alag sets hain.** Sirf keyed registration ho to plain `GetService<IPaymentProvider>()` **null** deta hai.
+- **Absent key**: `GetKeyedService` → null; `GetRequiredKeyedService` / `[FromKeyedServices]` → `InvalidOperationException`.
+- **Duplicate (same type + key)** allowed hai: single resolution mein last wins; `GetKeyedServices<T>(key)` saari ko order mein deta hai. Keys unique hone zaroori nahi.
+- **`KeyedService.AnyKey`** ek wildcard hai: registration ke roop mein "kisi bhi key ke liye fallback" (factory ko actual key milti hai); collection lookup mein keyed registrations enumerate karne ke liye. Single resolution ke liye `AnyKey` meaningful nahi hai aur reject hota hai. Exact `AnyKey` matrix apne patch version ke docs se confirm kar lo.
+- Keys `Equals` se compare hoti hain — strings/enums/records theek, bina equality wale mutable types nahi.
+- **Lifetime rules same**: keyed singleton per-key ek baar, keyed scoped per-scope per-key. Singleton mein keyed *scoped* service captive dependency hai; disposal ownership bhi same (container jo banaye wahi dispose).
+
+**Selection design aur security:**
+
+```csharp
+public class PaymentSelector
+{
+    private static readonly HashSet<string> Allowed = new() { "stripe", "paypal" };
+    private readonly IServiceProvider _sp; private readonly string _default;
+    public PaymentSelector(IServiceProvider sp, IOptions<PaymentOptions> o) { _sp = sp; _default = o.Value.DefaultProvider; }
+
+    public IPaymentProvider For(string? requested)
+    {
+        var key = requested is not null && Allowed.Contains(requested) ? requested : _default;
+        return _sp.GetRequiredKeyedService<IPaymentProvider>(key);
+    }
+}
+```
+
+**Untrusted input se seedha key mat banao.** Header/query/JSON value seedha `GetRequiredKeyedService` mein jaane se caller koi bhi registered keyed service tak pahunch sakta hai (probing bhi). Allow-list ya mapping use karo (`"card"` → `"stripe"`). Note: yeh selector `IServiceProvider` leta hai — locator ek chhoti, named class mein confined hai; scoped keyed services resolve karni hon to selector bhi scoped hona chahiye.
+
+**Keyed vs alternatives:**
+
+| Zaroorat | Prefer |
+|---|---|
+| Kuch fixed named implementations, known jagah inject | Keyed services |
+| Har implementation khud bataye woh applicable hai ya nahi | `IEnumerable<T>` + selector |
+| Same class, alag settings | **Named options** (`IOptionsMonitor<T>.Get(name)`) — options *data* configure karte hain, keyed services *implementation* choose karte hain |
+| Creation ko runtime parameters chahiye | Factory |
+| Sirf default + override | Plain unkeyed registrations (last wins) |
+
+**Overuse mat karo:** do choices aur simple local condition ho to ordinary `if` behtar hai; keys magic strings laate hain aur absent key runtime failure hai. Keyed tab use karo jab implementations time ke saath badhengi aur selection data-driven hai.
+
+### [di-added] Request Lifecycle & DI Scopes
+
+Ek typical `.NET 8` request (exact internals hosting model aur framework path — Minimal API / MVC / Razor Pages / SignalR — par depend karte hain, isliye isse model samjho, contract nahi):
+
+1. **Kestrel** connection/request parse karta hai aur `HttpContext` banata hai.
+2. **Hosting layer** request-scoped provider available karata hai (`HttpContext.RequestServices`). Scope `IServiceScopeFactory` se banta hai (current implementation mein lazily, `RequestServicesFeature` ke through) aur **request complete hone par dispose** hota hai.
+3. **Middleware inward** chalta hai (registration order mein, `await next()` tak).
+4. **Routing** endpoint match karke context par set karta hai; uske baad wale middleware (AuthN/AuthZ/CORS/rate-limiter) endpoint metadata dekh sakte hain.
+5. **Endpoint middleware** endpoint execute karta hai:
+   - *Minimal API*: generated delegate parameters bind karta hai (route/query/body/**services**), endpoint filters chalata hai, handler call karta hai.
+   - *MVC*: controller activator `RequestServices` se constructor dependencies resolve karke controller banata hai (default activator per request naya controller), phir filters → model binding/validation → action → result execution.
+6. **Response write** hota hai; headers pehle flush par chali jaati hain.
+7. **Middleware outward unwind** (`await next()` ke baad ka code).
+8. **Request scope dispose** — scoped aur tracked transients reverse creation order mein dispose. Exception ho to bhi exception-handling middleware ke baad hosting layer ka cleanup scope dispose karta hai; `try/finally` ki zaroorat nahi.
+
+**Filters mein DI:** attribute filters framework banata hai; DI chahiye to `[ServiceFilter(typeof(MyFilter))]` (registered hona zaroori) ya `[TypeFilter(typeof(MyFilter))]` (`ActivatorUtilities` se banta hai, registered hona zaroori nahi).
+
+**Request ke baad chalne wala kaam:** `Task.Run`/fire-and-forget mein request-scoped services ya `HttpContext` use mat karo — scope dispose ho chuka hoga (`ObjectDisposedException`). Naya scope `IServiceScopeFactory` se banao aur sirf plain data pass karo.
+
+**`HttpContext.RequestServices` vs `IHttpContextAccessor`:**
+
+- `RequestServices` request-scoped provider hai — framework seams (middleware, filters, handlers) mein theek, business logic mein locator-style hai.
+- `IHttpContextAccessor` (`AddHttpContextAccessor()`) singleton hai jo `AsyncLocal` se *current* request ka `HttpContext` deta hai; background service mein null hota hai. Singleton mein request data **field mein store** mat karo, call-time par read karo, ya scoped holder use karo:
+
+```csharp
+public class RequestTenant { public string? TenantId { get; set; } }   // AddScoped
+
+public class TenantMiddleware
+{
+    private readonly RequestDelegate _next;
+    public TenantMiddleware(RequestDelegate next) => _next = next;      // sirf singleton-safe dependencies
+    public async Task InvokeAsync(HttpContext ctx, RequestTenant tenant) // scoped yahan method injection se
+    {
+        tenant.TenantId = ctx.Request.Headers["X-Tenant"];
+        await _next(ctx);
+    }
+}
+```
+
+**Middleware lifetime:** conventional middleware pipeline build par **ek baar** banta hai (effectively singleton), sirf `InvokeAsync` per request chalta hai — isliye constructor mein scoped service captive hoti hai (validation pakadta hai) aur `InvokeAsync` parameters se scoped resolve hoti hai. **`IMiddleware`** alternative hai: DI mein tumhari chuni lifetime (aksar scoped/transient) ke saath register karo, `IMiddlewareFactory` per request produce karta hai, aur constructor mein scoped services valid hain. Cost: registration zaroori.
+
+**Hosted/Background services:** `AddHostedService<T>()` singleton register karta hai, request scope hota hi nahi, isliye scoped kaam ke liye `IServiceScopeFactory` se per-iteration `await using var scope = ...CreateAsyncScope()` banao (upar BackgroundService section ka pattern) — taaki har iteration fresh `DbContext` mile aur change tracker unbounded na badhe.
+
 ### [new content] IOptions vs IOptionsSnapshot vs IOptionsMonitor
 
 Original notes configuration ke liye `appsettings.json` mention karte hain lekin Options pattern kabhi cover nahi karte, jo configuration consume karne ka idiomatic, testable tareeka hai jo senior devs se expected hai (raw `IConfiguration` injection ko bootstrapping code ke aage kuch bhi mein ek smell samjha jaata hai).
@@ -716,18 +1110,130 @@ Gotcha jo interviewers probe karte hain: *"`IOptionsSnapshot` ko Singleton mein 
 
 Named options (`Configure<T>(name, ...)` + `IOptionsSnapshot<T>.Get(name)`) multi-tenant ya multi-provider scenarios (jaise multiple payment gateway configs) ke liye mention karne layak hain.
 
-### Detecting & Fixing Cyclic Dependencies
+### [di-added] Decorators, ActivatorUtilities, Collections & Framework Services
 
-ASP.NET Core ka container resolution time par circular constructor dependencies detect karta hai aur throw karta hai:
+**`IEnumerable<T>`**: har registered `T` ke liye natively supported; saari implementations order mein, har ek apni lifetime ke hisaab se resolve hoti hai.
 
+**Decorators.** Built-in container mein **`Decorate` API nahi hai**. Common approaches:
+
+```csharp
+services.AddScoped<OrderRepository>();
+services.AddScoped<IOrderRepository>(sp =>
+    new CachingOrderRepository(sp.GetRequiredService<OrderRepository>(), sp.GetRequiredService<IMemoryCache>()));
 ```
-System.InvalidOperationException: A circular dependency was detected for the service of type 'X'.
+
+1. Factory delegate composition (upar), 2. `ActivatorUtilities.CreateInstance` (inner explicit pass, baaki DI se), 3. third-party (Scrutor `Decorate<,>()`) jo descriptors rewrite karta hai. Decorator aur inner ki lifetimes compatible rakho.
+
+**`ActivatorUtilities`**: container mein *registered nahi* type ko banata hai — constructor parameters `IServiceProvider` se, kuch explicit arguments tumse:
+
+```csharp
+var job = ActivatorUtilities.CreateInstance<ReportJob>(sp, "monthly");
 ```
 
-Fixes:
-- Cycle ko break karo — concrete class ke bajaye ek side ko ek interface/abstraction depend karne do.
-- Ek factory (`Func<T>` ya ek dedicated factory service) use karo ek side ke resolution ko construction ke baad tak defer karne ke liye.
-- Generally constructor dependency count kam karo — ek cyclic dependency aksar do services ke bahut tightly coupled hone ka symptom hota hai jinko merge karna chahiye ya jinse ek shared collaborator extract karna chahiye.
+Use: dynamic types, non-service values (names/IDs), decorators, framework extension points (`TypeFilter`, middleware construction mein yahi use hota hai). `CreateFactory` repeated use ke liye reflection cost precompute karta hai. **Container isse bane object ko track/dispose nahi karta — owner tum ho.**
+
+**Framework-managed services aur lifetimes:**
+
+| Service | Lifetime | Gotcha |
+|---|---|---|
+| `ILogger<T>` | Singleton (open generic, `AddLogging`) | Kahin bhi inject karna safe, singleton mein bhi |
+| `IHostedService` / `BackgroundService` | Singleton | Scoped kaam ke liye scope factory |
+| `IHttpClientFactory` | Singleton | `CreateClient()` har baar naya lightweight client; handlers pooled (~2 min rotation) |
+| Typed client (`AddHttpClient<T>()`) | **Transient** | Singleton mein inject karoge to handler rotation/DNS refresh defeat hota hai — singleton mein `IHttpClientFactory` inject karo |
+| EF Core `DbContext` (`AddDbContext`) | **Scoped** | Thread-safe nahi, unit-of-work; singleton ya parallel kaam mein `IDbContextFactory<T>` |
+| `IOptions<T>` / `IOptionsSnapshot<T>` / `IOptionsMonitor<T>` | Singleton / **Scoped** / Singleton | Neeche options section |
+
+### [di-added] DI Failure Modes: Cause, Symptom, Fix
+
+| Problem | Cause | Symptom | Safer design |
+|---|---|---|---|
+| Captive dependency | Long-lived holder ne short-lived dependency field mein pakad li | Validation ON: exception; OFF: stale data, `ObjectDisposedException`, `DbContext` concurrency errors | Lifetimes align karo, ya `IServiceScopeFactory` / `IDbContextFactory<T>` se per-operation scope |
+| Scoped from root | Root provider se scoped resolve | Exception ya silent singleton behavior | `CreateScope()` karke `scope.ServiceProvider` se resolve |
+| Disposal galtiyan | Container-owned service par manual `Dispose`; ya khud banayi disposable (`new`, `ActivatorUtilities`, `AddSingleton(instance)`) dispose na karna | Dusre consumers par `ObjectDisposedException`; handle/connection leaks | Container jo banaye woh dispose kare; jo tum banao woh tum; disposable transients scope ke andar resolve karo; async-only disposables ke liye `CreateAsyncScope` |
+| Transient ko long-lived object mein inject | "Transient = har use par naya" ka galat assumption | Shared state; app lifetime tak zinda disposable | Factory ya scope factory inject karo, ya holder ko hi transient/scoped banao |
+| Constructor cycle | Do classes ki responsibilities tangled | "circular dependency" exception | Shared piece extract karo / ek direction event ya abstraction se invert karo; `IServiceProvider` se chhupao mat |
+| Bade constructors, hidden locator | Class bahut kaam kar rahi hai / `IServiceProvider` inject | 6+ parameters; hidden dependencies, runtime failures | Class split karo, cohesive facade, explicit constructor dependencies |
+| Galat service type par registration | Concrete register, interface inject (ya ulta); dono register to do instances | Missing-registration error ya duplicate state | Wahi type register karo jo consumers maangte hain; ek instance chahiye to forwarding |
+| Non-thread-safe stateful singleton | Mutable `List`/`Dictionary` shared | Intermittent "Collection was modified", corrupted data under load | Immutable, `ConcurrentDictionary`, locks; ya state ko scoped/transient banao |
+| Request data singleton mein | `HttpContext`/user/tenant field mein store | Galat user ka data, intermittent null | Scoped holder ya call-time `IHttpContextAccessor` ya method arguments |
+| DI/keyed/factory ka overuse | Har decision ko DI se solve karna | String keys sab jagah, factory ke andar factory | Ek implementation → direct dependency; simple choice → `if`; implementations badhne wali hon to keyed/`IEnumerable<T>`; policy ek jagah |
+
+### [di-added] End-to-End Walkthrough: Ek Request Mein Saari Lifetimes
+
+`POST /checkout` (MVC). Registrations: `IClock` singleton; `IOrderRepository` + `AppDbContext` scoped; `IPriceCalculator` transient; keyed scoped `IPaymentProvider` (`"stripe"`, `"paypal"`); `PaymentSelector` scoped; `IAuditWriter` transient + `IDisposable`.
+
+1. Kestrel `HttpContext` banata hai, hosting **Scope-1** banata hai; middleware inward chalta hai, routing `CheckoutController.Post` select karti hai.
+2. Controller construct hota hai Scope-1 se: `IClock` → wahi **singleton** jo har request ko mila (na create, na dispose). `IOrderRepository` → `AppDbContext` Scope-1 mein ek baar bana aur cache hua (is request mein jo bhi `AppDbContext` maange, wahi milega). `PaymentSelector` → Scope-1 mein ek. `IPriceCalculator` → naya instance (agar selector ko bhi chahiye hota to *alag* instance milta). `IAuditWriter` → naya, aur disposable hone ki wajah se Scope-1 track karta hai.
+3. Action `selector.For("card")` call karta hai: allow-list se `"card"` → `"stripe"` map hota hai, phir keyed scoped provider Scope-1 se resolve hota hai (is request mein dobara `"stripe"` maangne par same instance).
+4. Result execute, response write, middleware outward unwind.
+5. Hosting **Scope-1 dispose** karta hai: tracked disposables reverse creation order mein (audit writer, stripe provider, repository, aakhir mein `DbContext`). Singleton `SystemClock` untouched rehta hai jab tak root provider host shutdown par dispose na ho.
+6. Concurrent doosri request **Scope-2** leti hai: naya `DbContext`, repository, selector, keyed provider, transients — lekin wahi `SystemClock`. Exception hoti to bhi Scope-1 isi tarah dispose hota.
+
+### [di-added] Comparison Tables
+
+**Lifetimes**
+
+| | Transient | Scoped | Singleton |
+|---|---|---|---|
+| Naya instance kab | Har resolution | Har scope mein pehli resolution | Root se pehli resolution |
+| Share kaun karta hai | Koi nahi | Ek scope ke andar sab | Sab scopes |
+| Dispose kab | Owning scope/provider dispose par | Scope dispose par | Root provider dispose par |
+| Thread safety | Consumer par depend | Scope ke andar (parallel kaam par dhyan) | Hamesha zaroori |
+| Trap | Long-lived holder se promote | Root se resolve; singleton mein capture | Mutable non-thread-safe state |
+
+**Resolution methods**
+
+| Method | Missing registration | Notes |
+|---|---|---|
+| `GetService<T>()` | `null` | Optional dependencies |
+| `GetRequiredService<T>()` | `InvalidOperationException` | Default choice |
+| `GetServices<T>()` / `IEnumerable<T>` | Khaali sequence | Saari registrations, order mein |
+| `GetKeyedService<T>(key)` | `null` | .NET 8 |
+| `GetRequiredKeyedService<T>(key)` | `InvalidOperationException` | .NET 8 |
+| `ActivatorUtilities.CreateInstance` | n/a | Disposal tumhari |
+
+**Registration patterns**
+
+| Pattern | Resolve hota hai as | Container dispose? |
+|---|---|---|
+| `Add*<I, C>()` | `I` | Haan |
+| `Add*<C>()` | `C` | Haan |
+| `AddSingleton<I>(instance)` | `I` | **Nahi** |
+| `Add*<I>(sp => ...)` | `I` | Haan |
+| `AddKeyed*<I, C>(key)` | `I` with `key` | Haan |
+| `Add*(typeof(I<>), typeof(C<>))` | `I<X>` har X ke liye | Haan |
+
+### [di-added] DI Glossary
+
+- **IoC / DI / DIP** — principle / technique / SOLID rule (upar distinction).
+- **Service type vs implementation type** — registration ka key vs jo class container banata hai.
+- **`ServiceDescriptor`** — ek registration ka record (type, implementation/instance/factory, lifetime, key).
+- **Root provider** — singletons ka owner; **scope** — scoped lifetime ki unit.
+- **Captive dependency** — long-lived holder jo short-lived dependency pakad le.
+- **`ValidateScopes` / `ValidateOnBuild`** — lifetime mismatch aur invalid graphs detect karne wale options.
+- **Service locator** — point of use par provider se dependency nikalna.
+- **Keyed service / `AnyKey` / `[FromKeyedServices]`** — .NET 8 key-based registration, wildcard key, aur injection attribute.
+- **`TryAdd` / `TryAddEnumerable` / `Replace`** — add-if-absent / add-if-pair-absent / substitute.
+- **Open generic** — unbound type parameters wali registration (`IRepository<>`).
+- **Decorator** — same interface implement karke inner ko wrap karne wali class.
+- **`ActivatorUtilities`** — unregistered type ko provider + explicit args se banata hai.
+- **`IMiddleware`** — DI-activated middleware, registered lifetime ke saath.
+
+### [di-added] Practical Design Rules & Common Misconceptions
+
+**Rules:** constructor injection default; registration composition root mein; sabse chhoti *correct* lifetime chuno; consumer ki lifetime dependencies se lambi na ho; long-lived code ko scoped kaam ke liye `IServiceScopeFactory`; container jo banaye wahi dispose; singletons ko concurrent maano; singleton mein `HttpContext`/request data nahi; default `GetRequiredService`; selection policy ek jagah aur external input allow-list se; `ValidateScopes`+`ValidateOnBuild` Dev ke saath CI mein bhi; sabse simple tool: direct dependency > factory > keyed > service location.
+
+**Misconceptions:**
+
+- "Scoped = per HTTP request" → scoped = per scope; ASP.NET Core request ke liye ek scope banata hai.
+- "Transient = har use par naya" → har *resolution* par naya; inject hui field ek baar resolve hui.
+- "Concrete register kiya to interface se bhi milega" → service type hi key hai.
+- "Singleton safe hai kyunki ek hi hai" → ek hi hai to sab share karte hain, thread-safe hona padega.
+- "Container sab dispose karta hai" → supplied instances nahi.
+- "Built-in container mein property injection / auto `Func<T>` / `Decorate` hai" → teeno nahi.
+- "Nested scopes inherit karte hain" → independent siblings.
+- "`ValidateScopes` ka matlab graph guaranteed correct" → sirf resolved paths; factory bodies aur runtime lookups nahi dikhte.
+- "Middleware per request banta hai" → conventional middleware ek baar; sirf `InvokeAsync` per request (`IMiddleware` exception).
 
 ---
 
@@ -1751,6 +2257,16 @@ Yeh "aap Web API ko integration level par kaise test karte ho" ka standard, expe
 - Yeh assume karna ki Minimal APIs ko `[ApiController]` jaisi automatic model validation milti hai — yeh nahi milti, bina explicit wiring ke.
 - Multi-instance deployment mein rate limiting ko sirf application/instance level par lagana, aur yeh believe karna ki yeh global limit enforce karta hai jabki yeh actually per-instance hota hai.
 
+- "Scoped = per HTTP request" bolna — scoped per *scope* hai; background worker ya manual `CreateScope()` mein HTTP request hota hi nahi.
+- Transient ko Singleton/long-lived object mein inject karke maan lena ki har use par naya milega — woh ek baar resolve hui aur retain ho gayi.
+- `Func<T>` / `Lazy<T>` ko constructor mein maangna ye soch kar ki built-in container automatically de dega — explicit registration chahiye (aur root-captured `sp` ka trap alag).
+- Interface aur concrete dono register karke ek hi singleton ki ummeed rakhna — do independent registrations = do instances; forwarding chahiye.
+- Container-owned service par `Dispose()` call karna, ya `AddSingleton(instance)` / `ActivatorUtilities` se bani disposable ko dispose na karna.
+- Root provider se scoped ya disposable transient resolve karna — silent singleton behavior ya app-lifetime leak.
+- `[FromKeyedServices]` ya keyed lookup mein untrusted input seedha key bana dena — allow-list/mapping use karo.
+- Typed `HttpClient` ko singleton mein inject karna — handler rotation/DNS refresh defeat ho jaata hai.
+- Conventional middleware ke constructor mein scoped service inject karna — `InvokeAsync` parameter ya `IMiddleware` use karo.
+
 ---
 
 ## Sample Interview Q&A
@@ -1785,6 +2301,18 @@ A: Liveness yeh batata hai ki process khud alive/functioning hai ya nahi; ek fai
 **Q10: Tumhare API ki p99 latency load ke under sharply degrade ho jaati hai, jabki CPU usage theek dikh raha hai aur individual requests isolation mein fast hain. Pehle kya check karoge?**
 A: Request path mein kahin blocking (sync-over-async) call se aane wala thread pool starvation — `dotnet-counters` ke through `ThreadPool` queue length check karo, aur `.Result`/`.Wait()`/`GetAwaiter().GetResult()` calls ya hot paths par genuinely synchronous I/O ke liye audit karo. Thread pool ek sudden spike ke under slowly grow karta hai (hill-climbing heuristic), isliye blocked threads ka burst exactly yeh "low load par fine, load ke under cliff" wala signature create karta hai, chahe raw CPU par headroom bhi ho.
 
+**Q11: `AddTransient<IReportWriter, CsvReportWriter>()` aur `AddTransient<CsvReportWriter>()` dono register hon to kya hota hai? Singleton hote to?**
+A: Yeh do independent registrations hain, kyunki service type hi key hai. Singleton hote to bhi do alag `CsvReportWriter` instances milte (ek `IReportWriter` ke liye, ek `CsvReportWriter` ke liye). Ek instance share karna ho to concrete type register karo aur interface ko factory delegate se usi par forward karo (`sp => sp.GetRequiredService<CsvReportWriter>()`), dono ki lifetime match rakhte hue.
+
+**Q12: Scoped service ko `BackgroundService` ya singleton se kaise use karoge, aur container kaun si cheezein dispose karta hai?**
+A: `IServiceScopeFactory` (singleton) inject karo, har unit of work ke liye `await using var scope = factory.CreateAsyncScope()` banao aur `scope.ServiceProvider` se resolve karo. Container wahi dispose karta hai jo usne banaya — type ya factory delegate se bani instances scope/provider dispose par dispose hoti hain (reverse creation order mein); `AddSingleton(instance)` se di hui instance ya `ActivatorUtilities` se bani object tumhari responsibility hai. Sirf `IAsyncDisposable` service ko sync scope se dispose karoge to exception aata hai, isliye async scope.
+
+**Q13: .NET 8 keyed services kaise kaam karte hain, aur user se aaye value ko key kaise banaoge?**
+A: `AddKeyed*` se key ke saath register, `[FromKeyedServices(key)]` ya `GetRequiredKeyedService` se consume. Keyed aur unkeyed registrations alag sets hain (keyed-only service ke liye plain `GetService` null deta hai); absent key par required variant `InvalidOperationException` deta hai; duplicates mein last wins aur `GetKeyedServices` sab deta hai. External value kabhi seedha key nahi — ek selector service allow-list ya mapping se known key chunti hai (aur policy ek jagah rehti hai). Jab implementations khud batayein ki woh applicable hain, to `IEnumerable<T>` strategy aksar keys se behtar hoti hai.
+
+**Q14: Conventional middleware aur `IMiddleware` mein scoped dependency ka fark samjhao.**
+A: Conventional middleware pipeline build par ek baar banta hai (effectively singleton), isliye constructor mein sirf singleton-safe dependencies; scoped services `InvokeAsync` ke extra parameters (method injection) se aati hain. `IMiddleware` DI mein tumhari chuni lifetime ke saath register hota hai aur `IMiddlewareFactory` use per request banata hai, to constructor injection of scoped services valid hai — price yeh ki registration zaroori hai aur activation per request hota hai.
+
 ---
 
 ## Summary of Additions
@@ -1813,3 +2341,30 @@ Is pass mein ek formal gap-analysis review se identify kiya gaya targeted conten
 1. **Integration Testing with WebApplicationFactory** — guide mein pehle koi dedicated testing section hi nahi tha; yeh "Web API ko integration level par kaise test karte ho" ka standard, expected answer hai, jo unit testing ki kisi bhi discussion ke baad near-guaranteed senior follow-up hota hai. Yeh `TestServer`, `ConfigureServices` ke through DI override, minimal hosting model ke saath `Program` visibility gotcha, aur test database ke liye EF Core InMemory, SQLite in-memory, aur Testcontainers ke beech fidelity trade-offs ko cover karta hai.
 2. **IStartupFilter — Composing the Middleware Pipeline from a Library** — yeh DI/middleware coverage mein ek real gap fill karta hai: ki kaise ek library ya platform module bina consuming app ko `Program.cs` modify kiye, middleware ko pipeline mein ek specific position par inject karta hai. Yeh platform-engineering-flavored senior interviews mein frequently aata hai.
 3. **CORS Preflight Mechanics — What Actually Triggers an OPTIONS Request** — existing CORS content mein policy configuration cover ki gayi thi lekin underlying browser mechanism nahi (simple vs non-simple requests, `Content-Type: application/json` gotcha, aur production logs mein `OPTIONS` traffic normal kyun hai) — yeh ek precise, frequently-asked follow-up hai jiska jawab policy-only coverage nahi deta.
+
+---
+
+## Summary of [di-added] Additions (DI Deep-Dive Pass)
+
+Is pass mein "DI, service lifetimes, resolution aur request processing (.NET 8)" topic list ke against audit karke missing ya shallow topics add kiye gaye, aur DI section ko ek logical order mein restructure kiya gaya (terminology → injection styles → constructor resolution → registration forms → cyclic → lifetimes → captive/root provider → registration identity → resolution APIs → factory/strategy → keyed → request lifecycle → options → decorators/framework services → failure modes/reference).
+
+**Pehle se covered (kept as-is, sirf corrections ke saath):** basic DI + lifetimes table/diagram, captive dependency (singleton + scoped `DbContext`), `IOptions`/`IOptionsSnapshot`/`IOptionsMonitor`, cyclic dependencies, `IServiceScopeFactory` ka BackgroundService mein use, middleware constructor vs `InvokeAsync`, `IHttpContextAccessor` mention.
+
+**Naya add hua:**
+- DI terminology (IoC/DI/DIP, descriptor, provider, scope), composition root, injection styles, constructor resolution rules/failure table.
+- Registration forms (type/instance/factory) aur disposal ownership; `IAsyncDisposable`/`CreateAsyncScope`.
+- Scoped ≠ per-request, transient-in-singleton, registration vs object lifetime, identity timelines, thread safety.
+- Root-provider resolution, `ValidateScopes` vs `ValidateOnBuild` aur unki limits.
+- Registration identity (interface vs concrete = do instances, forwarding), multiple registrations/`IEnumerable<T>`, `TryAdd`/`TryAddEnumerable`/`Replace`, open generics.
+- Resolution APIs (`GetService` vs `GetRequiredService`, `IServiceProviderIsService`), service locator ka reasoning, nested scopes independent.
+- Factory taxonomy, strategy (keyed / enumerable / factory / delegate), `Func<T>` auto-support nahi.
+- Keyed services (.NET 8) poori detail mein, allow-list security.
+- Request lifecycle + request scope creation/disposal, `IMiddleware`, hosted services.
+- Decorators, `ActivatorUtilities`, framework services ke lifetimes (typed `HttpClient` trap).
+- Failure-modes table, end-to-end walkthrough, comparison tables, glossary, rules/misconceptions, 4 naye interview Q&As (Q11–Q14).
+
+**Existing content mein corrections:**
+- Cyclic dependency fix mein "`Func<T>` factory" likha tha jo built-in container mein automatically available nahi hota — wording explicit registration ke saath sahi ki gayi.
+- Lifetimes table mein Scoped ko "har HTTP request" bola gaya tha — "per DI scope (ASP.NET Core mein ek request = ek scope)" kiya gaya.
+
+**Verify karne layak:** `KeyedService.AnyKey` ki exact edge-case matrix, aur `[ServiceKey]` ki availability (.NET 9) — apne exact patch version ke docs se confirm kar lena.
