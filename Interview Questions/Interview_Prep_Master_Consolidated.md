@@ -44,12 +44,12 @@
 
 **Answer:** CLR type safety, exceptions, garbage collection aur threading jaise services deta hai. JIT sirf hot methods compile karta hai — AOT publishing kuch ya saara compilation deployment se pehle kar sakta hai.
 
-**Pitfall:** "C# hamesha interpreter se chalta hai" ya "JIT poora app startup par ek hi baar compile karta hai" — dono oversimplifications hain. Tiered compilation, runtime version aur deployment model behavior badal sakte hain.
+**Pitfall:** C# ko simply "interpreted" kehna misleading hai: C# source aam taur par IL mein compile hota hai, jise .NET runtime JIT karke native machine code banata hai; AOT deployment mein native code pehle compile ho sakta hai. Yeh bhi assume na karein ki JIT poora app startup par ek hi baar compile karta hai—tiered compilation aur deployment/runtime configuration ke mutabik compilation behavior badal sakta hai.
 
 **Scenario:** Cold-start sensitive serverless service mein startup aur memory important hain — AOT consider karein, lekin reflection/dynamic-code limitations, compatibility aur publish size validate karke.
 
 **Follow-ups**
-- **JIT ka fayda?** Runtime profiling ke baad hot code optimize ho sakta hai; cost startup par compilation aur runtime dependency hai.
+- **JIT ka fayda aur cost?** JIT methods ko zaroorat par native code mein compile karta hai. Runtime par frequently used ("hot") methods ko pehchaan kar, tiered compilation/dynamic PGO ke saath, current machine aur observed execution ke mutabik aur optimize kar sakta hai. Iska trade-off pehli calls par compilation ka startup/latency overhead aur JIT ke liye .NET runtime ki dependency hai; AOT kuch ya saara native code pehle compile kar sakta hai.
 - **Managed code kya hai?** Aisa code jo CLR ke runtime services ke under execute hota hai; unmanaged native code ko memory/resources ke liye explicit lifetime management chahiye.
 - **CLI/CTS/CLS?** CLI standard/runtime model; CTS common type system; CLS cross-language compatibility subset.
 
@@ -71,7 +71,25 @@ class C { public int X; }
 var c1 = new C { X = 1 }; var c2 = c1; c2.X = 2; // c1.X is now 2 — shared reference
 ```
 
-**`record` class vs `record struct`:** `record` reference type hai value-oriented equality ke saath; `record struct` value type hai value equality ke saath. Dono automatically immutable nahin hote — `init`/`readonly` aur exposed mutable members check karein.
+**`record class` vs `record struct`:** Dono records hain, isliye compiler value-based equality generate karta hai; lekin unke assignment aur mutation semantics alag hain.
+
+- **`record class`** reference type hai: assignment par object ka reference copy hota hai. Alag objects ki record values barabar hon to woh `==` se equal ho sakte hain.
+- **`record struct`** value type hai: assignment par value copy hoti hai, isliye copy ko badalne se original value nahi badalti. Normal `record struct` mutable hota hai; `readonly record struct` uske members ko immutable banane ke liye hai.
+- Positional `record class` properties aam taur par `init`-only hoti hain, lekin iska matlab deep immutability nahi: record ke andar exposed mutable object (jaise `List<T>`) phir bhi badal sakta hai.
+
+```csharp
+public record Person(string Name);
+public record struct Point(int X, int Y);
+
+var person1 = new Person("Asha");
+var person2 = new Person("Asha");
+Console.WriteLine(person1 == person2); // True: record values equal
+
+var point1 = new Point(2, 3);
+var point2 = point1;                   // value copy
+point2.X = 9;
+Console.WriteLine(point1.X);           // 2
+```
 
 **Boxing / Unboxing:** Value type ko `object` ya compatible interface reference ke roop mein use karne par boxing hoti hai — heap allocation trigger hoti hai. Hot paths mein yeh costly hai; generics (`List<T>`) boxing avoid karte hain.
 
@@ -92,7 +110,7 @@ var c1 = new C { X = 1 }; var c2 = c1; c2.X = 2; // c1.X is now 2 — shared ref
 
 **Answer:** `new C()` mein, agar `C : B : A`, constructor bodies pehle `A`, phir `B`, phir `C` chalte hain. Har class ke instance field initializers us class ke constructor body se pehle execute hote hain. `base(args)` base constructor select karta hai; `this(args)` isi class ke doosre constructor ko chain karta hai.
 
-**Pitfall:** Base constructor se virtual method call karne par derived override derived constructor body se pehle chal sakta hai; derived state abhi ready na ho. Aisa virtual dispatch constructors mein avoid karein.
+**Pitfall:** Base constructor agar virtual method call kare, to C# derived override dispatch kar sakta hai—derived constructor body se pehle. Override derived state use kare to woh abhi initialize nahi hui ho sakti, jis se bug ya exception aa sakta hai. Constructors mein overridable methods call na karein; zaroorat ho to initialization object construct hone ke baad karein.
 
 **Follow-ups**
 - **Agar `base(...)` omit ho?** Compiler implicit parameterless base constructor call karta hai; woh accessible/existent na ho to explicit constructor chain likhni hogi.
@@ -102,18 +120,39 @@ var c1 = new C { X = 1 }; var c2 = c1; c2.X = 2; // c1.X is now 2 — shared ref
 
 ### Q1.4 `async`/`await` thread create karta hai?
 
-**Short answer:** Nahin. `async` method compiler-generated state machine banata hai; `await` incomplete asynchronous operation par method ko suspend karke control caller ko lauta sakta hai bina thread block kiye.
+**Short answer:** Nahin. Compiler `async` method ko ek state machine mein rewrite karta hai—generated code jo track karta hai ki method kis step par hai aur `await` ke baad kahan se continue karna hai. Jab awaited operation incomplete ho, method apni current state save karke caller ko control lauta sakta hai bina thread block kiye. Operation complete hone par continuation us saved state se method ko aage chalati hai.
 
 **Answer:** I/O-bound kaam ke liye thread block kiye bina scalability milti hai. CPU-bound kaam ke liye `Task.Run` use karein.
 
 **Depth:**
-- `.Result`/`.Wait()` se async call block karne par thread starvation/deadlock risk badhta hai.
+- **State machine ka flow:** Compiler method ke steps ko generated state machine mein badalta hai. Yeh current step, `await` ke baad chahiye locals, aur awaited operation ka awaiter track karta hai. Method call par code synchronously pehle `await` tak chalta hai. Agar awaited task incomplete ho, state save hoti hai, continuation register hoti hai, aur method caller ko incomplete `Task` dekar return kar sakta hai. Operation complete hone par continuation state machine ko saved step se resume karti hai. Agar task pehle hi complete ho, method bina suspend/resume ke aage chal sakta hai.
+- **Example:**
+  ```csharp
+  static async Task<string> LoadAsync()
+  {
+      Console.WriteLine("Load started");
+      await Task.Delay(1000); // timer wait; current thread block nahi hota
+      Console.WriteLine("Load resumed");
+      return "data";
+  }
+
+  static async Task Main()
+  {
+      Task<string> loadTask = LoadAsync(); // LoadAsync pehle await tak chalta hai
+      Console.WriteLine("Caller continues");
+      string result = await loadTask;      // caller bhi thread block kiye bina wait karta hai
+      Console.WriteLine(result);
+  }
+  ```
+  Is example mein aam taur par output order `Load started` → `Caller continues` → `Load resumed` → `data` hota hai. `await` ke baad continuation kis thread par chalegi, iski guarantee nahi; UI apps mein synchronization context continuation ko UI context par la sakta hai, jabki ASP.NET Core mein aam taur par aisa context nahi hota.
+- **Yaad rakhein:** State machine control flow ko track karti hai; yeh apne aap naya thread create nahi karti. `async`/`await` asynchronous operation ko compose karte hain, jabki `Task.Run` kaam ko thread pool par schedule karta hai.
+- `.Result` aur `.Wait()` async operation ke finish hone tak current thread ko synchronously wait karwate hain. Isse do risks hain: **thread-pool starvation**, kyunki blocked threads doosre requests ya continuations process nahi kar paate; aur **deadlock**, jab continuation ko usi UI/ASP.NET synchronization context par resume hona ho jiska thread `.Result`/`.Wait()` se blocked hai.
 - `async void` avoid karein except event handlers; return `Task`/`ValueTask`.
 - Independent calls concurrently run karein: `await Task.WhenAll(t1, t2)`.
 - `CancellationToken` through all layers pass karein.
-- `ValueTask` hot paths ke liye jab frequently complete synchronously ho.
+- **`ValueTask<T>` kab?** Sirf profiled hot path mein jab operation aksar synchronously complete hota ho; yeh result directly dekar `Task<T>` allocation bacha sakta hai. Iske usage rules zyada nuanced hain (aam taur par ek baar await karein), isliye default `Task<T>` rakhein. Result na ho to `ValueTask` use ho sakta hai; `Task<void>` nahi hota.
 
-**Pitfall:** `.Result`/`.Wait()` sync-over-async pattern library code mein deadlock de sakta hai. Fire-and-forget task exceptions/lifetime ignore na karein.
+**Pitfall:** `.Result`/`.Wait()` async work ko block karke deadlock ya thread-pool starvation cause kar sakte hain; library code mein `await` karein. Fire-and-forget tasks ki failure, cancellation aur shutdown lifetime handle karein, warna errors ya unfinished work unnoticed reh sakte hain.
 
 **Scenario:** API external service call karti hai — `HttpClient` ka async API await karein, request cancellation token propagate karein, finite timeout set karein.
 
@@ -1091,6 +1130,8 @@ public class Function {
 - **`@if`/`@for`?** Built-in template control flow; `@for` mein stable `track` expression define karna DOM efficiency ke liye important.
 - **`inject()` vs constructor injection?** Dono DI resolve karte hain; `inject()` functional guards/interceptors/factories aur field initialization mein useful.
 - **Lifecycle hooks order?** `ngOnChanges` → `ngOnInit` → `ngDoCheck` → `ngAfterContentInit` → `ngAfterContentChecked` → `ngAfterViewInit` → `ngAfterViewChecked` → `ngOnDestroy`.
+- **Default/root component kaun sa hota hai?** CLI aam taur par `AppComponent` (`app-root`) generate karta hai. Standalone app mein `main.ts` par `bootstrapApplication(AppComponent, appConfig)` se, ya legacy app mein `AppModule` ke `bootstrap` array se boot hota hai; `index.html` mein uska selector hota hai.
+- **Kya dashboard ko directly bootstrap kar sakte hain?** Technically haan, agar root component standalone ho (ya module mein declared ho) aur `index.html` uska selector use kare. Normal SPA mein `AppComponent` ko thin shell (layout, navigation, `<router-outlet>`) rakhein aur dashboard ko route banayein, taaki guards, lazy loading, deep links aur shared layout naturally kaam karein. Direct bootstrap single-purpose widget ya deliberate micro-frontend jaise cases mein fit ho sakta hai.
 
 ---
 
@@ -1120,6 +1161,8 @@ constructor() { effect(() => console.log(this.count())); }
 this.count.set(5);
 this.count.update(c => c + 1);
 ```
+
+**Zone.js mechanics:** Zone.js async browser APIs (jaise timers, Promises, DOM events aur HTTP) ko instrument karta hai. Zone stable hone par Angular change detection schedule karta hai; isliye async callback ke baad template updates dikhte hain. Har async event par checking ka cost ho sakta hai. High-frequency events jo UI state nahi badalte (jaise `mousemove` ya chart polling) ko `ngZone.runOutsideAngular(...)` mein chala sakte hain, aur UI update zaroori ho to `ngZone.run(...)` se Angular zone mein wapas aayen. Zoneless setup mein signals, events aur explicit change-detection notifications updates trigger karte hain; Zone.js ke implicit notifications par depend na karein.
 
 **Follow-ups**
 - **Signals vs RxJS?** Signals synchronous state/derived UI state ke liye; RxJS async streams, cancellation, operator composition ke liye. Interop: `toSignal(obs$)`, `toObservable(sig)`.
@@ -1207,6 +1250,17 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
 
 ---
 
+**Custom pipes — pure vs impure:** Pipes template transformations ko reusable aur declarative banate hain (for example date/currency formatting, truncation, enum-to-label). Pure pipe default hai; primitive value ya input reference badalne par chalta hai, isliye deterministic transforms ke liye efficient hai. Immutable updates ke saath use karein. Impure pipe har change-detection cycle par chalta hai; mutable arrays, time, ya inputs se bahar ke state par depend karne par kabhi zaroori ho sakta hai, lekin performance risk ke kaaran use limited aur lightweight rakhein. Filtering/sorting ke liye impure pipe ke bajay component mein derived state (`computed()`/RxJS) banayein.
+
+```ts
+@Pipe({ name: 'truncate', standalone: true })
+export class TruncatePipe implements PipeTransform {
+  transform(value: string, max = 50): string {
+    return value.length > max ? value.slice(0, max) + '…' : value;
+  }
+}
+```
+
 ### Q12.9 Angular 19 key features?
 
 - **Standalone by default:** Components, directives, pipes standalone unless opted out.
@@ -1215,6 +1269,15 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
 - **Zoneless:** Experimental via `provideExperimentalZonelessChangeDetection()`.
 - **Control flow:** `@if`, `@for` (required `track`), `@switch`, `@let`, `@defer`.
 - **Tooling:** esbuild/Vite application builder, HMR for styles/templates.
+
+### Q12.10 Do unrelated components ke beech state kaise share karein?
+
+**Answer:** Shared injectable service/store mein state rakhein; unrelated components ke liye parent-child `@Input`/`@Output` chain ya ancestors se event bubble karna brittle hota hai. App-wide state ke liye root-provided service; feature tak scoped state ke liye component/feature providers choose karein. Signals ko read-only expose karke writes service methods se karayein, ya RxJS `BehaviorSubject` use karein.
+
+- Synchronous UI state ke liye service signal achha fit hai; derived values `computed()` se expose karein. Badi app-wide state aur complex actions/side effects ke liye NgRx/SignalStore consider karein.
+- Shareable/bookmarkable filters ya selected ID ko URL query params mein rakhein; reload ke baad state chahiye to suitable storage consider karein.
+- Data polling, WebSocket/SignalR push, ya HTTP refresh se aa raha ho to timing/cancellation pipeline RxJS mein rakhein (`timer`/`interval` + `switchMap`, ya stream subscription), phir template consumers ke liye `toSignal()` se state bana sakte hain. Update har 10–20 minute mein ho ya zyada frequently, decision update frequency se zyada source aur state ownership par nirbhar hai.
+- Service API chhoti rakhein, read-only state expose karein, aur ek all-purpose "god service" se bachein.
 
 ---
 
@@ -1279,6 +1342,30 @@ Promise.resolve().then(() => console.log('promise'));
 console.log('B');
 // Output: A, B, promise, timer
 ```
+
+```js
+async function f() {
+  console.log('a');
+  await null;
+  console.log('b');
+}
+console.log('c');
+f();
+console.log('d');
+// Output: c, a, d, b — await ke baad ka code microtask mein resume hota hai.
+```
+
+```js
+setTimeout(() => console.log('timeout'), 0);
+Promise.resolve()
+  .then(() => console.log('p1'))
+  .then(() => console.log('p2'));
+queueMicrotask(() => console.log('micro'));
+console.log('sync');
+// Output: sync, p1, micro, p2, timeout
+```
+
+Pehle synchronous code chalta hai; phir queued microtasks drain hote hain. `p2` pehle Promise callback (`p1`) complete hone par queue hota hai, isliye pehle se queued `micro` usse pehle chalta hai.
 
 **Follow-ups**
 - **CPU-heavy task UI freeze?** Main thread busy; chunked work ya Web Worker use karein.
@@ -1498,6 +1585,14 @@ var byDept = employees.GroupBy(e => e.Department)
     .Select(g => new { Dept = g.Key, Count = g.Count(), Avg = g.Average(e => e.Salary) });
 ```
 
+**Additional quick coding drills**
+- String/array: anagram check, first non-repeating character, find duplicates.
+- Fundamentals: FizzBuzz, iterative/memoised Fibonacci, prime check.
+- Search/collections: binary search, LINQ `GroupBy`/`Join`/top-N-per-group/`SelectMany`, merge two sorted lists.
+- Data: SQL running total, employees earning more than their manager, department-wise top 3.
+- Design/concurrency: LRU cache; thread-safe producer-consumer with `BlockingCollection<T>`.
+- Angular: debounce search with `switchMap`, build a reusable form control, implement a route guard.
+
 ---
 
 ### Q18.3 BFS, topological sort, LRU cache?
@@ -1575,6 +1670,15 @@ var byDept = employees.GroupBy(e => e.Department)
 ### Q19.6 Technical disagreement kaise handle karein?
 
 **Answer:** Shared goal/data clarify; options compare karein evidence/trade-offs ke saath; decide via owner; commit after decision aur revisit with new data. ADR (Architecture Decision Record) mein document karein.
+
+### Last-day checklist
+
+- [ ] Resume ke do projects chun kar architecture, apna role, ek difficult bug aur ek performance improvement explain karne ki practice karein.
+- [ ] C#, MVC/Web API aur SQL fundamentals ko depth mein revise karein; AWS mein sirf wahi services revise karein jinhe aapne sach mein use kiya hai.
+- [ ] Angular ke current release notes mein Signals, standalone APIs aur built-in control flow skim karein.
+- [ ] SOLID aur design patterns ko ek code example ke saath 60 seconds mein explain karne ki practice karein.
+- [ ] Apne AWS architecture diagram ko end-to-end samajh kar explain karne ke liye ready rakhein.
+- [ ] Interviewer ke liye team structure, release process aur compliance handling par teen relevant questions taiyar karein.
 
 ---
 
