@@ -1446,3 +1446,216 @@ Neeche wale saare items unke respective headings mein `[new content]` tagged hai
 
 - Different source lists ke beech koi direct factual contradictions nahi mile — lists conflicting hone ke jagah duplicative thi (same questions "general", ".NET Core/API", aur second "SQL" passes mein near-verbatim repeat hui thi). Duplicates ko single, consolidated answers mein merge kiya gaya (e.g., Eager/Lazy Loading EF aur .NET Core/API dono ke under aayi thi; Async/Await aur Clustered/Non-Clustered indexes har ek do baar aaye).
 - Kuch points inline **(verify)** marked hain kyunki woh interview time par exact framework/tool version par depend karte hain aur target company ke stack ke against check kiye bina absolute fact ke roop mein state nahi honi chahiye: current .NET LTS cadence, use ki gayi SQL Server version mein table-variable statistics behavior, aur use ki gayi Angular CLI version mein current default Angular testing tool (Jasmine/Karma vs Jest).
+
+---
+
+## Legacy .NET Codebase — 90-Day Plan 🆕 LATEST
+
+> **Added:** 2026-11-11 (Q19.4a from Interview Prep Master)
+
+### Q: Legacy .NET codebase inherit kiya — 90-day plan kya hoga?
+
+**Short answer:** Pehle samjho, phir stabilize karo, phir incrementally improve karo. Big-bang rewrite kabhi nahin.
+
+**Answer framework:**
+
+---
+
+### Days 1–30 — Understand (Samajhna)
+
+**Goal:** Codebase aur domain logic samajhna bina kuch todhe
+
+**Actions:**
+1. **Codebase read karein**
+   - Core domain aur highest-risk areas identify karein
+   - Business logic ka flow trace karein (orders, payments, core workflows)
+   - Entry points identify karein (controllers, background jobs, message handlers)
+
+2. **Local dev setup**
+   - App successfully run karein locally
+   - 2–3 key workflows end-to-end trace karein (user registration, checkout, report generation)
+   - Debugger se step through karke actual execution path dekhein
+
+3. **Documentation banana shuru karein**
+   - Jo sikhein woh document karte jaayein (ADRs, wiki pages, flow diagrams)
+   - "Things I Learned" log maintain karein — surprises, gotchas, undocumented behavior
+   - Architecture diagram banayein (components, dependencies, external integrations)
+
+4. **Dependencies map karein**
+   - External integrations identify karein (payment gateways, email services, third-party APIs)
+   - Database dependencies (stored procedures, triggers, jobs)
+   - Deployment pipeline aur environments (dev, staging, prod)
+
+5. **Team se poochhein**
+   - "Kya frequently fail hota hai?"
+   - "Kaunsa code touch karna darr lagta hai?"
+   - "Kaunsi areas slow hain ya brittle hain?"
+   - Production incidents history review karein
+
+**Deliverable:** Architecture diagram + key workflows documented + risk areas identified
+
+---
+
+### Days 31–60 — Stabilize (Stable banana)
+
+**Goal:** Critical paths ke around safety net create karna before any changes
+
+**Actions:**
+1. **Characterization tests add karein**
+   - Kuch bhi touch karne se pehle tests add karein
+   - Approval/snapshot tests use karein ("Golden Master" pattern)
+   - Critical business logic ko cover karein — exact current behavior capture karein
+   - Integration tests priority dein (unit tests baad mein)
+
+   ```csharp
+   // Approval test example
+   [Fact]
+   public async Task OrderCalculation_ProducesExpectedResult()
+   {
+       var order = CreateSampleOrder();
+       var result = await _orderService.CalculateTotal(order);
+       
+       // Captures current output as "approved" baseline
+       await Verifier.Verify(result);
+   }
+   ```
+
+2. **Urgent bugs fix karein**
+   - Production incidents address karein
+   - Low-hanging fruit improvements (obvious null checks, missing validation)
+   - Defensive logging add karein (error paths, critical workflows)
+
+3. **Code quality baseline**
+   - Linting/formatting baseline introduce karein (EditorConfig, StyleCop)
+   - PR review process establish karein
+   - CI pipeline health check karein — builds reliable hone chahiye
+
+4. **Technical debt inventory**
+   - Top 3-5 technical debt items identify karein **business impact ke mutabik**
+   - ROI estimate karein (time to fix vs risk reduction vs velocity improvement)
+   - Stakeholders ko communicate karein — "yeh issues slow delivery cause kar rahe hain"
+
+5. **Monitoring improve karein**
+   - Structured logging add karein (Serilog/NLog)
+   - APM setup karein (Application Insights, New Relic, Datadog)
+   - Alerts configure karein (error rate spikes, slow queries)
+
+**Deliverable:** Critical paths covered by tests + top technical debt documented + CI/CD stable
+
+---
+
+### Days 61–90 — Improve (Incrementally)
+
+**Goal:** Test harness ke saath incremental refactoring shuru karna
+
+**Actions:**
+1. **Incremental refactoring**
+   - **Strangler Fig pattern** — legacy system ko ek ek component incrementally replace karein
+   - Interfaces extract karein tightly coupled components se
+   - Circular dependencies todein (layering introduce karein)
+   - Missing DI introduce karein (constructor injection)
+   
+   ```csharp
+   // Example: Extract interface from tightly coupled service
+   
+   // Before:
+   public class OrderService
+   {
+       public void ProcessOrder()
+       {
+           var payment = new PaymentGateway(); // Tight coupling
+           payment.Charge(...);
+       }
+   }
+   
+   // After:
+   public interface IPaymentGateway { void Charge(...); }
+   
+   public class OrderService
+   {
+       private readonly IPaymentGateway _payment;
+       
+       public OrderService(IPaymentGateway payment) // DI
+       {
+           _payment = payment;
+       }
+   }
+   ```
+
+2. **Test harness expand karein**
+   - Har refactored component ke liye unit tests add karein
+   - **Golden rule:** Test harness ke bina refactor kabhi nahin
+   - Tests green rakhein har step par
+
+3. **Quick wins deliver karein**
+   - Performance improvements (N+1 queries fix, caching add)
+   - Security fixes (SQL injection, missing authorization)
+   - User-facing bugs (validation errors, edge cases)
+
+4. **Next quarter roadmap propose karein**
+   - Days 1-60 ke findings par based
+   - Business value ke saath prioritize karein (velocity, stability, security)
+   - Team ke saath alignment banayein
+
+5. **Learnings share karein**
+   - "Legacy Codebase Lessons" brown-bag session
+   - Team ke saath priorities par alignment
+   - Knowledge transfer — juniors ko onboard karein
+
+**Deliverable:** 2-3 modules incrementally refactored + unit tests added + roadmap for next quarter
+
+---
+
+### Key Principles
+
+**1. Strangler Fig Pattern**
+Legacy system ko ek ek component incrementally replace karein stable interface ke peeche. Big-bang rewrite project delivery aur team morale dono risk karta hai.
+
+```
+Old System ──┐
+             ├── Shared Interface ──→ Clients
+New System ──┘
+```
+
+**2. Test Harness First**
+Michael Feathers ke "Working Effectively with Legacy Code" ka core principle: kuch bhi change karne se pehle test harness banao.
+
+**3. Boy Scout Rule**
+"Leave the code better than you found it" — har PR mein choti improvement.
+
+**4. No Big-Bang Rewrite**
+Incremental improvement > Complete rewrite. Rewrites:
+- Underestimate complexity (business logic hidden hai)
+- Delay delivery (months/years tak kuch ship nahin hota)
+- Risk morale (team frustrated hoti hai)
+
+---
+
+### Pitfalls to Avoid
+
+| Pitfall | Why It's Bad | Fix |
+|---|---|---|
+| **Pehle week mein sab refactor karne ki koshish** | Context nahin hai, business logic samajh nahin aayi | 30 days understanding mein invest karein |
+| **Test coverage ke bina changes** | Regressions introduce hote hain silently | Characterization tests pehle, refactor baad mein |
+| **Team buy-in ke bina architecture decisions** | Resistance milta hai, changes revert ho sakte hain | Stakeholders ko ROI ke saath convince karein |
+| **"Code clean nahin hai" argument** | Business ko matter nahin karta | Business risk mein frame karein: "yeh slow delivery cause karta hai" |
+| **Ignoring domain experts** | Business rules misunderstand kar sakte ho | Senior team members/domain experts se active collaboration |
+
+---
+
+### Interview Answer Template
+
+**Q: "Agar aapko legacy codebase inherit ho to pehle 90 days mein kya karoge?"**
+
+**Strong answer:**
+> "Pehle 30 days understanding mein invest karta hoon — codebase read karna, key workflows trace karna, team se production pain points poochhna, architecture document karna. Days 31-60 mein stabilize karta hoon — critical paths ke liye characterization tests add karna, CI/CD fix karna, urgent bugs address karna, technical debt inventory banana business impact ke saath. Days 61-90 mein incremental refactoring shuru karta hoon — Strangler Fig pattern use karke, test harness ke saath, ek module at a time. Recent example mein 8-year-old payment service inherit kiya tha — pehle month mein payment flow end-to-end trace kiya, approval tests add kiye, second month mein tightly coupled gateway code ko interface extract karke testable banaya, third month mein 3 payment providers ko DI se inject karne layak refactor kiya. Big-bang rewrite avoid karta hoon — incremental improvement project delivery aur team morale dono ke liye better hai."
+
+**Follow-ups:**
+- **Stakeholders ko technical debt address karne ke liye kaise convince karein?** Business risk mein frame karein — "yeh code slow delivery karta hai" ya "yeh production incidents ka root cause hai" — nahin ki "code clean nahin hai."
+- **Agar tests nahin hain to kaise refactor karein?** Characterization/approval tests add karein pehle — current behavior baseline ke roop mein capture karein, phir refactor karte waqt behavior preserve verify karein.
+- **Team resistance agar aaye to?** Small wins deliver karein — quick performance improvement ya bug fix — trust earn karein, phir bade changes propose karein.
+
+---
+
+**Summary:** Legacy codebase mein 90-day plan = **Understand → Stabilize → Improve** (incrementally, with tests, avoiding big-bang rewrite).
+

@@ -2368,3 +2368,218 @@ Is pass mein "DI, service lifetimes, resolution aur request processing (.NET 8)"
 - Lifetimes table mein Scoped ko "har HTTP request" bola gaya tha — "per DI scope (ASP.NET Core mein ek request = ek scope)" kiya gaya.
 
 **Verify karne layak:** `KeyedService.AnyKey` ki exact edge-case matrix, aur `[ServiceKey]` ki availability (.NET 9) — apne exact patch version ke docs se confirm kar lena.
+
+---
+
+## Output Caching (ASP.NET Core 7+) 🆕 LATEST
+
+> **Added:** 2026-11-11 (Q4.11 from Interview Prep Master)
+
+### What is Output Caching?
+
+**Short answer:** Output Caching puri HTTP response cache karta hai server-side — status code, headers, body sab. `IMemoryCache` application data cache karta hai; Output Caching endpoint ka complete response cache karta hai.
+
+**Answer:**
+
+ASP.NET Core 7+ mein `AddOutputCache()` aur `[OutputCache]` attribute se configure hota hai. Response Caching middleware se better hai — server-side cache control karta hai, `no-cache` headers se bypass ho sakta hai, aur tag-based invalidation support karta hai.
+
+---
+
+### Basic Setup
+
+```csharp
+// Program.cs
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddOutputCache(options =>
+{
+    options.AddBasePolicy(builder => builder.Expire(TimeSpan.FromMinutes(5)));
+    
+    options.AddPolicy("ProductsPolicy", builder =>
+        builder.Expire(TimeSpan.FromMinutes(10))
+               .Tag("products"));
+});
+
+var app = builder.Build();
+
+app.UseOutputCache(); // Before UseEndpoints / MapControllers
+
+app.MapControllers();
+app.Run();
+```
+
+---
+
+### Using Output Cache
+
+**Controller / Minimal API:**
+
+```csharp
+// Controller
+[OutputCache(PolicyName = "ProductsPolicy")]
+[HttpGet]
+public async Task<IActionResult> GetProducts()
+{
+    var products = await _productService.GetAllAsync();
+    return Ok(products);
+}
+
+// Minimal API
+app.MapGet("/products", async (IProductService service) =>
+{
+    var products = await service.GetAllAsync();
+    return Results.Ok(products);
+})
+.CacheOutput("ProductsPolicy");
+```
+
+---
+
+### Tag-Based Invalidation
+
+```csharp
+// Registration with tags
+builder.Services.AddOutputCache(options =>
+{
+    options.AddPolicy("ProductsPolicy", builder =>
+        builder.Expire(TimeSpan.FromMinutes(10))
+               .Tag("products")
+               .Tag("catalog"));
+});
+
+// Invalidate by tag
+[HttpPost]
+public async Task<IActionResult> CreateProduct([FromBody] Product product)
+{
+    await _productService.AddAsync(product);
+    
+    // Invalidate all cached responses tagged with "products"
+    await _outputCacheStore.EvictByTagAsync("products", HttpContext.RequestAborted);
+    
+    return CreatedAtAction(nameof(GetProduct), new { id = product.Id }, product);
+}
+
+// Inject IOutputCacheStore:
+public class ProductsController : ControllerBase
+{
+    private readonly IOutputCacheStore _outputCacheStore;
+    
+    public ProductsController(IOutputCacheStore outputCacheStore)
+    {
+        _outputCacheStore = outputCacheStore;
+    }
+}
+```
+
+---
+
+### VaryBy Options
+
+```csharp
+builder.Services.AddOutputCache(options =>
+{
+    options.AddPolicy("VaryByUser", builder =>
+        builder.VaryByHeader("Authorization")
+               .Expire(TimeSpan.FromMinutes(5)));
+    
+    options.AddPolicy("VaryByQuery", builder =>
+        builder.VaryByQuery("category", "page")
+               .Expire(TimeSpan.FromMinutes(3)));
+    
+    options.AddPolicy("VaryByValue", builder =>
+        builder.VaryByValue((context) => 
+        {
+            var userId = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            return new KeyValuePair<string, string>("userId", userId ?? "anonymous");
+        }));
+});
+```
+
+**Key VaryBy methods:**
+- `VaryByHeader(string... headers)` — Cache per header value
+- `VaryByQuery(string... queryKeys)` — Cache per query parameter
+- `VaryByValue(Func<HttpContext, KeyValuePair<string, string>>)` — Custom cache key
+- `SetVaryByHost(bool)` — Cache per host
+- `SetVaryByRouteValue(params string[])` — Cache per route value
+
+---
+
+### Pitfalls
+
+| Pitfall | Explanation | Fix |
+|---|---|---|
+| **Authenticated endpoints** | User A ke response User B ko serve ho sakta hai | `VaryByHeader("Authorization")` ya `VaryByValue` user ID se |
+| **No cache key** | Default cache key sirf path — query params ignore | Explicitly `VaryByQuery()` specify karein |
+| **Multi-instance deployment** | In-memory cache per-instance isolated | Distributed cache configure karein (Redis) |
+| **No automatic invalidation** | Data update hone par cache stale | Tag-based invalidation manually trigger karein |
+
+**Critical security issue:**
+
+```csharp
+// ❌ BAD — All users get same cached response
+[OutputCache(Duration = 300)]
+[HttpGet("users/{id}")]
+public async Task<IActionResult> GetUser(string id)
+{
+    var user = await _userService.GetAsync(id);
+    return Ok(user);
+}
+
+// ✅ GOOD — Cache per user
+[OutputCache(PolicyName = "PerUser")]
+[HttpGet("users/{id}")]
+public async Task<IActionResult> GetUser(string id)
+{
+    // Policy configured with VaryByValue(userId)
+    var user = await _userService.GetAsync(id);
+    return Ok(user);
+}
+```
+
+---
+
+### Output Caching vs Response Caching vs IMemoryCache
+
+| Feature | Output Caching | Response Caching | IMemoryCache |
+|---|---|---|---|
+| **What it caches** | Full HTTP response | Full HTTP response | Application data |
+| **Control** | Server-side | Client + proxy (`Cache-Control` headers) | Application code |
+| **Location** | Server memory (or distributed) | Client, proxy, server | Server memory |
+| **Invalidation** | Tag-based API | Header-based expiry | Manual remove |
+| **Best for** | API responses, read-heavy endpoints | Static content, CDN-friendly | Computed data, lookups |
+| **ASP.NET Core version** | 7+ | 2.1+ | Any .NET |
+
+---
+
+### Distributed Output Caching (Redis)
+
+```csharp
+builder.Services.AddStackExchangeRedisOutputCache(options =>
+{
+    options.Configuration = builder.Configuration.GetConnectionString("Redis");
+    options.InstanceName = "MyApp";
+});
+
+builder.Services.AddOutputCache(); // Uses Redis automatically
+```
+
+**Benefits:**
+- Shared cache across multiple instances
+- Persists across app restarts
+- Horizontal scaling support
+
+---
+
+### Interview Answer Template
+
+**Q: "Output Caching kya hai? IMemoryCache se kaise alag hai?"**
+
+**Strong answer:**
+> "Output Caching ASP.NET Core 7+ feature hai jo complete HTTP response cache karta hai — status code, headers, body — server-side. `IMemoryCache` application data cache karta hai, jabki Output Caching endpoint level par kaam karta hai. Tag-based invalidation support karta hai — jaise product update hone par `EvictByTagAsync("products")` se sabhi product-related cached responses invalidate ho jate hain. Multi-instance deployment mein distributed cache (Redis) configure karna chahiye warna har instance ka apna cache hoga. Security ke liye authenticated endpoints par `VaryByHeader("Authorization")` ya `VaryByValue` se user ID cache key mein include karna zaroori hai, warna User A ka response User B ko serve ho sakta hai."
+
+**Follow-ups:**
+- **Response Caching se compare?** Response Caching `Cache-Control` headers par depend karta hai (client control bhi hai); Output Caching purely server-side hai aur tag-based invalidation deta hai.
+- **Performance improvement?** Read-heavy endpoints par 80-95% response time reduction; database/computation load significantly kam.
+
+---
+
