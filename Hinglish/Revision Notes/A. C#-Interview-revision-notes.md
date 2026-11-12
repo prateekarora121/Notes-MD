@@ -30,6 +30,14 @@
 | Desktop | Full | Limited | Full (Windows) |
 | Cloud/Microservices | Limited | Haan | Haan (containers, gRPC, Minimal APIs) |
 
+- **Upgrades from .NET 5 to .NET 10**
+  - **.NET 5**: unified platform; modern single-runtime story ki shuruaat; abhi bhi legacy .NET Framework app se migrate karte waqt package/runtime cleanup chahiye hoti hai.
+  - **.NET 6**: first major LTS; ASP.NET Core aur cloud workloads ke liye default production upgrade target bana.
+  - **.NET 7/8/9/10**: JIT/GC, JSON, AOT, ASP.NET Core, aur hosting mein steady improvements; .NET 8 familiar LTS baseline raha; .NET 10 current LTS hai.
+  - **Typical risks**: `System.Web`, legacy config files, binding redirects, old deployment assumptions, TLS/cert config, aur serialization/configuration behavior changes.
+  - **Best upgrade pattern**: SDK + target framework bump karo, package/API compatibility fix karo, unit/integration tests run karo, container aur startup behavior verify karo, phir promote karo.
+  - **Rule of thumb**: agar aap already .NET 5+ par hain, toh .NET 8/10 tak path usually modernization path hota hai, rewrite nahi.
+
 - Mid-2026: **.NET 10 = current LTS** (Nov 2025, C# 14 ke saath). LTS ~3 saal, STS ~18 months. Exact EOL dates Microsoft lifecycle docs se verify karo.
 
 ### Build & Execution Pipeline

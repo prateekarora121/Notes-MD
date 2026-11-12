@@ -158,6 +158,17 @@ C# is a modern, object-oriented, strongly typed language from Microsoft, part of
 | Mobile | No | No | .NET MAUI |
 | Cloud-Native/Microservices | Limited | Yes | Yes (better containers, gRPC, Minimal APIs) |
 
+#### Upgrades from .NET 5 to .NET 10
+
+- **.NET 5 (2020)** — the first unified .NET platform, consolidating the old split between .NET Framework and .NET Core. For a lot of teams, this was the start of a single runtime story for web, desktop, cloud, and worker workloads.
+- **.NET 6 (LTS, 2021)** — the first major LTS release after .NET 5. It established the modern baseline for ASP.NET Core, container-first hosting, and better runtime performance. Many production apps treated .NET 6 as the first practical long-term upgrade target.
+- **.NET 7 / 8 / 9 / 10** — incremental but meaningful upgrades: faster JIT/GC, improved `System.Text.Json`, better AOT support, modernization of ASP.NET Core, better cross-platform hosting, and newer language/runtime features. In practice, the upgrade story is often “move to the latest supported LTS and validate the app ecosystem,” not a rewrite.
+- **.NET 8 (LTS)** — the dominant production baseline for most organizations before .NET 10. It is a stable, mature target for APIs, background services, and cloud workloads.
+- **.NET 10 (LTS, Nov 2025)** — current LTS release, shipping alongside C# 14. Interviewers often expect candidates to know that .NET 10 is the current long-term support baseline, while .NET 9 was STS and had a shorter support window.
+- **Common upgrade risks** — `System.Web`/ASP.NET Framework dependencies, `Web.config`/`Machine.config` assumptions, old `ConfigurationManager` patterns, legacy binding redirects, serialization differences, TLS/certificate settings, and deployment/container assumptions.
+- **Strong upgrade strategy** — 1) upgrade the SDK and target framework, 2) pin a supported runtime in CI/CD (`global.json`/Docker images), 3) fix package and API breakages, 4) run unit + integration tests, 5) validate deployment, observability, and startup behavior before production cutover.
+- **Rule of thumb** — if an app is already on .NET 5+, it is usually a straightforward modernization path to .NET 8 or .NET 10 rather than a full rewrite. The real work is compatibility, testing, and operational readiness.
+
 As of mid-2026, **.NET 10 is the current LTS release** (shipped November 2025, alongside C# 14); .NET 9 was a Standard Term Support (STS) release that reached end-of-support in May 2026 — a senior candidate should know that STS releases have a ~18-month window vs ~3 years for LTS, and plan upgrade cadence accordingly *(verify exact EOL dates against current Microsoft lifecycle docs at interview time, since support windows are occasionally adjusted)*.
 
 ### The .NET Build & Execution Pipeline

@@ -22,6 +22,14 @@
 | Desktop | Full WPF/WinForms | Limited early | Full (Windows) |
 | Blazor / MAUI / Cloud-native | No | Partial | Yes |
 
+- **Upgrades from .NET 5 to .NET 10**
+  - **.NET 5**: unified platform; started the modern single-runtime story; migration from legacy .NET Framework still required package/runtime cleanup.
+  - **.NET 6**: first major LTS; became the default production upgrade target for ASP.NET Core and cloud workloads.
+  - **.NET 7/8/9/10**: steady improvements in JIT/GC, JSON, AOT, ASP.NET Core, and hosting; .NET 8 is the familiar LTS baseline; .NET 10 is the current LTS.
+  - **Typical risks**: `System.Web`, legacy config files, binding redirects, old deployment assumptions, TLS/cert config, and serialization/configuration behavior changes.
+  - **Best upgrade pattern**: bump SDK + target framework, fix package/API compatibility, run unit/integration tests, verify container and startup behavior, then promote.
+  - **Rule of thumb**: if you're already on .NET 5+, the path to .NET 8/10 is usually a modernization path, not a rewrite.
+
 - **Mid-2026: .NET 10 is current LTS** (shipped Nov 2025 with C# 14). .NET 6 & 8 also LTS. STS releases (e.g. .NET 9) get ~18 months vs ~3 years LTS. *Verify EOL dates at interview time.*
 
 ### The .NET Build & Execution Pipeline

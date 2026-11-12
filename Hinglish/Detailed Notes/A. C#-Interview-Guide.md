@@ -183,6 +183,17 @@ C# Microsoft ka ek modern, object-oriented, strongly typed language hai, jo .NET
 | Mobile | Nahi | Nahi | .NET MAUI |
 | Cloud-Native/Microservices | Limited | Haan | Haan (behtar containers, gRPC, Minimal APIs) |
 
+#### .NET 5 se .NET 10 tak upgrade
+
+- **.NET 5 (2020)** — yeh .NET platform ka pehla unified version tha, jisme .NET Framework aur .NET Core ke darmiyan divide ka issue solve ho gaya. Bahut teams ke liye yahi start tha single runtime story ka web, desktop, cloud, aur worker workloads ke liye.
+- **.NET 6 (LTS, 2021)** — .NET 5 ke baad pehla major LTS release. Isne ASP.NET Core, container-first hosting, aur better runtime performance ko mainstream bana diya. Bahut production apps ne .NET 6 ko first practical long-term upgrade target maana.
+- **.NET 7 / 8 / 9 / 10** — incremental but meaningful upgrades: faster JIT/GC, improved `System.Text.Json`, better AOT support, ASP.NET Core modernization, better cross-platform hosting, aur nayi language/runtime features. Real world mein upgrade typically “latest supported LTS par jao aur app ecosystem validate karo” hota hai, rewrite nahi.
+- **.NET 8 (LTS)** — most organizations ke liye production baseline tha .NET 10 se pehle. Yeh APIs, background services, aur cloud workloads ke liye stable target hai.
+- **.NET 10 (LTS, Nov 2025)** — current LTS release hai, C# 14 ke saath ship hua. Interviewers aksar expect karte hain ki candidate ko pata ho ki .NET 10 current long-term support baseline hai, jabki .NET 9 STS tha aur uska support window chhota tha.
+- **Common upgrade risks** — `System.Web`/ASP.NET Framework dependencies, `Web.config`/`Machine.config` assumptions, old `ConfigurationManager` patterns, legacy binding redirects, serialization differences, TLS/certificate settings, aur deployment/container assumptions.
+- **Strong upgrade strategy** — 1) SDK aur target framework upgrade karo, 2) CI/CD mein supported runtime pin karo (`global.json`/Docker images), 3) package aur API breakages fix karo, 4) unit + integration tests run karo, 5) production cutover se pehle deployment, observability, aur startup behavior validate karo.
+- **Rule of thumb** — agar app already .NET 5+ par hai, toh usually .NET 8 ya .NET 10 tak modernization path straightforward hota hai full rewrite ke bajaye. Asli kaam compatibility, testing, aur operational readiness ka hota hai.
+
 Mid-2026 tak, **.NET 10 current LTS release hai** (November 2025 mein ship hua, C# 14 ke saath); .NET 9 ek Standard Term Support (STS) release tha jo May 2026 mein end-of-support ko pahuncha — ek senior candidate ko yeh pata hona chahiye ki STS releases ka window ~18-month hota hai vs LTS ke ~3 saal, aur upgrade cadence usi hisaab se plan karna chahiye *(interview ke time exact EOL dates ko current Microsoft lifecycle docs se verify kar lena, kyunki support windows kabhi-kabhi adjust ho jaate hain)*.
 
 ### .NET Build & Execution Pipeline
