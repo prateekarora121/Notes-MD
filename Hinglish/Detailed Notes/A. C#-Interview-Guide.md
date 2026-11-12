@@ -130,7 +130,7 @@ builder.Services.AddTransient<ReportService>();
 - [Part XV — Performance & Low-Allocation Programming](#part-xv--performance--low-allocation-programming)
 - [Part XVI — Advanced Concurrency Primitives](#part-xvi--advanced-concurrency-primitives)
   - [[gaps] Low-Level Concurrency Primitives: Monitor, SpinLock, False Sharing, Thread-Pool Starvation](#low-level-concurrency-primitives-monitor-spinlock-false-sharing-thread-pool-starvation-gaps)
-- [Part XVII — Microservices, Messaging & CQRS](#part-xvii--microservices-messaging--cqrs)
+- [Part XVII — Microservices, Messaging & CQRS](./H. Microservices-Interview-Guide.md)
 - [Part XVIII — Observability, Testing & Full-Stack Integration](#part-xviii--observability-testing--full-stack-integration)
 - [Part XIX — Swagger / OpenAPI & API Documentation](#part-xix--swagger--openapi--api-documentation)
 - [Part XX — Terminology Reference](#part-xx--terminology-reference)
@@ -2414,51 +2414,9 @@ flowchart LR
 
 ## Part XVII — Microservices, Messaging & CQRS
 
-**REST vs gRPC:**
+Yeh topic ab dedicated guide mein move ho gaya hai: [H. Microservices-Interview-Guide.md](./H. Microservices-Interview-Guide.md).
 
-| | REST/OpenAPI | gRPC |
-|---|---|---|
-| Transport | HTTP/1.1 (typically), JSON | HTTP/2, binary Protobuf |
-| Performance | Achha | Faster — smaller payloads, multiplexed streams |
-| Contract | OpenAPI (optional/loose) | `.proto` file (strict, code-generated) |
-| Streaming | Limited (SSE, polling) | First-class bidirectional streaming |
-| Browser support | Native | grpc-web / ek proxy chahiye |
-| Best for | Public APIs, browser clients | Internal service-to-service calls, low-latency needs |
-
-**Message brokers:**
-
-| Broker | Model | Typical use |
-|---|---|---|
-| RabbitMQ | Traditional message queue (AMQP) | Task queues, work distribution, topic/exchange ke through routing |
-| Kafka | Distributed log / event streaming | High-throughput event streams, event sourcing, replayable history |
-| Azure Service Bus | Managed queue/topic service | Enterprise .NET-native messaging, dead-lettering, sessions |
-
-Ek **queue** (message ek baar consume hota hai, phir remove) aur ek **topic/pub-sub** (message har subscriber ko deliver hota hai) ke beech difference jaano — aur pub-sub use karke decoupling ke liye ek design describe karne ke liye ready raho (e.g., `OrderPlaced` → Inventory + Shipping services dono independently react karte hain).
-
-**CQRS with MediatR:**
-```csharp
-public record CreateOrderCommand(int ProductId, int Quantity) : IRequest<int>;
-
-public class CreateOrderHandler : IRequestHandler<CreateOrderCommand, int>
-{
-    public async Task<int> Handle(CreateOrderCommand request, CancellationToken ct)
-    {
-        // validate, persist, publish domain event...
-        return newOrderId;
-    }
-}
-// var orderId = await mediator.Send(new CreateOrderCommand(productId, quantity));
-```
-Benefits: thin controllers/endpoints, har use case apne testable handler mein isolated, `IPipelineBehavior<>` cross-cutting concerns (validation, logging, transactions) ke liye ek clean jagah deta hai.
-
-**Saga pattern** — microservices ek ACID transaction share nahi kar sakte, isliye ek Saga local transactions ki ek sequence coordinate karta hai jiske saath compensating actions hote hain agar koi later step fail ho jaaye (inventory reserve karo → payment charge karo → order confirm karo; agar payment fail ho jaaye, to inventory reservation release karo).
-
-| Style | Description |
-|---|---|
-| Orchestration | Ek central coordinator explicitly har service ko call karta hai aur compensations trigger karta hai |
-| Choreography | Har service doosron ke events par react karta hai; koi central coordinator nahi, lekin end-to-end trace karna harder hai |
-
-**Domain-Driven Design vocabulary** jo ready rakhne layak hai: **Entity** (jiski identity state changes ke across persist karti hai), **Value Object** (poori tarah apne values se defined, koi identity nahi — `record`/`record struct` ke liye natural fit), **Aggregate** (entities/value objects ka ek cluster jo ek single Aggregate Root ke saath ek consistency boundary maana jaata hai), **Bounded Context** (woh boundary jiske andar ek specific model/vocabulary valid hai — aksar ek microservice ke saath 1:1 map hota hai), **Domain Event** (kuch jo hua hai jiske baare mein system ke doosre parts care kar sakte hain, e.g. `OrderPlaced`).
+Service boundaries, REST/gRPC, messaging, CQRS, Saga, aur DDD ke liye us guide ka use karo.
 
 ---
 

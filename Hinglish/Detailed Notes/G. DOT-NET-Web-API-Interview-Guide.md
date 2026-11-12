@@ -347,6 +347,37 @@ public class MyLoggerService
 
 Yeh singleton ke andar manually ek naya scope create karta hai, isliye resolved `DbContext` sirf us unit of work ki duration ke liye jeeta hai — safe aur correctly isolated. Loggers ke liye specifically best practice: unhe Singleton, stateless, thread-safe rakho, aur jab possible ho hand-rolled logger services ke bajaye built-in `ILogger<T>` abstraction prefer karo.
 
+### Example: One-at-a-Time Access with `SemaphoreSlim`
+
+Agar aapko kisi shared resource ko **ek saath sirf ek task** tak hi allow karna ho (jaise file write, outbound API rate limiting, ya shared queue), to `SemaphoreSlim` ka `maxCount: 1` use karo.
+
+```csharp
+private static readonly SemaphoreSlim _gate = new(1, 1);
+
+public async Task ProcessInvoiceAsync(string invoiceId)
+{
+    await _gate.WaitAsync();
+    try
+    {
+        // Only one caller can be in here at a time.
+        Console.WriteLine($"Processing {invoiceId} at {DateTime.UtcNow:O}");
+        await Task.Delay(2000); // simulate DB/file write
+        Console.WriteLine($"Completed {invoiceId}");
+    }
+    finally
+    {
+        _gate.Release();
+    }
+}
+```
+
+**Use case:**
+- multiple HTTP requests try to update the same file or shared state
+- only one should proceed at a time
+- `lock` ke bajaye yeh async-friendly hai, isliye `await` ke beech bhi safe rehta hai
+
+**Interview-level explanation:** `SemaphoreSlim` ek capacity-based gate hai; `maxCount: 1` ka matlab ek hi caller allowed, jisse serial access guarantee hota hai, while still being compatible with `async/await`.
+
 ### [new content] Singleton vs Scoped vs Transient — Real-Life Examples
 
 Teeno lifetimes ka core difference ek hi sawaal mein samajh aata hai: **container mujhe kab naya instance deta hai?**

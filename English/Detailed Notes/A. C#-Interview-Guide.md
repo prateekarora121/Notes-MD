@@ -104,7 +104,7 @@
 - [Part XV — Performance & Low-Allocation Programming](#part-xv--performance--low-allocation-programming)
 - [Part XVI — Advanced Concurrency Primitives](#part-xvi--advanced-concurrency-primitives)
   - [[gaps] Low-Level Concurrency Primitives: Monitor, SpinLock, False Sharing, Thread-Pool Starvation](#low-level-concurrency-primitives-monitor-spinlock-false-sharing-thread-pool-starvation-gaps)
-- [Part XVII — Microservices, Messaging & CQRS](#part-xvii--microservices-messaging--cqrs)
+- [Part XVII — Microservices, Messaging & CQRS](./H. Microservices-Interview-Guide.md)
 - [Part XVIII — Observability, Testing & Full-Stack Integration](#part-xviii--observability-testing--full-stack-integration)
 - [Part XIX — Swagger / OpenAPI & API Documentation](#part-xix--swagger--openapi--api-documentation)
 - [Part XX — Terminology Reference](#part-xx--terminology-reference)
@@ -2304,51 +2304,9 @@ flowchart LR
 
 ## Part XVII — Microservices, Messaging & CQRS
 
-**REST vs gRPC:**
+This topic has moved to the dedicated guide: [H. Microservices-Interview-Guide.md](./H. Microservices-Interview-Guide.md).
 
-| | REST/OpenAPI | gRPC |
-|---|---|---|
-| Transport | HTTP/1.1 (typically), JSON | HTTP/2, binary Protobuf |
-| Performance | Good | Faster — smaller payloads, multiplexed streams |
-| Contract | OpenAPI (optional/loose) | `.proto` file (strict, code-generated) |
-| Streaming | Limited (SSE, polling) | First-class bidirectional streaming |
-| Browser support | Native | Needs grpc-web / a proxy |
-| Best for | Public APIs, browser clients | Internal service-to-service calls, low-latency needs |
-
-**Message brokers:**
-
-| Broker | Model | Typical use |
-|---|---|---|
-| RabbitMQ | Traditional message queue (AMQP) | Task queues, work distribution, routing by topic/exchange |
-| Kafka | Distributed log / event streaming | High-throughput event streams, event sourcing, replayable history |
-| Azure Service Bus | Managed queue/topic service | Enterprise .NET-native messaging, dead-lettering, sessions |
-
-Know the difference between a **queue** (message consumed once, then removed) and a **topic/pub-sub** (message delivered to every subscriber) — and be ready to describe a design (e.g., `OrderPlaced` → Inventory + Shipping services both react independently) using pub-sub for decoupling.
-
-**CQRS with MediatR:**
-```csharp
-public record CreateOrderCommand(int ProductId, int Quantity) : IRequest<int>;
-
-public class CreateOrderHandler : IRequestHandler<CreateOrderCommand, int>
-{
-    public async Task<int> Handle(CreateOrderCommand request, CancellationToken ct)
-    {
-        // validate, persist, publish domain event...
-        return newOrderId;
-    }
-}
-// var orderId = await mediator.Send(new CreateOrderCommand(productId, quantity));
-```
-Benefits: thin controllers/endpoints, each use case isolated in its own testable handler, `IPipelineBehavior<>` gives a clean place for cross-cutting concerns (validation, logging, transactions).
-
-**Saga pattern** — since microservices can't share one ACID transaction, a Saga coordinates a sequence of local transactions with compensating actions if a later step fails (reserve inventory → charge payment → confirm order; if payment fails, release the inventory reservation).
-
-| Style | Description |
-|---|---|
-| Orchestration | A central coordinator explicitly calls each service and triggers compensations |
-| Choreography | Each service reacts to events from others; no central coordinator, but harder to trace end-to-end |
-
-**Domain-Driven Design vocabulary** worth having ready: **Entity** (has identity persisting across state changes), **Value Object** (defined entirely by its values, no identity — a natural fit for `record`/`record struct`), **Aggregate** (a cluster of entities/value objects treated as one consistency boundary with a single Aggregate Root), **Bounded Context** (the boundary within which a specific model/vocabulary is valid — often maps 1:1 to a microservice), **Domain Event** (something that happened that other parts of the system may care about, e.g. `OrderPlaced`).
+Use that guide for service boundaries, REST/gRPC, messaging, CQRS, Saga, and DDD.
 
 ---
 

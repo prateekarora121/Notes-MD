@@ -326,6 +326,26 @@ GET /orders    // handled by Query Handler → reads from read replica / project
 
 **[new content]** Common follow-up: "Kya CQRS ko Event Sourcing chahiye?" — Nahi, yeh independent patterns hain often ek saath use hote hain lekin required nahi hain. Tum do relational tables/views ke saath CQRS kar sakte ho. Event Sourcing (state ko current state ke jagah events ki sequence ke roop mein store karna) ek complementary pattern hai jo CQRS ke saath well pairs karta hai kyunki event stream naturally read-model projections feed karta hai, lekin plain CQRS ek read replica ke saath practice mein far more common aur operationally much simpler hai.
 
+**CQRS with MediatR (in-process request dispatch):**
+
+```csharp
+public record CreateOrderCommand(int ProductId, int Quantity) : IRequest<int>;
+
+public class CreateOrderHandler : IRequestHandler<CreateOrderCommand, int>
+{
+    public async Task<int> Handle(CreateOrderCommand request, CancellationToken ct)
+    {
+        // Validate and persist the order; publish domain events if needed.
+        return newOrderId;
+    }
+}
+
+var orderId = await mediator.Send(
+    new CreateOrderCommand(productId, quantity), cancellationToken);
+```
+
+MediatR application ke andar commands ko handlers tak dispatch karta hai; yeh khud message broker ya independently deployed services ke beech communication ka tareeka nahi hai. Handlers endpoints ko thin rakhte hain aur `IPipelineBehavior<>` validation, logging, aur transactions jaise concerns centralize kar sakta hai.
+
 ### Distributed Transactions — Saga Pattern
 
 2PC (Two-Phase Commit) autonomous services/databases ke across well scale nahi karta (blocking, availability trade-offs, zyadatar modern message brokers/NoSQL stores usko support hi nahi karte) — **Saga** standard alternative hai: local transactions ka ek sequence, har ek ka failure par undo karne ke liye ek corresponding **compensating transaction**.
