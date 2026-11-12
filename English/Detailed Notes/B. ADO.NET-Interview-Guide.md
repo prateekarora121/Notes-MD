@@ -2,6 +2,8 @@
 
 > Audience: 10+ year .NET full-stack developer prepping for senior/lead interviews. Fundamentals assumed — this guide emphasizes nuance, trade-offs, "why", gotchas, and likely follow-ups.
 
+> This file is the dedicated deep-dive companion for the high-level ADO.NET summary that sits under the main C# guide's Part IX — Data Access: ADO.NET. Keep the quick overview in the main guide, and use this file for the detailed architecture, patterns, and interview follow-ups.
+
 ## Table of Contents
 
 - [1. Core Concepts](#1-core-concepts)

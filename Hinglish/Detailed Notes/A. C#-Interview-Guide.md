@@ -116,17 +116,13 @@ builder.Services.AddTransient<ReportService>();
   - [[new content] The Classic Sync-Over-Async Deadlock](#new-content-the-classic-sync-over-async-deadlock)
   - [[new content] async void — Why It's Dangerous](#new-content-async-void--why-its-dangerous)
   - [[new content] Task vs ValueTask](#new-content-task-vs-valuetask)
-- [Part IX — Data Access: ADO.NET](#part-ix--data-access-adonet)
+- [Part IX — Data Access: ADO.NET](./B. ADO.NET-Interview-Guide.md)
 - [Part X — Design Principles & Patterns](#part-x--design-principles--patterns)
   - [SOLID Principles](#solid-principles)
-  - [Dependency Injection](#dependency-injection-di)
-  - [[new content] Singleton vs Scoped vs Transient — Real-Life Examples](#new-content-singleton-vs-scoped-vs-transient--real-life-examples)
   - [Serialization & Deserialization](#serialization--deserialization)
   - [AutoMapper](#automapper)
   - [Architectural Patterns](#architectural-patterns)
   - [Microservices](#microservices)
-  - [[new content] The Captive Dependency Problem](#new-content-the-captive-dependency-problem)
-  - [[new content] Keyed DI Services (.NET 8+)](#new-content-keyed-di-services-net-8)
 - [Part XI — Cross-Cutting Concerns: Logging & Exceptions](#part-xi--cross-cutting-concerns-logging--exceptions)
 - [Part XII — Modern C# Language Features (C# 9–14)](#part-xii--modern-c-language-features-c-914)
 - [Part XIII — Minimal APIs, EF Core & Caching](#part-xiii--minimal-apis-ef-core--caching)
@@ -756,7 +752,42 @@ expando.Name = "John";               // properties added dynamically at runtime
 IEnumerable<int> GetNumbers() { yield return 1; yield return 2; }
 ```
 
-Compiler ek `yield return` method ko rewrite karke ek state machine bana deta hai jo `IEnumerable<T>`/`IEnumerator<T>` implement karta hai — execution deferred hota hai jab tak caller enumerate na kare (`foreach`, `.ToList()`, etc.), aur har `MoveNext()` call wahi se resume hota hai jahan pichhla chhoda tha.
+```csharp
+using System;
+using System.Collections.Generic;
+
+public class Demo
+{
+    public static IEnumerable<int> GetEvenNumbers(int max)
+    {
+        for (int i = 0; i <= max; i++)
+        {
+            if (i % 2 == 0)
+                yield return i;   // one item at a time
+        }
+    }
+
+    public static void Main()
+    {
+        foreach (var n in GetEvenNumbers(10))
+        {
+            Console.WriteLine(n);
+        }
+    }
+}
+```
+
+Output:
+```text
+0
+2
+4
+6
+8
+10
+```
+
+Compiler ek `yield return` method ko rewrite karke ek state machine bana deta hai jo `IEnumerable<T>`/`IEnumerator<T>` implement karta hai — execution deferred hota hai jab tak caller enumerate na kare (`foreach`, `.ToList()`, etc.), aur har `MoveNext()` call wahi se resume hota hai jahan pichhla chhoda tha. Yeh lazy evaluation hai: values ek-ek karke generate hote hain jab caller unhe maangta hai, full collection ko memory mein ek saath build karne ke bajaye.
 
 ### Fluent Interfaces
 
@@ -1818,99 +1849,9 @@ public ValueTask<int> GetCachedOrComputeAsync(int key)
 
 ## Part IX — Data Access: ADO.NET
 
-**ADO.NET kya hai?** Yeh connections open karne, SQL execute karne, data retrieve/manipulate karne, transactions handle karne, aur disconnected data ke saath kaam karne ke liye ek low-level data-access framework hai. SQL execution par full control deta hai; EF Core se faster/lighter hai kyunki yaha koi object tracking ya LINQ-translation layer nahi hoti. High-performance apps, fine-grained control chahne wale microservices, aur legacy systems mein common hai.
+This topic has moved to the dedicated deep-dive guide: [B. ADO.NET-Interview-Guide.md](./B. ADO.NET-Interview-Guide.md).
 
-**Core architecture:**
-- **Connected model** — `Application → Connection → Command → DataReader → Database`; connection open rehte hue data read hota hai.
-- **Disconnected model** — `Application → DataAdapter → DataSet/DataTable → Database`; data memory mein load hota hai, connection close ho sakta hai.
-
-**Data providers:** `SqlConnection`, `SqlCommand`, `SqlDataReader`, `SqlDataAdapter`, `SqlTransaction`. Modern SQL Server provider: **`Microsoft.Data.SqlClient`** (older `System.Data.SqlClient` legacy/deprecated hai — yeh ek currency point hai jo interview mein explicitly bolna worth hai).
-
-**Connection pooling** by default enabled hoti hai — `Close()`/`Dispose()` par connections reuse hote hain (destroy nahi hote). Best practice: `using` ke through "open late, close early"; improper management (leaked open connections) load ke under pool exhaust kar sakti hai.
-
-**Command execution methods:**
-
-| Method | Returns | Use for |
-|---|---|---|
-| `ExecuteReader()` | `SqlDataReader` (forward-only) | Large datasets ko stream/read karna — sabse fastest |
-| `ExecuteNonQuery()` | Affected row count | INSERT, UPDATE, DELETE |
-| `ExecuteScalar()` | Single value | Aggregates, existence checks |
-
-**Parameterized queries** SQL injection ko prevent karti hain aur query-plan reuse enable karti hain:
-```csharp
-cmd.Parameters.Add("@Id", SqlDbType.Int).Value = id;   // correct
-// "SELECT * FROM Users WHERE Id=" + id                // WRONG — injection risk
-```
-`.AddWithValue()` ke upar explicit `SqlDbType` prefer karo — `AddWithValue` .NET value se type/size infer karta hai, jisse query-plan cache bloat ho sakta hai (slightly different inferred sizes logically same query ke liye different cached plans produce karte hain) aur occasional implicit-conversion index scans ho sakte hain.
-
-**Transactions** — `BeginTransaction()`/`Commit()`/`Rollback()` ke through ACID guarantees. Transaction scope ko small rakho; **isolation levels** discuss karne ke liye ready raho:
-
-| Isolation Level | Dirty Reads | Non-Repeatable Reads | Phantom Reads | Notes |
-|---|---|---|---|---|
-| Read Uncommitted | Ho sakta hai | Ho sakta hai | Ho sakta hai | Fastest, sabse kam safe |
-| Read Committed (SQL Server default) | Prevent hota hai | Ho sakta hai | Ho sakta hai | Common default |
-| Repeatable Read | Prevent hota hai | Prevent hota hai | Ho sakta hai | Read locks zyada der hold karta hai |
-| Serializable | Prevent hota hai | Prevent hota hai | Prevent hota hai | Slowest, fully isolated |
-| Snapshot | Prevent hota hai | Prevent hota hai | Prevent hota hai | Row-versioning based, blocking reads nahi |
-
-**Async operations** (`OpenAsync`, `ExecuteReaderAsync`, etc.) **throughput** improve karte hain (concurrent load ke under threads free karke), single-query latency nahi.
-
-**ADO.NET vs Dapper vs EF Core** — ek senior answer ek decision framework deta hai, sirf "it depends" nahi:
-
-| | ADO.NET | Dapper | EF Core |
-|---|---|---|---|
-| Abstraction | Kuch nahi — raw SQL + manual mapping | Micro-ORM — raw SQL + automatic mapping | Full ORM — LINQ, change tracking, migrations |
-| Performance | Fastest | Very fast (ADO.NET ke kareeb) | Slow hai, har release mein improve ho raha hai |
-| Productivity | Sabse kam | Medium | Sabse zyada |
-| Best for | Performance-critical hot paths | High-performance apps jo mapping convenience bhi chahte hain | CRUD-heavy business apps, rapid development |
-
-> Zyadatar business logic ke liye EF Core ko default rakho; specific hot-path queries ke liye Dapper (ya raw ADO.NET) par jao, lekin sirf jab profiling actually dikhaye ki EF Core overhead matter karta hai — sirf principle ke naam par har jagah EF Core avoid karke pre-optimize mat karo.
-
-**Common pitfalls:** connection pooling ko na samajhna; string-concatenated SQL; connections ko open chhod dena; readers ko dispose na karna; async ignore karna (load ke under thread-pool starvation); jaha `DataReader` kaafi hota wahan `DataSet` ka overuse karna; poochhe jaane par isolation levels/transaction scope discuss na karna.
-
-**High-scale composite example** — async order-creation jo ek transaction, parameterized queries, aur ek `CancellationToken` ko combine karta hai:
-
-```csharp
-public async Task<OrderResult> CreateOrderAsync(int productId, int quantity, CancellationToken token)
-{
-    using SqlConnection conn = new SqlConnection(_cs);
-    await conn.OpenAsync(token);
-    using SqlTransaction transaction = conn.BeginTransaction();
-    try
-    {
-        var productCmd = new SqlCommand(
-            "SELECT Id, Name, Price, Stock FROM Products WHERE Id = @ProductId", conn, transaction);
-        productCmd.Parameters.Add("@ProductId", SqlDbType.Int).Value = productId;
-
-        Product product = null;
-        using (var reader = await productCmd.ExecuteReaderAsync(token))
-            if (await reader.ReadAsync(token))
-                product = new Product { Id = reader.GetInt32(0), Name = reader.GetString(1),
-                                         Price = reader.GetDecimal(2), Stock = reader.GetInt32(3) };
-
-        if (product == null) throw new Exception("Product not found");
-        if (product.Stock < quantity) throw new Exception("Insufficient stock");
-
-        var orderCmd = new SqlCommand(
-            "INSERT INTO Orders(ProductId, Quantity, TotalAmount) OUTPUT INSERTED.Id " +
-            "VALUES(@ProductId, @Qty, @Total)", conn, transaction);
-        orderCmd.Parameters.Add("@ProductId", SqlDbType.Int).Value = productId;
-        orderCmd.Parameters.Add("@Qty", SqlDbType.Int).Value = quantity;
-        orderCmd.Parameters.Add("@Total", SqlDbType.Decimal).Value = product.Price * quantity;
-        int orderId = (int)await orderCmd.ExecuteScalarAsync(token);
-
-        var stockCmd = new SqlCommand(
-            "UPDATE Products SET Stock = Stock - @Qty WHERE Id = @ProductId", conn, transaction);
-        stockCmd.Parameters.Add("@Qty", SqlDbType.Int).Value = quantity;
-        stockCmd.Parameters.Add("@ProductId", SqlDbType.Int).Value = productId;
-        await stockCmd.ExecuteNonQueryAsync(token);
-
-        transaction.Commit();
-        return new OrderResult { OrderId = orderId, ProductName = product.Name, Quantity = quantity };
-    }
-    catch { transaction.Rollback(); throw; }
-}
-```
+Use that file for the full architecture, patterns, trade-offs, and interview follow-ups.
 
 ---
 
@@ -1934,105 +1875,9 @@ public async Task<OrderResult> CreateOrderAsync(int productId, int quantity, Can
 
 > **Note:** ek raw source file (`c#.txt`) mein SOLID code examples Java syntax (`implements`, `extends`, `System.out.println`) mein likhe hue the, jabki yeh C# interview notes hain — yeh guide upar throughout correct, idiomatic C# framing use karti hai.
 
-### Dependency Injection (DI)
+Yeh topic ab dedicated Web API guide mein move ho gaya hai: [G. DOT-NET-Web-API-Interview-Guide.md](./G. DOT-NET-Web-API-Interview-Guide.md).
 
-```csharp
-public interface IService { void Serve(); }
-public class MyService : IService { public void Serve() => Console.WriteLine("Serving..."); }
-public class Client
-{
-    private readonly IService _service;
-    public Client(IService service) { _service = service; }
-}
-```
-
-**.NET ka built-in DI container actually kaise kaam karta hai** (`Microsoft.Extensions.DependencyInjection`):
-
-1. **Service registration** ek service map banata hai (interface → implementation):
-   ```csharp
-   builder.Services.AddScoped<INotificationService, EmailService>();
-   builder.Services.AddScoped<ReportService>();
-   ```
-2. **Service resolution** — jab `ReportService` ko `INotificationService` chahiye hota hai, container `EmailService` dhoondta hai, usse create karta hai, aur inject karta hai (constructor injection standard mechanism hai).
-3. **Object lifetime** — container aapke liye lifetime manage karta hai:
-
-| Lifetime | Behavior |
-|---|---|
-| Transient | Har baar request hone par naya instance |
-| Scoped | Har HTTP request (ya har scope) ke liye ek instance |
-| Singleton | Poori application lifetime ke liye ek instance |
-
-4. **Mechanism** — C# compiler DI ke liye aapka code **rewrite nahi** karta. Runtime par, container **reflection** ke through constructors inspect karta hai, parameters ko registered services se match karta hai, aur recursively saari dependencies resolve karta hai. Yeh sab runtime par hota hai, compile time par nahi.
-
-```mermaid
-flowchart TB
-    A["Startup: builder.Services.AddScoped(...)"] --> B["Service map built\n(interface -> implementation, lifetime)"]
-    C["Request: needs ReportService"] --> D["Container inspects ReportService\nconstructor via reflection"]
-    D --> E["Resolves INotificationService\n-> creates/reuses EmailService"]
-    E --> F["Injects into ReportService\nconstructor and returns instance"]
-    B -.-> D
-```
-
-### [new content] Singleton vs Scoped vs Transient — Real-Life Examples
-
-Teeno lifetimes ka core difference sirf ek sawaal hai: **"container mujhe kab ek naya instance deta hai?"** Neeche har lifetime ko ek real-world analogy, actual .NET use case, aur registration/consumption code ke saath explain kiya gaya hai.
-
-**1. Transient — "har baar ek fresh, disposable instance"**
-
-*Real-life analogy:* ek restaurant mein **paper napkin** — har customer ko ek naya milta hai, use hone ke baad throw ho jata hai, koi state carry nahi hoti next customer tak.
-
-*.NET use case:* lightweight, **stateless** services jinme koi mutable/shared state nahi hoti — e.g. ek `IEmailValidator`, `IPasswordHasher`, ya ek `IOrderNumberGenerator` jo pure logic hai aur cheap hai banana.
-
-```csharp
-builder.Services.AddTransient<IPasswordHasher, BCryptPasswordHasher>();
-```
-
-Container `BCryptPasswordHasher` ka **naya instance** deta hai **har baar** jab bhi koi dependency usse maangti hai — chahe wo ek hi HTTP request ke andar 3 alag jagah injected ho, teeno alag instances honge.
-
-**2. Scoped — "ek HTTP request (ya ek explicit scope) ke liye ek shared instance"**
-
-*Real-life analogy:* ek hospital visit ka **patient file** — usi visit ke dauraan reception, nurse, aur doctor sab **same file** use karte hain (shared state within that visit), lekin agle visit (next request) par ek **fresh file** khulti hai.
-
-*.NET use case:* sabse classic example **`DbContext`** hai. ASP.NET Core mein `AddDbContext<T>()` by default `DbContext` ko **Scoped** register karta hai — ek hi HTTP request ke andar agar `OrderService` aur `InventoryService` dono `AppDbContext` inject karte hain, to unhe **wahi ek instance** milta hai (EF Core change-tracking ke liye zaroori — same request ke andar entities ko track karna), lekin next request par ek naya `DbContext` banega.
-
-```csharp
-builder.Services.AddScoped<AppDbContext>();          // EF Core ka default
-builder.Services.AddScoped<IOrderService, OrderService>();
-```
-
-**3. Singleton — "poori application lifetime ke liye ek hi instance"**
-
-*Real-life analogy:* ek office ka **shared printer** — sab employees (saare requests) wahi ek printer use karte hain, application (office) band hone tak.
-
-*.NET use case:* **`IMemoryCache`**, ek `IConfiguration` object, ya ek `HttpClient`-wrapping typed client jise `AddHttpClient` khud singleton `IHttpClientFactory` ke through manage karta hai. Ek aur bahut common real-world Singleton: application-wide **in-memory cache** ya **connection pool manager** jisme state saare requests ke beech share honi chahiye taaki repeatedly expensive kaam (e.g., ek config file parse karna, ek external API ka rate-limit token maintain karna) baar-baar na ho.
-
-```csharp
-builder.Services.AddSingleton<ICacheService, InMemoryCacheService>();
-```
-
-```csharp
-public class InMemoryCacheService : ICacheService
-{
-    // Yeh dictionary poori application lifetime ke liye ek hi baar banta hai
-    // aur har request/user ke beech SHARE hota hai.
-    private readonly ConcurrentDictionary<string, object> _cache = new();
-
-    public T? Get<T>(string key) => _cache.TryGetValue(key, out var v) ? (T)v : default;
-    public void Set(string key, object value) => _cache[key] = value;
-}
-```
-
-> **Note:** Singleton service ke andar state ko `ConcurrentDictionary` jaisa thread-safe rakhna zaroori hai — kyunki ek hi instance **concurrently multiple requests** se access ho sakta hai (office printer ki tarah, jise ek saath kai log use karne ki koshish kar sakte hain).
-
-**Ek nazar mein comparison:**
-
-| Lifetime | Real-life analogy | Instance kab naya banta hai | Typical .NET example |
-|---|---|---|---|
-| **Transient** | Paper napkin | Har baar resolve/inject hone par | `IPasswordHasher`, `IEmailValidator` |
-| **Scoped** | Patient file during one hospital visit | Har HTTP request / explicit scope ke liye ek baar | `DbContext`, `IOrderService` |
-| **Singleton** | Office ka shared printer | Poori application life mein sirf ek baar | `IMemoryCache`, `IConfiguration`, logging providers |
-
-**Interviewer follow-up jo aksar poocha jata hai:** *"Agar ek Singleton service ek Scoped dependency (jaise `DbContext`) capture kar le to kya hota hai?"* — yeh exactly **Captive Dependency Problem** hai, jo neeche detail mein cover kiya gaya hai.
+Full DI lifetimes, registration patterns, and ASP.NET Core-specific gotchas ke liye us file ka use karo.
 
 ### Serialization & Deserialization
 
@@ -2066,47 +1911,6 @@ var mapper = config.CreateMapper();
 ### Microservices
 
 Small, independently deployable services. .NET mein: ASP.NET Core + Docker + Kubernetes + ek API Gateway. (Part XVII mein messaging, gRPC, aur Saga pattern ke saath substantially expand kiya gaya hai.)
-
-### [new content] The Captive Dependency Problem
-
-Ek subtle DI bug jo ek favorite senior "gotcha" question hai: ek **Singleton**-lifetime service jo ek constructor-injected **Scoped** (ya Transient) dependency capture kar leti hai.
-
-```csharp
-public class CacheService  // registered as Singleton
-{
-    private readonly AppDbContext _db;  // Scoped — captured once, held forever!
-    public CacheService(AppDbContext db) => _db = db;
-}
-```
-
-Kyunki `CacheService` ek Singleton hai, yeh **ek baar** construct hota hai — aur us moment par container jo `AppDbContext` instance usse deta hai wo sirf ek request ke liye nahi, balki **application ki poori lifetime** ke liye hold hoti hai. Wo `DbContext` bhi de facto singleton ban jata hai — apne intended per-request scope se bahar, jisse thread-safety violations (EF Core `DbContext` thread-safe nahi hai) aur stale/leaked state hoti hai.
-
-**Built-in DI container actually isse `AddScoped`/`AddTransient` validation mein detect karta hai aur throw karta hai** (`ValidateScopes = true`, jo `CreateDefaultBuilder` ke through Development environment mein by default on hota hai) — lekin agar pucha jaaye to *fix* jaanna abhi bhi worth hai: Singleton mein `IServiceScopeFactory` inject karo aur jab bhi zaroorat ho ek naya scope create karo (aur scoped dependency ko fresh resolve karo):
-
-```csharp
-public class CacheService(IServiceScopeFactory scopeFactory)
-{
-    public async Task DoWorkAsync()
-    {
-        using var scope = scopeFactory.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        // use db safely within this scope's lifetime
-    }
-}
-```
-
-### [new content] Keyed DI Services (.NET 8+)
-
-.NET 8 ne **keyed services** introduce kiye — same interface ke multiple implementations ko register karna, ek key se distinguish karke, bina kisi factory/wrapper pattern ki zaroorat ke:
-
-```csharp
-builder.Services.AddKeyedScoped<INotificationService, EmailService>("email");
-builder.Services.AddKeyedScoped<INotificationService, SmsService>("sms");
-
-public class OrderService([FromKeyedServices("email")] INotificationService notifier) { ... }
-```
-
-Yeh useful hai jab bhi aap pehle ek factory delegate ya ek manual `Dictionary<string, IService>` ka use karte the sirf resolution time par naam se ek implementation pick karne ke liye.
 
 ---
 

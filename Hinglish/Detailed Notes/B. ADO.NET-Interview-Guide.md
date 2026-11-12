@@ -2,6 +2,8 @@
 
 > Audience: 10+ year ka .NET full-stack developer jo senior/lead interviews ki prep kar raha hai. Fundamentals assumed hain — yeh guide nuance, trade-offs, "why", gotchas, aur likely follow-ups par focus karta hai.
 
+> Yeh file main C# guide ke Part IX — Data Access: ADO.NET ke high-level summary ka dedicated deep-dive companion hai. Quick overview main guide mein rakho, aur is file mein architecture, patterns, aur interview follow-ups ko detailed mein cover karo.
+
 ## Table of Contents
 
 - [1. Core Concepts](#1-core-concepts)

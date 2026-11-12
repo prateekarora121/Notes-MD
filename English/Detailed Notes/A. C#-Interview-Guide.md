@@ -66,8 +66,6 @@
   - [String vs StringBuilder](#string-vs-stringbuilder)
   - [[gaps] Expression Trees & How EF Core Translates LINQ to SQL](#expression-trees--how-ef-core-translates-linq-to-sql-gaps)
   - [[gaps] PLINQ / AsParallel() Trade-offs](#plinq--asparallel-trade-offs-gaps)
-  - [[gaps] .NET 6+ LINQ Additions: MinBy/MaxBy/Chunk/DistinctBy/Order/OrderDescending](#net-6-linq-additions-minbymaxbychunkdistinctbyorderorderdescending-gaps)
-  - [[new content] LINQ Gotchas Every Senior Dev Should Know](#new-content-linq-gotchas-every-senior-dev-should-know)
 - [Part VII — Memory Management & Garbage Collection](#part-vii--memory-management--garbage-collection)
   - [Stack vs Heap](#stack-vs-heap-in-the-net-memory-model)
   - [Garbage Collection Mechanics](#garbage-collection-gc)
@@ -92,16 +90,13 @@
   - [[new content] The Classic Sync-Over-Async Deadlock](#new-content-the-classic-sync-over-async-deadlock)
   - [[new content] async void — Why It's Dangerous](#new-content-async-void--why-its-dangerous)
   - [[new content] Task vs ValueTask](#new-content-task-vs-valuetask)
-- [Part IX — Data Access: ADO.NET](#part-ix--data-access-adonet)
+- [Part IX — Data Access: ADO.NET](./B. ADO.NET-Interview-Guide.md)
 - [Part X — Design Principles & Patterns](#part-x--design-principles--patterns)
   - [SOLID Principles](#solid-principles)
-  - [Dependency Injection](#dependency-injection-di)
   - [Serialization & Deserialization](#serialization--deserialization)
   - [AutoMapper](#automapper)
   - [Architectural Patterns](#architectural-patterns)
   - [Microservices](#microservices)
-  - [[new content] The Captive Dependency Problem](#new-content-the-captive-dependency-problem)
-  - [[new content] Keyed DI Services (.NET 8+)](#new-content-keyed-di-services-net-8)
 - [Part XI — Cross-Cutting Concerns: Logging & Exceptions](#part-xi--cross-cutting-concerns-logging--exceptions)
 - [Part XII — Modern C# Language Features (C# 9–14)](#part-xii--modern-c-language-features-c-914)
 - [Part XIII — Minimal APIs, EF Core & Caching](#part-xiii--minimal-apis-ef-core--caching)
@@ -731,7 +726,42 @@ expando.Name = "John";               // properties added dynamically at runtime
 IEnumerable<int> GetNumbers() { yield return 1; yield return 2; }
 ```
 
-The compiler rewrites a `yield return` method into a state machine implementing `IEnumerable<T>`/`IEnumerator<T>` — execution is deferred until the caller enumerates (`foreach`, `.ToList()`, etc.), and each `MoveNext()` call resumes exactly where the previous one left off.
+```csharp
+using System;
+using System.Collections.Generic;
+
+public class Demo
+{
+    public static IEnumerable<int> GetEvenNumbers(int max)
+    {
+        for (int i = 0; i <= max; i++)
+        {
+            if (i % 2 == 0)
+                yield return i;   // returns one item at a time
+        }
+    }
+
+    public static void Main()
+    {
+        foreach (var n in GetEvenNumbers(10))
+        {
+            Console.WriteLine(n);
+        }
+    }
+}
+```
+
+Output:
+```text
+0
+2
+4
+6
+8
+10
+```
+
+The compiler rewrites a `yield return` method into a state machine implementing `IEnumerable<T>`/`IEnumerator<T>` — execution is deferred until the caller enumerates (`foreach`, `.ToList()`, etc.), and each `MoveNext()` call resumes exactly where the previous one left off. This is lazy evaluation: values are produced one by one as requested instead of creating the entire collection in memory upfront.
 
 ### Fluent Interfaces
 
@@ -1073,59 +1103,6 @@ sb.Append(" World");
 | Performance | Slower for repeated edits | Faster for repeated edits |
 
 `string` is immutable — every apparent "modification" (`+=`, `Replace`, `Substring`) allocates a brand-new string object. .NET also **interns** string literals (identical literals in the assembly can share one instance via the intern pool), which is why `"abc" == "abc"` by reference for literals — but strings built at runtime (e.g., via concatenation) are **not** automatically interned. `StringBuilder` maintains an internal mutable char buffer and should be **pre-sized** (`new StringBuilder(capacity)`) when the approximate final length is known, to avoid repeated internal buffer resizes.
-
-### .NET 6+ LINQ Additions: MinBy/MaxBy/Chunk/DistinctBy/Order/OrderDescending [gaps]
-
-.NET 6 through 9 added several LINQ operators that replace verbose, easy-to-get-wrong workarounds from older code — worth knowing cold since interviewers use them to gauge whether your day-to-day LINQ usage is current.
-
-```csharp
-var products = new[]
-{
-    new Product("Laptop", 999.99m, "Electronics"),
-    new Product("Mouse", 25.00m, "Electronics"),
-    new Product("Desk", 250.00m, "Furniture"),
-};
-
-// MinBy / MaxBy (.NET 6) — select the element with the min/max key, not just the key itself.
-// Old way: products.OrderBy(p => p.Price).First();  (sorts the whole sequence just to get one element)
-Product cheapest = products.MinBy(p => p.Price);       // Mouse
-Product priciest = products.MaxBy(p => p.Price);       // Laptop
-
-// Chunk (.NET 6) — splits a sequence into fixed-size batches, last batch may be smaller.
-foreach (Product[] batch in products.Chunk(2))
-    await ProcessBatchAsync(batch);                     // e.g., batched bulk-insert calls
-
-// DistinctBy (.NET 6) — de-duplicate by a key selector instead of the whole object/a custom IEqualityComparer.
-var onePerCategory = products.DistinctBy(p => p.Category);  // first product seen per category
-
-// Order / OrderDescending (.NET 7) — shorthand for OrderBy(x => x) when sorting by the element itself.
-var sorted = new[] { 3, 1, 2 }.Order();                 // [1, 2, 3] — no need for OrderBy(x => x)
-var sortedDesc = products.Select(p => p.Price).OrderDescending();
-```
-
-| Method | Replaces | Introduced |
-|---|---|---|
-| `MinBy(keySelector)` / `MaxBy(keySelector)` | `OrderBy(key).First()` / `OrderByDescending(key).First()` — avoids sorting the whole sequence for one element | .NET 6 |
-| `Chunk(size)` | Hand-rolled batching loops with manual index math | .NET 6 |
-| `DistinctBy(keySelector)` | `GroupBy(key).Select(g => g.First())`, or a custom `IEqualityComparer<T>` just to de-dupe by one property | .NET 6 |
-| `Order()` / `OrderDescending()` | `OrderBy(x => x)` / `OrderByDescending(x => x)` when the element itself is the sort key | .NET 7 |
-
-> **Nuance worth mentioning:** `MinBy`/`MaxBy` return the **element**, not the key (unlike `Min()`/`Max()`, which return the key/value itself when called with a selector on some overloads) — mixing these up is an easy mistake. Also, on a tie, `MinBy`/`MaxBy` return the **first** matching element in iteration order, mirroring `First()` semantics.
-
-### [new content] LINQ Gotchas Every Senior Dev Should Know
-
-- **Multiple enumeration.** Calling `.Count()` then `.First()` on the same `IEnumerable<T>` query (not yet materialized) can execute the underlying query **twice** — expensive for `IQueryable` (two round-trips to the DB) and dangerous for a lazily-evaluated sequence with side effects. Fix: materialize once with `.ToList()`/`.ToArray()` if you need to inspect it more than once.
-- **Deferred execution + captured variables in loops.** A classic bug:
-  ```csharp
-  var funcs = new List<Func<int>>();
-  for (int i = 0; i < 3; i++) funcs.Add(() => i);   // C# 5+: each iteration has its own 'i' — this is actually fine now
-  ```
-  Prior to C# 5, `foreach`/`for` loop variables were captured by reference and shared across closures, causing every lambda to return the *final* value. **C# 5 changed `foreach` to give each iteration its own variable** — but a classic-`for` loop's index variable is still a single variable shared across all captured lambdas *unless* you copy it into a loop-local variable. Interviewers still ask this because the C# 5 fix only covers `foreach`, not `for`.
-- **`First()`/`FirstOrDefault()`/`Single()`/`SingleOrDefault()` semantics**: `First()` throws `InvalidOperationException` on an empty sequence; `FirstOrDefault()` returns `default(T)` (null/0/etc.); `Single()` throws if there is **zero or more than one** match (use it to assert uniqueness, e.g., a primary-key lookup you expect to be unambiguous); `SingleOrDefault()` throws only on more-than-one, returns default on zero.
-- **`ToList()`/`ToArray()` on `IQueryable` too early.** Materializing before applying further `Where`/`OrderBy` forces EF Core to pull the full table into memory and filter client-side — the classic "why is this endpoint slow" root cause in code review.
-- **Custom equality in LINQ** (`Distinct()`, `GroupBy()`, `Except()`) requires either overriding `Equals`/`GetHashCode` on the element type or supplying an `IEqualityComparer<T>` — silently using reference equality on a custom class is a common bug (`Distinct()` "not working").
-
----
 
 ## Part VII — Memory Management & Garbage Collection
 
@@ -1793,99 +1770,9 @@ public ValueTask<int> GetCachedOrComputeAsync(int key)
 
 ## Part IX — Data Access: ADO.NET
 
-**What is ADO.NET?** A low-level data-access framework for opening connections, executing SQL, retrieving/manipulating data, handling transactions, and working with disconnected data. Full control over SQL execution; faster/lighter than EF Core because there's no object tracking or LINQ-translation layer. Common in high-performance apps, microservices needing fine-grained control, and legacy systems.
+This topic has moved to the dedicated deep-dive guide: [B. ADO.NET-Interview-Guide.md](./B. ADO.NET-Interview-Guide.md).
 
-**Core architecture:**
-- **Connected model** — `Application → Connection → Command → DataReader → Database`; data read while the connection stays open.
-- **Disconnected model** — `Application → DataAdapter → DataSet/DataTable → Database`; data loaded into memory, connection can close.
-
-**Data providers:** `SqlConnection`, `SqlCommand`, `SqlDataReader`, `SqlDataAdapter`, `SqlTransaction`. Modern SQL Server provider: **`Microsoft.Data.SqlClient`** (the older `System.Data.SqlClient` is legacy/deprecated — a currency point worth stating explicitly in an interview).
-
-**Connection pooling** is enabled by default — connections are reused (not destroyed) on `Close()`/`Dispose()`. Best practice: "open late, close early" via `using`; improper management (leaked open connections) can exhaust the pool under load.
-
-**Command execution methods:**
-
-| Method | Returns | Use for |
-|---|---|---|
-| `ExecuteReader()` | `SqlDataReader` (forward-only) | Streaming/reading large datasets — fastest |
-| `ExecuteNonQuery()` | Affected row count | INSERT, UPDATE, DELETE |
-| `ExecuteScalar()` | Single value | Aggregates, existence checks |
-
-**Parameterized queries** prevent SQL injection and enable query-plan reuse:
-```csharp
-cmd.Parameters.Add("@Id", SqlDbType.Int).Value = id;   // correct
-// "SELECT * FROM Users WHERE Id=" + id                // WRONG — injection risk
-```
-Prefer explicit `SqlDbType` over `.AddWithValue()` — `AddWithValue` infers type/size from the .NET value, which can cause query-plan cache bloat (slightly different inferred sizes produce different cached plans for what's logically the same query) and occasional implicit-conversion index scans.
-
-**Transactions** — ACID guarantees via `BeginTransaction()`/`Commit()`/`Rollback()`. Keep transaction scope small; be ready to discuss **isolation levels**:
-
-| Isolation Level | Dirty Reads | Non-Repeatable Reads | Phantom Reads | Notes |
-|---|---|---|---|---|
-| Read Uncommitted | Possible | Possible | Possible | Fastest, least safe |
-| Read Committed (SQL Server default) | Prevented | Possible | Possible | Common default |
-| Repeatable Read | Prevented | Prevented | Possible | Holds read locks longer |
-| Serializable | Prevented | Prevented | Prevented | Slowest, fully isolated |
-| Snapshot | Prevented | Prevented | Prevented | Row-versioning based, no blocking reads |
-
-**Async operations** (`OpenAsync`, `ExecuteReaderAsync`, etc.) improve **throughput** (freeing threads under concurrent load), not single-query latency.
-
-**ADO.NET vs Dapper vs EF Core** — a senior answer gives a decision framework, not just "it depends":
-
-| | ADO.NET | Dapper | EF Core |
-|---|---|---|---|
-| Abstraction | None — raw SQL + manual mapping | Micro-ORM — raw SQL + automatic mapping | Full ORM — LINQ, change tracking, migrations |
-| Performance | Fastest | Very fast (close to ADO.NET) | Slower, improving each release |
-| Productivity | Lowest | Medium | Highest |
-| Best for | Performance-critical hot paths | High-performance apps that still want mapping convenience | CRUD-heavy business apps, rapid development |
-
-> Default to EF Core for most business logic; drop to Dapper (or raw ADO.NET) for specific hot-path queries once profiling actually shows EF Core overhead matters — don't pre-optimize by avoiding EF Core everywhere out of principle.
-
-**Common pitfalls:** not understanding connection pooling; string-concatenated SQL; connections left open; not disposing readers; ignoring async (thread-pool starvation under load); overusing `DataSet` where a `DataReader` would do; not discussing isolation levels/transaction scope when asked.
-
-**High-scale composite example** — async order-creation combining a transaction, parameterized queries, and a `CancellationToken`:
-
-```csharp
-public async Task<OrderResult> CreateOrderAsync(int productId, int quantity, CancellationToken token)
-{
-    using SqlConnection conn = new SqlConnection(_cs);
-    await conn.OpenAsync(token);
-    using SqlTransaction transaction = conn.BeginTransaction();
-    try
-    {
-        var productCmd = new SqlCommand(
-            "SELECT Id, Name, Price, Stock FROM Products WHERE Id = @ProductId", conn, transaction);
-        productCmd.Parameters.Add("@ProductId", SqlDbType.Int).Value = productId;
-
-        Product product = null;
-        using (var reader = await productCmd.ExecuteReaderAsync(token))
-            if (await reader.ReadAsync(token))
-                product = new Product { Id = reader.GetInt32(0), Name = reader.GetString(1),
-                                         Price = reader.GetDecimal(2), Stock = reader.GetInt32(3) };
-
-        if (product == null) throw new Exception("Product not found");
-        if (product.Stock < quantity) throw new Exception("Insufficient stock");
-
-        var orderCmd = new SqlCommand(
-            "INSERT INTO Orders(ProductId, Quantity, TotalAmount) OUTPUT INSERTED.Id " +
-            "VALUES(@ProductId, @Qty, @Total)", conn, transaction);
-        orderCmd.Parameters.Add("@ProductId", SqlDbType.Int).Value = productId;
-        orderCmd.Parameters.Add("@Qty", SqlDbType.Int).Value = quantity;
-        orderCmd.Parameters.Add("@Total", SqlDbType.Decimal).Value = product.Price * quantity;
-        int orderId = (int)await orderCmd.ExecuteScalarAsync(token);
-
-        var stockCmd = new SqlCommand(
-            "UPDATE Products SET Stock = Stock - @Qty WHERE Id = @ProductId", conn, transaction);
-        stockCmd.Parameters.Add("@Qty", SqlDbType.Int).Value = quantity;
-        stockCmd.Parameters.Add("@ProductId", SqlDbType.Int).Value = productId;
-        await stockCmd.ExecuteNonQueryAsync(token);
-
-        transaction.Commit();
-        return new OrderResult { OrderId = orderId, ProductName = product.Name, Quantity = quantity };
-    }
-    catch { transaction.Rollback(); throw; }
-}
-```
+Use that file for the full architecture, patterns, trade-offs, and interview follow-ups.
 
 ---
 
@@ -1909,44 +1796,9 @@ public async Task<OrderResult> CreateOrderAsync(int productId, int quantity, Can
 
 > **Note:** one raw source file (`c#.txt`) had its SOLID code examples written in Java syntax (`implements`, `extends`, `System.out.println`) despite being C# interview notes — this guide uses the correct, idiomatic C# framing above throughout.
 
-### Dependency Injection (DI)
+This topic has moved to the dedicated Web API guide: [G. DOT-NET-Web-API-Interview-Guide.md](./G. DOT-NET-Web-API-Interview-Guide.md).
 
-```csharp
-public interface IService { void Serve(); }
-public class MyService : IService { public void Serve() => Console.WriteLine("Serving..."); }
-public class Client
-{
-    private readonly IService _service;
-    public Client(IService service) { _service = service; }
-}
-```
-
-**How .NET's built-in DI container actually works** (`Microsoft.Extensions.DependencyInjection`):
-
-1. **Service registration** builds a service map (interface → implementation):
-   ```csharp
-   builder.Services.AddScoped<INotificationService, EmailService>();
-   builder.Services.AddScoped<ReportService>();
-   ```
-2. **Service resolution** — when `ReportService` needs `INotificationService`, the container finds `EmailService`, creates it, and injects it (constructor injection is the standard mechanism).
-3. **Object lifetime** — the container manages lifetime for you:
-
-| Lifetime | Behavior |
-|---|---|
-| Transient | New instance every time it's requested |
-| Scoped | One instance per HTTP request (or per scope) |
-| Singleton | One instance for the whole application lifetime |
-
-4. **Mechanism** — the C# compiler does **not** rewrite your code for DI. At runtime, the container inspects constructors via **reflection**, matches parameters to registered services, and recursively resolves all dependencies. This all happens at runtime, not compile time.
-
-```mermaid
-flowchart TB
-    A["Startup: builder.Services.AddScoped(...)"] --> B["Service map built\n(interface -> implementation, lifetime)"]
-    C["Request: needs ReportService"] --> D["Container inspects ReportService\nconstructor via reflection"]
-    D --> E["Resolves INotificationService\n-> creates/reuses EmailService"]
-    E --> F["Injects into ReportService\nconstructor and returns instance"]
-    B -.-> D
-```
+Use that file for the full DI lifecycle discussion, service registration patterns, lifecycle gotchas, and ASP.NET Core-specific guidance.
 
 ### Serialization & Deserialization
 
@@ -1980,47 +1832,6 @@ var mapper = config.CreateMapper();
 ### Microservices
 
 Small, independently deployable services. In .NET: ASP.NET Core + Docker + Kubernetes + an API Gateway. (Expanded substantially in Part XVII with messaging, gRPC, and the Saga pattern.)
-
-### [new content] The Captive Dependency Problem
-
-A subtle DI bug that's a favorite senior "gotcha" question: a **Singleton**-lifetime service that captures a constructor-injected **Scoped** (or Transient) dependency.
-
-```csharp
-public class CacheService  // registered as Singleton
-{
-    private readonly AppDbContext _db;  // Scoped — captured once, held forever!
-    public CacheService(AppDbContext db) => _db = db;
-}
-```
-
-Because `CacheService` is a Singleton, it's constructed **once** — and whatever `AppDbContext` instance the container hands it at that moment is held for the **lifetime of the application**, not just one request. That `DbContext` becomes a de facto singleton too — outside its intended per-request scope, causing thread-safety violations (EF Core `DbContext` is not thread-safe) and stale/leaked state.
-
-**The built-in DI container actually detects and throws on this in `AddScoped`/`AddTransient` validation** (`ValidateScopes = true`, on by default in the Development environment via `CreateDefaultBuilder`) — but it's still worth knowing the *fix* if asked: inject `IServiceScopeFactory` into the Singleton and create a new scope (and resolve the scoped dependency fresh) each time it's needed:
-
-```csharp
-public class CacheService(IServiceScopeFactory scopeFactory)
-{
-    public async Task DoWorkAsync()
-    {
-        using var scope = scopeFactory.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        // use db safely within this scope's lifetime
-    }
-}
-```
-
-### [new content] Keyed DI Services (.NET 8+)
-
-.NET 8 introduced **keyed services** — registering multiple implementations of the same interface, distinguished by a key, without needing a factory/wrapper pattern:
-
-```csharp
-builder.Services.AddKeyedScoped<INotificationService, EmailService>("email");
-builder.Services.AddKeyedScoped<INotificationService, SmsService>("sms");
-
-public class OrderService([FromKeyedServices("email")] INotificationService notifier) { ... }
-```
-
-Useful whenever you previously reached for a factory delegate or a manual `Dictionary<string, IService>` just to pick an implementation by name at resolution time.
 
 ---
 
@@ -2308,40 +2119,9 @@ stateDiagram-v2
 
 ### Authentication & Authorization
 
-**JWT Bearer authentication** — stateless, scales horizontally (no server-side session store), travels naturally to SPA/mobile clients via an `Authorization: Bearer` header:
-```csharp
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options => options.TokenValidationParameters = new TokenValidationParameters
-    {
-        ValidateIssuer = true, ValidateAudience = true, ValidateLifetime = true, ValidateIssuerSigningKey = true,
-        ValidIssuer = config["Jwt:Issuer"], ValidAudience = config["Jwt:Audience"],
-        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(config["Jwt:Key"]))
-    });
-builder.Services.AddAuthorization();
-app.UseAuthentication();
-app.UseAuthorization();
-```
+This topic is covered in the dedicated security guide: [D. Authentication-Authorization-Interview-Guide.md](./D. Authentication-Authorization-Interview-Guide.md).
 
-**OAuth2 vs OpenID Connect:** OAuth2 is an *authorization* framework (who can access what); OIDC is an *identity* layer on top (who the user is). Most full-stack .NET apps delegate to an external identity provider (Entra ID, Auth0, Keycloak, Duende IdentityServer) rather than rolling their own login.
-
-| Grant/Flow | Typical use |
-|---|---|
-| Authorization Code + PKCE | SPA and mobile apps (modern default — avoid the deprecated Implicit flow) |
-| Client Credentials | Service-to-service (machine-to-machine), no user involved |
-| Refresh Token | Silently renewing an access token without re-prompting login |
-
-**Claims/policy-based authorization** (preferred over hardcoded role checks):
-```csharp
-builder.Services.AddAuthorization(options =>
-    options.AddPolicy("CanEditProducts", policy => policy.RequireClaim("permission", "products.edit")));
-
-[Authorize(Policy = "CanEditProducts")]
-[HttpPut("{id}")]
-public IActionResult Update(int id, ProductDto dto) { /* ... */ }
-```
-This decouples "what a user can do" from "what role they happen to have," which scales far better as permission models grow beyond a handful of roles.
-
-**Other security topics:** CORS must be explicitly configured (`AddCors`/`UseCors`) for any SPA on a different origin; CSRF mainly matters for cookie-based auth (token-based JWT in an `Authorization` header is inherently less exposed, but cookie-authenticated form posts still need antiforgery tokens); the **Data Protection API** is ASP.NET Core's built-in key-management system for encrypting cookies/tokens at rest; **never** store secrets in `appsettings.json` in source control — use User Secrets locally and Key Vault/Secrets Manager/environment variables in production.
+Use that file for the full JWT/OAuth2/OIDC, claims/policy, refresh-token, BFF, and ASP.NET Core authorization flow coverage.
 
 ---
 
@@ -2851,7 +2631,6 @@ All headings below were added during consolidation because the topic was missing
 | init, required, and Primary Constructors (C# 11/12) | Extremely common in modern minimal-API/DI code; original notes stopped around C# 8–10. |
 | Static Abstract/Virtual Interface Members & Generic Math (C# 11) | Powers `INumber<T>`-style generics; a genuinely new capability with no prior C# equivalent. |
 | Source Generators | The modern, AOT-friendly alternative to reflection; a strong current-knowledge signal. |
-| LINQ Gotchas Every Senior Dev Should Know | Multiple-enumeration, closure-capture, and First/Single semantics were entirely absent but are classic senior traps. |
 | IAsyncDisposable | `await using`/async cleanup wasn't covered at all despite being standard in modern `DbContext`/`Stream` usage. |
 | ConfigureAwait(false) and SynchronizationContext | Named nowhere in any of the six sources despite being one of the most-asked async nuances. |
 | The Classic Sync-Over-Async Deadlock | The single most common senior async interview question; source only had a generic lock-ordering deadlock, not this one. |
@@ -2883,7 +2662,6 @@ This is a second gap-fill pass, run against a **formal gap-analysis review** tha
 | Task.Run vs Task.Factory.StartNew(LongRunning) vs Parallel.ForEachAsync | Part VIII, after Task Parallel Library (TPL) | Clarifies the one real remaining use case for `StartNew(..., LongRunning)`, and introduces `Parallel.ForEachAsync` (.NET 6+) as the modern built-in replacement for hand-rolled `SemaphoreSlim` throttling — a pattern this guide previously only showed the manual way. |
 | Expression Trees & How EF Core Translates LINQ to SQL | Part VI, before IEnumerable vs ICollection/IList/IReadOnlyList | Directly answers the near-guaranteed follow-up to "IEnumerable vs IQueryable": *how* does `Expression<Func<T,bool>>` actually become SQL — the guide previously named the mechanism ("expression trees translated to SQL") without ever explaining it. |
 | PLINQ / AsParallel() Trade-offs | Part VI, alongside the expression-trees section | The guide had no PLINQ coverage at all; this fills in when parallelizing LINQ genuinely helps vs. when partitioning/merging overhead makes it a net loss — a common "I tried this and it got slower" senior trap question. |
-| .NET 6+ LINQ Additions: MinBy/MaxBy/Chunk/DistinctBy/Order/OrderDescending | Part VI, before LINQ Gotchas | Modern, frequently-used LINQ operators that were entirely absent from the guide despite being standard in current-day .NET code — a quick, high-value currency signal. |
 | GC Diagnostics Tooling for Production | Part VII, before Dispose() vs Finalize() | The guide's own sample question ("walk me through debugging a production memory leak") previously had no tooling-based answer anywhere in the document; this adds `dotnet-counters` → `dotnet-gcdump` → `dotnet-trace` as a concrete, sequenced walkthrough, and the sample-question references elsewhere were updated to point here. |
 | Low-Level Concurrency Primitives: Monitor, SpinLock, False Sharing, Thread-Pool Starvation | Part XVI, before SemaphoreSlim | Explains what `lock` actually compiles down to (`Monitor.Enter`/`Exit`/`Wait`/`Pulse`), when `SpinLock`/`SpinWait` are (rarely) appropriate, the false-sharing/cache-line-contention performance trap, and how to recognize and reason about ThreadPool starvation (`ThreadPool.SetMinThreads` as a band-aid, not a fix) — all previously missing from the concurrency coverage. |
 

@@ -20,6 +20,7 @@
   - [Distinct, Except, Intersect, Union](#distinct-except-intersect-union)
   - [ToLookup() vs GroupBy()](#tolookup-vs-groupby)
   - [MaxBy, MinBy, DistinctBy, and Chunk (.NET 6+) [gaps]](#maxby-minby-distinctby-and-chunk-net-6-gaps)
+  - [[new content] LINQ Gotchas Every Senior Dev Should Know](#new-content-linq-gotchas-every-senior-dev-should-know)
   - [Take/Skip, Pagination, DefaultIfEmpty, Zip](#takeskip-pagination-defaultifempty-zip)
   - [ToDictionary and Non-Generic Collections](#todictionary-and-non-generic-collections)
   - [Let Clause](#let-clause)
@@ -333,6 +334,19 @@ foreach (int[] batch in employeeIds.Chunk(100))
 - If multiple elements tie for the max/min key, `MaxBy`/`MinBy` return the **first** one encountered — same tie-breaking semantics as `OrderBy...First()`, not an arbitrary/undefined pick.
 - As of EF Core 8, `MaxBy`/`MinBy`/`DistinctBy`/`Chunk` translation support against `IQueryable` varies by provider and version — verify against your EF Core version and the generated SQL before assuming these push down to the database rather than triggering client evaluation.
 - `Chunk`'s last batch can be shorter than the requested size — always handle a partial final batch rather than assuming a fixed length.
+
+### [new content] LINQ Gotchas Every Senior Dev Should Know
+
+- **Multiple enumeration.** Calling `.Count()` then `.First()` on the same `IEnumerable<T>` query (not yet materialized) can execute the underlying query **twice** — expensive for `IQueryable` (two round-trips to the DB) and dangerous for a lazily-evaluated sequence with side effects. Fix: materialize once with `.ToList()`/`.ToArray()` if you need to inspect it more than once.
+- **Deferred execution + captured variables in loops.** A classic bug:
+  ```csharp
+  var funcs = new List<Func<int>>();
+  for (int i = 0; i < 3; i++) funcs.Add(() => i);   // C# 5+: each iteration has its own 'i' — this is actually fine now
+  ```
+  Prior to C# 5, `foreach`/`for` loop variables were captured by reference and shared across closures, causing every lambda to return the *final* value. **C# 5 changed `foreach` to give each iteration its own variable** — but a classic-`for` loop's index variable is still a single variable shared across all captured lambdas *unless* you copy it into a loop-local variable. Interviewers still ask this because the C# 5 fix only covers `foreach`, not `for`.
+- **`First()`/`FirstOrDefault()`/`Single()`/`SingleOrDefault()` semantics**: `First()` throws `InvalidOperationException` on an empty sequence; `FirstOrDefault()` returns `default(T)` (null/0/etc.); `Single()` throws if there is **zero or more than one** match (use it to assert uniqueness, e.g., a primary-key lookup you expect to be unambiguous); `SingleOrDefault()` throws only on more-than-one, returns default on zero.
+- **`ToList()`/`ToArray()` on `IQueryable` too early.** Materializing before applying further `Where`/`OrderBy` forces EF Core to pull the full table into memory and filter client-side — the classic "why is this endpoint slow" root cause in code review.
+- **Custom equality in LINQ** (`Distinct()`, `GroupBy()`, `Except()`) requires either overriding `Equals`/`GetHashCode` on the element type or supplying an `IEqualityComparer<T>` — silently using reference equality on a custom class is a common bug (`Distinct()` "not working").
 
 ### Take/Skip, Pagination, DefaultIfEmpty, Zip
 

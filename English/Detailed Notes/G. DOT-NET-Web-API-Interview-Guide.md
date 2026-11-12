@@ -16,6 +16,9 @@ Audience: 10-year .NET full-stack developer prepping for senior/lead-level inter
    - [Content Negotiation](#content-negotiation)
 2. [Intermediate](#intermediate)
    - [Dependency Injection & Service Lifetimes](#dependency-injection--service-lifetimes)
+   - [[new content] Singleton vs Scoped vs Transient — Real-Life Examples](#new-content-singleton-vs-scoped-vs-transient--real-life-examples)
+   - [[new content] The Captive Dependency Problem](#new-content-the-captive-dependency-problem)
+   - [[new content] Keyed DI Services (.NET 8+)](#new-content-keyed-di-services-net-8)
    - [SOLID Principles](#solid-principles)
    - [Middleware Pipeline](#middleware-pipeline)
    - [Request Lifecycle End-to-End](#request-lifecycle-end-to-end)
@@ -343,6 +346,102 @@ public class MyLoggerService
 ```
 
 This manually creates a new scope inside the singleton, so the resolved `DbContext` lives only for the duration of that unit of work — safe and correctly isolated. Best practice for loggers specifically: keep them Singleton, stateless, thread-safe, and prefer the built-in `ILogger<T>` abstraction over hand-rolled logger services when possible.
+
+### [new content] Singleton vs Scoped vs Transient — Real-Life Examples
+
+The real difference between all three lifetimes is one question: **when does the container create a new instance?**
+
+**1. Transient — one fresh, disposable instance per resolution**
+
+*Real-life analogy:* a **paper napkin** in a restaurant — each customer gets a new one, it is thrown away after use, and no state carries over to the next customer.
+
+*.NET use case:* lightweight, stateless services such as `IEmailValidator`, `IPasswordHasher`, or an `IOrderNumberGenerator` with no shared mutable state.
+
+```csharp
+builder.Services.AddTransient<IPasswordHasher, BCryptPasswordHasher>();
+```
+
+The container creates a new `BCryptPasswordHasher` every time a dependency asks for it. If the same request resolves it in three different places, those are three distinct instances.
+
+**2. Scoped — one shared instance per request or explicit scope**
+
+*Real-life analogy:* a **patient file** during one hospital visit — the front desk, nurse, and doctor all use the same file, but the next visit gets a fresh file.
+
+*.NET use case:* the classic example is `DbContext`. In ASP.NET Core, `AddDbContext<T>()` registers it as `Scoped` by default. If both `OrderService` and `InventoryService` inject `AppDbContext` in the same HTTP request, they get the same instance so EF Core can track changes consistently within the request.
+
+```csharp
+builder.Services.AddScoped<AppDbContext>();
+builder.Services.AddScoped<IOrderService, OrderService>();
+```
+
+**3. Singleton — one instance for the entire application lifetime**
+
+*Real-life analogy:* an office's **shared printer** — everyone uses the same shared device until the office shuts down.
+
+*.NET use case:* `IMemoryCache`, application configuration, and other application-wide shared state. A common real-world Singleton is an in-memory cache or connection-pool manager where the state should be shared across all requests.
+
+```csharp
+builder.Services.AddSingleton<ICacheService, InMemoryCacheService>();
+```
+
+```csharp
+public class InMemoryCacheService : ICacheService
+{
+    private readonly ConcurrentDictionary<string, object> _cache = new();
+
+    public T? Get<T>(string key) => _cache.TryGetValue(key, out var value) ? (T)value : default;
+    public void Set(string key, object value) => _cache[key] = value;
+}
+```
+
+> **Rule:** if it's a Singleton, every field or dictionary it holds must be thread-safe. A single shared instance is used by many concurrent requests at once.
+
+| Lifetime | Real-world analogy | New instance when | Typical .NET example |
+|---|---|---|---|
+| **Transient** | Paper napkin | Every resolution | `IPasswordHasher`, `IEmailValidator` |
+| **Scoped** | Patient file for one visit | Per request / explicit scope | `DbContext`, `IOrderService` |
+| **Singleton** | Shared office printer | Once for app lifetime | `IMemoryCache`, `IConfiguration` |
+
+### [new content] The Captive Dependency Problem
+
+A classic senior DI gotcha is a **Singleton** service that captures a constructor-injected **Scoped** or **Transient** dependency.
+
+```csharp
+public class CacheService  // registered as Singleton
+{
+    private readonly AppDbContext _db;  // Scoped — captured once, held forever!
+    public CacheService(AppDbContext db) => _db = db;
+}
+```
+
+Because `CacheService` is a Singleton, it is created once, and the `AppDbContext` handed to it at construction time is also kept for the lifetime of the application. That turns a request-scoped dependency into a de facto singleton, which can lead to thread-safety violations and stale state.
+
+The built-in DI container detects this and throws when validation is enabled. The safest fix is to inject `IServiceScopeFactory` and create a new scope each time you need a scoped dependency.
+
+```csharp
+public class CacheService(IServiceScopeFactory scopeFactory)
+{
+    public async Task DoWorkAsync()
+    {
+        using var scope = scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        // use db safely within this scope's lifetime
+    }
+}
+```
+
+### [new content] Keyed DI Services (.NET 8+)
+
+.NET 8 introduced **keyed services** so you can register multiple implementations of the same interface and resolve a specific one by key.
+
+```csharp
+builder.Services.AddKeyedScoped<INotificationService, EmailService>("email");
+builder.Services.AddKeyedScoped<INotificationService, SmsService>("sms");
+
+public class OrderService([FromKeyedServices("email")] INotificationService notifier) { ... }
+```
+
+This is especially useful when a factory delegate or a `Dictionary<string, IService>` was previously needed just to pick an implementation by name at runtime.
 
 ### SOLID Principles
 

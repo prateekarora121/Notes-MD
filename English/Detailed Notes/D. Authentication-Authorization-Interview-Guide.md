@@ -6,6 +6,7 @@ Audience: 10+ year .NET full-stack developer prepping for senior/lead interviews
 
 - [1. Core Concepts](#1-core-concepts)
   - [1.1 Authentication vs Authorization](#11-authentication-vs-authorization)
+  - [1.1a ASP.NET Core Authentication + Authorization Setup](#11a-aspnet-core-authentication--authorization-setup)
   - [1.2 Stateful Sessions vs Stateless Tokens](#12-stateful-sessions-vs-stateless-tokens)
   - [1.3 Basic Authentication (Legacy)](#13-basic-authentication-legacy)
   - [1.4 What JWT Actually Is](#14-what-jwt-actually-is)
@@ -66,6 +67,56 @@ Audience: 10+ year .NET full-stack developer prepping for senior/lead interviews
 | Example | User logs in | User (logged in) tries to hit an admin-only endpoint |
 
 **Interviewer follow-up:** *"Why does my API return 401 when I expected 403?"* — Usually means the authentication handler never populated a valid principal (missing/invalid/expired token), so the pipeline never got far enough to evaluate authorization. If you get 403, authentication succeeded but the policy/role check failed.
+
+### 1.1a ASP.NET Core Authentication + Authorization Setup
+
+**JWT Bearer authentication** — stateless, scales horizontally (no server-side session store), travels naturally to SPA/mobile clients via an `Authorization: Bearer` header:
+
+```csharp
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options => options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidateAudience = true,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+        ValidIssuer = config["Jwt:Issuer"],
+        ValidAudience = config["Jwt:Audience"],
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(config["Jwt:Key"]))
+    });
+
+builder.Services.AddAuthorization();
+app.UseAuthentication();
+app.UseAuthorization();
+```
+
+**OAuth2 vs OpenID Connect:** OAuth2 is an *authorization* framework (who can access what); OIDC is an *identity* layer on top (who the user is). Most full-stack .NET apps delegate to an external identity provider (Entra ID, Auth0, Keycloak, Duende IdentityServer) rather than rolling their own login.
+
+| Grant/Flow | Typical use |
+|---|---|
+| Authorization Code + PKCE | SPA and mobile apps (modern default — avoid the deprecated Implicit flow) |
+| Client Credentials | Service-to-service (machine-to-machine), no user involved |
+| Refresh Token | Silently renewing an access token without re-prompting login |
+
+**Claims/policy-based authorization** (preferred over hardcoded role checks):
+
+```csharp
+builder.Services.AddAuthorization(options =>
+    options.AddPolicy("CanEditProducts", policy =>
+        policy.RequireClaim("permission", "products.edit")));
+
+[Authorize(Policy = "CanEditProducts")]
+[HttpPut("{id}")]
+public IActionResult Update(int id, ProductDto dto)
+{
+    // ...
+    return Ok();
+}
+```
+
+This decouples "what a user can do" from "what role they happen to have," which scales far better as permission models grow beyond a handful of roles.
+
+**Other important security topics:** CORS must be explicitly configured (`AddCors`/`UseCors`) for any SPA on a different origin; CSRF mainly matters for cookie-based auth (token-based JWT in an `Authorization` header is inherently less exposed, but cookie-authenticated form posts still need antiforgery tokens); the **Data Protection API** is ASP.NET Core's built-in key-management system for encrypting cookies/tokens at rest; **never** store secrets in `appsettings.json` in source control — use User Secrets locally and Key Vault/Secrets Manager/environment variables in production.
 
 ### 1.2 Stateful Sessions vs Stateless Tokens
 

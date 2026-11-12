@@ -16,6 +16,9 @@ Audience: 10-year .NET full-stack developer jo senior/lead-level interviews ke l
    - [Content Negotiation](#content-negotiation)
 2. [Intermediate](#intermediate)
    - [Dependency Injection & Service Lifetimes](#dependency-injection--service-lifetimes)
+   - [[new content] Singleton vs Scoped vs Transient — Real-Life Examples](#new-content-singleton-vs-scoped-vs-transient--real-life-examples)
+   - [[new content] The Captive Dependency Problem](#new-content-the-captive-dependency-problem)
+   - [[new content] Keyed DI Services (.NET 8+)](#new-content-keyed-di-services-net-8)
    - [SOLID Principles](#solid-principles)
    - [Middleware Pipeline](#middleware-pipeline)
    - [Request Lifecycle End-to-End](#request-lifecycle-end-to-end)
@@ -343,6 +346,102 @@ public class MyLoggerService
 ```
 
 Yeh singleton ke andar manually ek naya scope create karta hai, isliye resolved `DbContext` sirf us unit of work ki duration ke liye jeeta hai — safe aur correctly isolated. Loggers ke liye specifically best practice: unhe Singleton, stateless, thread-safe rakho, aur jab possible ho hand-rolled logger services ke bajaye built-in `ILogger<T>` abstraction prefer karo.
+
+### [new content] Singleton vs Scoped vs Transient — Real-Life Examples
+
+Teeno lifetimes ka core difference ek hi sawaal mein samajh aata hai: **container mujhe kab naya instance deta hai?**
+
+**1. Transient — "har baar ek fresh, disposable instance"**
+
+*Real-life analogy:* ek restaurant mein **paper napkin** — har customer ko ek naya milta hai, use hone ke baad throw ho jata hai, aur next customer tak koi state carry nahi hoti.
+
+*.NET use case:* lightweight, **stateless** services jinke andar mutable/shared state nahi hoti — jaise `IEmailValidator`, `IPasswordHasher`, ya ek `IOrderNumberGenerator` jo pure logic hai.
+
+```csharp
+builder.Services.AddTransient<IPasswordHasher, BCryptPasswordHasher>();
+```
+
+Container `BCryptPasswordHasher` ka **naya instance** deta hai **har baar** jab bhi koi dependency usse maangti hai — chahe ek hi request ke andar 3 jagah inject ho, teeno alag instances honge.
+
+**2. Scoped — "ek HTTP request (ya ek explicit scope) ke liye ek shared instance"**
+
+*Real-life analogy:* ek hospital visit ka **patient file** — usi visit ke dauraan reception, nurse, aur doctor sab same file use karte hain, lekin agla visit (next request) par ek fresh file khulti hai.
+
+*.NET use case:* sabse classic example **`DbContext`** hai. ASP.NET Core mein `AddDbContext<T>()` by default `DbContext` ko **Scoped** register karta hai — ek hi HTTP request ke andar agar `OrderService` aur `InventoryService` dono `AppDbContext` inject karte hain, to unhe wahi ek instance milta hai.
+
+```csharp
+builder.Services.AddScoped<AppDbContext>();
+builder.Services.AddScoped<IOrderService, OrderService>();
+```
+
+**3. Singleton — "poori application lifetime ke liye ek hi instance"**
+
+*Real-life analogy:* ek office ka **shared printer** — sab employees same printer use karte hain, application ke living lifetime tak.
+
+*.NET use case:* **`IMemoryCache`**, application configuration, aur application-wide shared state jisse sab requests ke beech share kiya jana chahiye.
+
+```csharp
+builder.Services.AddSingleton<ICacheService, InMemoryCacheService>();
+```
+
+```csharp
+public class InMemoryCacheService : ICacheService
+{
+    private readonly ConcurrentDictionary<string, object> _cache = new();
+
+    public T? Get<T>(string key) => _cache.TryGetValue(key, out var value) ? (T)value : default;
+    public void Set(string key, object value) => _cache[key] = value;
+}
+```
+
+> **Rule:** ek Singleton ke andar jo bhi state ho, usse thread-safe rakhna zaroori hai, kyunki ek hi instance multiple concurrent requests se access hota hai.
+
+| Lifetime | Real-life analogy | Instance kab naya banta hai | Typical .NET example |
+|---|---|---|---|
+| **Transient** | Paper napkin | Har baar resolve/inject hone par | `IPasswordHasher`, `IEmailValidator` |
+| **Scoped** | Patient file during one hospital visit | Har HTTP request / explicit scope | `DbContext`, `IOrderService` |
+| **Singleton** | Shared office printer | Poori app life mein sirf ek baar | `IMemoryCache`, `IConfiguration` |
+
+### [new content] The Captive Dependency Problem
+
+Ek classic senior DI gotcha hai: ek **Singleton** service jo constructor-injected **Scoped** ya **Transient** dependency capture kar leta hai.
+
+```csharp
+public class CacheService  // registered as Singleton
+{
+    private readonly AppDbContext _db;  // Scoped — captured once, held forever!
+    public CacheService(AppDbContext db) => _db = db;
+}
+```
+
+Kyunki `CacheService` ek Singleton hai, yeh **ek baar** construct hota hai — aur usi waqt ka `AppDbContext` instance application ki poori lifetime ke liye hold ho jata hai. Isse request-scoped dependency de facto singleton ban jata hai, jisse thread-safety issues aur stale state hota hai.
+
+Built-in DI container isse detect karta hai aur validation enabled hone par exception throw karta hai. Safest fix: `IServiceScopeFactory` inject karo aur har baar scoped dependency ke liye naya scope create karo.
+
+```csharp
+public class CacheService(IServiceScopeFactory scopeFactory)
+{
+    public async Task DoWorkAsync()
+    {
+        using var scope = scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        // use db safely within this scope's lifetime
+    }
+}
+```
+
+### [new content] Keyed DI Services (.NET 8+)
+
+.NET 8 ne **keyed services** introduce kiye, jisse ek hi interface ke multiple implementations ko register karke specific one ko key se resolve kiya ja sakta hai.
+
+```csharp
+builder.Services.AddKeyedScoped<INotificationService, EmailService>("email");
+builder.Services.AddKeyedScoped<INotificationService, SmsService>("sms");
+
+public class OrderService([FromKeyedServices("email")] INotificationService notifier) { ... }
+```
+
+Yeh tab bahut useful hota hai jab aapko pehle factory delegate ya `Dictionary<string, IService>` ke through runtime par implementation select karni padti thi.
 
 ### SOLID Principles
 
