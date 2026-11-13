@@ -28,20 +28,18 @@
    - [Distributed Locks / Leases](#distributed-locks--leases)
 6. [SOLID Principles](#solid-principles)
    - [[new content] SOLID in Practice — Violation-to-Fix Walkthroughs](#new-content-solid-in-practice--violation-to-fix-walkthroughs)
-7. [Anti-Patterns](#anti-patterns)
-   - [[new content] God Object, Anemic Domain Model, Service Locator, and Other Overused/Misapplied Patterns](#new-content-god-object-anemic-domain-model-service-locator-and-other-overusedmisapplied-patterns)
-8. [Performance Considerations](#performance-considerations)
-9. [Best Practices](#best-practices)
-10. [Common Pitfalls](#common-pitfalls)
-11. [Sample Interview Q&A](#sample-interview-qa)
-12. [Summary of Additions](#summary-of-additions)
-13. [Summary of \[gaps\] Additions (This Pass)](#summary-of-gaps-additions-this-pass)
-8. [Performance Considerations](#performance-considerations)
-9. [Best Practices](#best-practices)
-10. [Common Pitfalls](#common-pitfalls)
-11. [Sample Interview Q&A](#sample-interview-qa)
-12. [Summary of Additions](#summary-of-additions)
-13. [Summary of [gaps] Additions (This Pass)](#summary-of-gaps-additions-this-pass)
+7. [Performance Considerations](#performance-considerations)
+8. [Best Practices](#best-practices)
+9. [Common Pitfalls](#common-pitfalls)
+10. [Sample Interview Q&A](#sample-interview-qa)
+11. [Summary of Additions](#summary-of-additions)
+12. [Summary of \[gaps\] Additions (This Pass)](#summary-of-gaps-additions-this-pass)
+7. [Performance Considerations](#performance-considerations)
+8. [Best Practices](#best-practices)
+9. [Common Pitfalls](#common-pitfalls)
+10. [Sample Interview Q&A](#sample-interview-qa)
+11. [Summary of Additions](#summary-of-additions)
+12. [Summary of [gaps] Additions (This Pass)](#summary-of-gaps-additions-this-pass)
 
 ---
 
@@ -1338,43 +1336,6 @@ public class OrderProcessor
     public void Process(Order order) => _repo.Save(order);
 }
 ```
-
----
-
-## Anti-Patterns
-
-### [new content] God Object, Anemic Domain Model, Service Locator, aur Doosre Overused/Misapplied Patterns
-
-**Gap identified:** source notes anti-patterns ko ek category ki tarah kabhi discuss nahi karte, iske bawajood ki "aapne kaunse anti-patterns dekhe/fix kiye hain?" ek near-guaranteed senior/lead interview question hai.
-
-**God Object (aka God Class):** ek class jo bahut zyada jaanti/karti hai — aksar ek `Manager`, `Helper`, ya `Utils` class jo saalon ke over unrelated responsibilities accrete karti hai. Long-term SRP ignore karne ka symptom hai. **Extract Class** ke through incrementally fix karo, ek big-bang rewrite nahi.
-
-**Anemic Domain Model:** entities jo pure data bags hain (`{ get; set; }` everywhere) jinme saari business logic separate "Service" classes mein push kar di gayi hai. EF Core codebases mein common hai kyunki yeh path of least resistance hai, lekin yeh OO encapsulation violate karta hai — invariants kahin bhi violate ho sakte hain kyunki kuch bhi entity state protect nahi karta. Fix: behavior ko entity par khud push karo (rich domain model) — e.g., `order.Cancel()` jo "shipped order cancel nahi kar sakte" internally enforce karta hai, `OrderService.Cancel(order)` ke bajaye jo woh check externally perform karta hai jahan use bhoolna/duplicate karna easy hai.
-```csharp
-// ❌ Anemic
-public class Order { public OrderStatus Status { get; set; } }
-if (order.Status != OrderStatus.Shipped) order.Status = OrderStatus.Cancelled; // check can be forgotten elsewhere
-
-// ✅ Rich domain model enforces the invariant itself
-public class Order
-{
-    public OrderStatus Status { get; private set; }
-    public void Cancel()
-    {
-        if (Status == OrderStatus.Shipped) throw new InvalidOperationException("Cannot cancel a shipped order");
-        Status = OrderStatus.Cancelled;
-    }
-}
-```
-
-**Service Locator:** ek global registry (`ServiceLocator.Resolve<T>()`) jo classes ke andar se call hoti hai dependencies ko will par fetch karne ke liye, unhe constructor injection ke through receive karne ke bajaye. DI jaisa dikhta hai lekin hai nahi — yeh ek class ki real dependencies ko uske public API se **hide** kar deta hai, unhe implementation padhe bina undiscoverable banata hai, aur unit testing ko locator setup/mocking gymnastics chahiye banata hai. `IServiceProvider` jo *pervasively business logic ke andar* use hota hai (composition-root/factory boundaries par ke bajaye) woh disguise mein Service Locator hai — fix hai ek class ko chahiye specific dependencies inject karna, `IServiceProvider` ko genuine factory scenarios ke liye reserve karte hue (Factory section dekhein).
-
-**Discuss karne ke liye ready rehne layak doosre commonly overused/misapplied patterns:**
-- Web apps mein **mutable shared state ke liye Singleton** (upar covered) — single most common real-world Singleton misuse.
-- Bina reason ke **EF Core par cargo-culted Repository/UoW** (upar covered) — simple CRUD ke liye bina benefit ceremony add karta hai.
-- **Trivial CRUD apps ke liye MediatR/CQRS overuse karna** — jab koi real read/write divergence na ho to bina payoff ke indirection tax.
-- **Ek single implementation ke liye premature Abstract Factory / Strategy** — "just in case kabhi humein koi doosra payment provider chahiye ho" ek YAGNI smell hai; abstraction add karo jab second implementation actually show up ho.
-- **Har class ke liye interface ("Java-itis")** — har `Foo` ke liye `IFoo` create karna jiska sirf ek implementation hai, "testability ke liye," jab real testability lever pure logic ko I/O se separate karna hai, blanket interface creation nahi.
 
 ---
 
