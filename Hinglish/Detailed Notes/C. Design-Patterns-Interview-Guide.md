@@ -16,24 +16,17 @@
    - [Repository Pattern](#repository-pattern)
    - [Unit of Work Pattern](#unit-of-work-pattern)
    - [[new content] Decorator vs Proxy vs Adapter](#new-content-decorator-vs-proxy-vs-adapter)
-   - [[new content] Facade](#new-content-facade)
-   - [[new content] Specification Pattern](#new-content-specification-pattern)
-   - [Bridge, Composite, and Flyweight [gaps]](#bridge-composite-and-flyweight-gaps)
 4. [Behavioral Patterns](#behavioral-patterns)
    - [Observer](#observer)
    - [Mediator Pattern (MediatR)](#mediator-pattern-mediatr)
    - [[new content] Strategy vs State](#new-content-strategy-vs-state)
    - [[new content] Template Method](#new-content-template-method)
    - [[new content] Command Pattern](#new-content-command-pattern)
-   - [[new content] Chain of Responsibility](#new-content-chain-of-responsibility)
-   - [Visitor and Memento [gaps]](#visitor-and-memento-gaps)
    - [Null Object Pattern [gaps]](#null-object-pattern-gaps)
 5. [Architectural Patterns](#architectural-patterns)
    - [CQRS](#cqrs)
    - [Projection Service](#projection-service)
    - [Distributed Locks / Leases](#distributed-locks--leases)
-   - [[new content] Options Pattern in .NET](#new-content-options-pattern-in-net)
-   - [[new content] Repository + Unit of Work vs Raw EF Core / CQRS](#new-content-repository--unit-of-work-vs-raw-ef-core--cqrs)
 6. [SOLID Principles](#solid-principles)
    - [[new content] SOLID in Practice — Violation-to-Fix Walkthroughs](#new-content-solid-in-practice--violation-to-fix-walkthroughs)
 7. [Anti-Patterns](#anti-patterns)
@@ -60,8 +53,8 @@ Design patterns reusable, named solutions hote hain recurring software design pr
 | Category | Purpose | Examples |
 |---|---|---|
 | Creational | Control karta hai **kaise objects create hote hain** | Singleton, Factory Method, Abstract Factory, Builder, Prototype |
-| Structural | Control karta hai **kaise objects/classes compose hote hain** | Adapter, Decorator, Proxy, Facade, Composite, Bridge, Flyweight |
-| Behavioral | Control karta hai **kaise objects communicate/collaborate karte hain** | Observer, Strategy, State, Template Method, Command, Chain of Responsibility, Mediator, Iterator, Visitor, Memento |
+| Structural | Control karta hai **kaise objects/classes compose hote hain** | Adapter, Decorator, Proxy |
+| Behavioral | Control karta hai **kaise objects communicate/collaborate karte hain** | Observer, Strategy, State, Template Method, Command, Mediator, Iterator |
 
 ```mermaid
 graph TD
@@ -76,7 +69,6 @@ graph TD
     C --> C1[Adapter]
     C --> C2[Decorator]
     C --> C3[Proxy]
-    C --> C4[Facade]
     C --> C5[Repository / UoW - not GoF, but idiomatic .NET]
     D --> D1[Observer]
     D --> D2[Strategy]
@@ -84,7 +76,6 @@ graph TD
     D --> D4[Template Method]
     D --> D5[Mediator]
     D --> D6[Command]
-    D --> D7[Chain of Responsibility]
 ```
 
 **Senior-level framing jo ek interviewer sunna chahta hai:** patterns goals nahi hote — yeh trade-offs hote hain jo aap accept karte ho ek specific force (variability, coupling, lifecycle, testability) ko solve karne ke liye. Agar aap yeh naam nahi bata sakte ki pattern kaunsi force resolve karta hai, toh probably aap over-engineering kar rahe ho. "Yahan aap kaunsa pattern use karoge?" ka best senior answer often isse start hota hai — "hum actually kaunsa problem solve kar rahe hain — kya humein ek pattern chahiye bhi hai, ya ek simple function/DI registration hi isko solve kar deta hai?"
@@ -784,193 +775,6 @@ public class LazyReportGeneratorProxy : IReportGenerator
 
 ---
 
-### [new content] Facade
-
-**Gap identified:** source mein kahin mention nahi hai, lekin commonly poocha jaata hai ek quick "ek pattern batao jo ek complex subsystem ko simplify karne ke liye use karte ho."
-
-**Intent:** classes ke ek complex subsystem ke upar ek single simplified interface provide karo, un callers se subsystem ki power hide kiye bina jinhe use directly zaroorat hai.
-
-```csharp
-// Subsystem: multiple services with intricate coordination
-public class InventoryService { public bool Reserve(int sku, int qty) => true; }
-public class PaymentService { public bool Charge(decimal amount) => true; }
-public class ShippingService { public string Schedule(int orderId) => "TRACK123"; }
-
-// Facade
-public class OrderFacade
-{
-    private readonly InventoryService _inventory = new();
-    private readonly PaymentService _payment = new();
-    private readonly ShippingService _shipping = new();
-
-    public string PlaceOrder(int sku, int qty, decimal amount, int orderId)
-    {
-        if (!_inventory.Reserve(sku, qty)) throw new InvalidOperationException("Out of stock");
-        if (!_payment.Charge(amount)) throw new InvalidOperationException("Payment failed");
-        return _shipping.Schedule(orderId);
-    }
-}
-```
-Real-world .NET example: `HttpClient` khud `HttpMessageHandler`, socket management, aur connection pooling ke upar ek facade hai.
-
----
-
-### [new content] Specification Pattern
-
-**Gap identified:** explicitly request kiya gaya — Repository ke saath frequently discuss hota hai DDD-flavored senior interviews mein query logic ko repositories se bahar rakhne ke ek tarike ke roop mein.
-
-**Intent:** ek business rule/query predicate ko ek composable object (`IsSatisfiedBy`) ke roop mein encapsulate karo, services ke across `Where()` lambdas scatter karne ya repository interfaces ko har query variation ke liye ek method se bloat karne ke bajaye.
-
-```csharp
-public interface ISpecification<T>
-{
-    Expression<Func<T, bool>> ToExpression();
-}
-
-public class ActiveCustomerSpecification : ISpecification<Customer>
-{
-    public Expression<Func<Customer, bool>> ToExpression() => c => c.IsActive;
-}
-
-public class HighValueCustomerSpecification : ISpecification<Customer>
-{
-    private readonly decimal _threshold;
-    public HighValueCustomerSpecification(decimal threshold) => _threshold = threshold;
-    public Expression<Func<Customer, bool>> ToExpression() => c => c.LifetimeValue >= _threshold;
-}
-
-// Combinator support (AND) — the real payoff of the pattern
-public class AndSpecification<T> : ISpecification<T>
-{
-    private readonly ISpecification<T> _left, _right;
-    public AndSpecification(ISpecification<T> left, ISpecification<T> right) { _left = left; _right = right; }
-
-    public Expression<Func<T, bool>> ToExpression()
-    {
-        var param = Expression.Parameter(typeof(T));
-        var body = Expression.AndAlso(
-            Expression.Invoke(_left.ToExpression(), param),
-            Expression.Invoke(_right.ToExpression(), param));
-        return Expression.Lambda<Func<T, bool>>(body, param);
-    }
-}
-
-// Repository accepts specifications instead of growing bespoke query methods
-public async Task<List<Customer>> FindAsync(ISpecification<Customer> spec) =>
-    await _dbSet.Where(spec.ToExpression()).ToListAsync();
-```
-
-**Trade-off:** reusable, testable, composable business rules ke liye aur repository interface bloat avoid karne ke liye great hai; CRUD-only apps ke liye overkill hai — ek abstraction layer aur expression-tree complexity add karta hai jo most small services ko zaroorat nahi hoti. EF Core simple specification expressions ko directly SQL mein translate kar sakta hai kyunki yeh sirf `Expression<Func<T,bool>>` hi hain.
-
----
-
-### Bridge, Composite, and Flyweight [gaps]
-
-**Gap identified:** yeh teen GoF structural patterns source mein absent hain aur Decorator/Proxy/Adapter se kam frequently aate hain, lekin ek senior candidate se still expect kiya jaata hai ki inhe define kare aur inke lookalikes se distinguish kare (Bridge vs Adapter, Composite vs Decorator) agar interviewer poochhe "have you used X?" Yahan intentionally tight rakha gaya hai — lower interview frequency upar wale core structural trio jaisi depth warrant nahi karti.
-
-#### Bridge
-
-Ek **abstraction** ko uske **implementation** se separate karta hai taaki dono independently vary kar sakein, jab aapke paas variation ke do orthogonal dimensions hote hain (jaise, shape × renderer, ya notification-type × channel) toh subclasses ka combinatorial explosion avoid karte hue.
-
-```csharp
-// Implementation hierarchy (the "how")
-public interface IChannel { void Send(string message); }
-public class EmailChannel : IChannel { public void Send(string m) => Console.WriteLine($"Email: {m}"); }
-public class SmsChannel : IChannel { public void Send(string m) => Console.WriteLine($"SMS: {m}"); }
-
-// Abstraction hierarchy (the "what") — holds a reference to the implementation
-public abstract class Notification
-{
-    protected readonly IChannel Channel;
-    protected Notification(IChannel channel) => Channel = channel;
-    public abstract void Notify(string content);
-}
-
-public class Alert : Notification
-{
-    public Alert(IChannel channel) : base(channel) { }
-    public override void Notify(string content) => Channel.Send($"[ALERT] {content}");
-}
-
-public class Reminder : Notification
-{
-    public Reminder(IChannel channel) : base(channel) { }
-    public override void Notify(string content) => Channel.Send($"[REMINDER] {content}");
-}
-
-// 2 abstractions x 2 channels = 4 combinations without 4 subclasses
-var alert = new Alert(new SmsChannel());
-alert.Notify("Server down");
-```
-
-*Ek real .NET codebase mein isko actually kab reach karoge:* ek notification system jahan kai message types (Alert, Reminder, Digest) ko kai delivery channels (Email, SMS, Push) ke upar kaam karna hai — Bridge us grid ko `AlertEmail`, `AlertSms`, `ReminderEmail`, `ReminderSms`, etc. banne se rokta hai.
-
-#### Composite
-
-Clients ko ek single object aur objects ki ek composition ko **uniformly** treat karne deta hai ek shared component interface ke through — tree-shaped data (file systems, UI control trees, org charts, nested validation rules) ke liye classic fit.
-
-```csharp
-public interface IValidationRule
-{
-    bool IsValid(object input);
-}
-
-public class RequiredFieldRule : IValidationRule
-{
-    public bool IsValid(object input) => input is not null;
-}
-
-// Composite: aggregates children but exposes the exact same interface as a leaf
-public class CompositeRule : IValidationRule
-{
-    private readonly List<IValidationRule> _children = new();
-    public CompositeRule Add(IValidationRule rule) { _children.Add(rule); return this; }
-    public bool IsValid(object input) => _children.All(r => r.IsValid(input));
-}
-
-// Caller doesn't know or care whether it's holding one rule or a whole tree of rules
-IValidationRule rules = new CompositeRule()
-    .Add(new RequiredFieldRule())
-    .Add(new CompositeRule().Add(new RequiredFieldRule()));
-```
-
-*Ek real .NET codebase mein isko actually kab reach karoge:* ek recursive UI component/menu tree render karna, ya ek composable business-rule/validation tree banana jahan ek "group" rule child rules ko aggregate karti hai lekin khud ek aur `IValidationRule` ki tarah pass ki jaati hai.
-
-#### Flyweight
-
-Large numbers of similar objects ke liye memory footprint minimize karta hai **intrinsic (context-independent) state** ko instances ke across share karke aur sirf **extrinsic (context-specific) state** ko per object rakhte hue — ek classic space/time trade-off jo matter karta hai jab object counts bade ho jaate hain (thousands se millions).
-
-```csharp
-// Intrinsic state (shared, immutable) — the "flyweight"
-public class CharacterGlyph
-{
-    public char Symbol { get; }
-    public string FontFamily { get; }
-    public CharacterGlyph(char symbol, string fontFamily) { Symbol = symbol; FontFamily = fontFamily; }
-}
-
-public class GlyphFactory
-{
-    private readonly Dictionary<(char, string), CharacterGlyph> _cache = new();
-
-    public CharacterGlyph GetGlyph(char symbol, string fontFamily)
-    {
-        var key = (symbol, fontFamily);
-        if (!_cache.TryGetValue(key, out var glyph))
-        {
-            glyph = new CharacterGlyph(symbol, fontFamily);
-            _cache[key] = glyph;
-        }
-        return glyph;
-    }
-}
-
-// Extrinsic state (per-occurrence: position) stays outside the shared glyph
-public record RenderedCharacter(CharacterGlyph Glyph, int X, int Y);
-```
-
-*Ek real .NET codebase mein isko actually kab reach karoge:* string interning khud ek built-in Flyweight hai (`string.Intern`); same idea ek text editor mein shared immutable formatting/glyph objects cache karne mein, ya thousands of lightweight game entities dwara reference kiye jaane wale shared sprite/texture objects mein apply hoti hai.
-
 ---
 
 ## Behavioral Patterns
@@ -1214,116 +1018,6 @@ public class CommandInvoker
 
 ---
 
-### [new content] Chain of Responsibility
-
-**Gap identified:** source mein present nahi hai; directly relevant hai kyunki ASP.NET Core middleware — jo most .NET developers daily use karte hain — **Chain of Responsibility hai**, aur interviewers "ASP.NET Core middleware ke peeche wala GoF pattern naam batao" poochna pasand karte hain.
-
-**Intent:** ek request ko handlers ki ek chain ke through pass karo jab tak koi ek isko handle na kare (ya sabko act karne ka chance mile), sender ko receivers se decouple karte hue.
-
-```csharp
-public abstract class Handler
-{
-    protected Handler? Next;
-    public Handler SetNext(Handler next) { Next = next; return next; }
-    public abstract Task HandleAsync(HttpContext ctx);
-}
-
-public class AuthHandler : Handler
-{
-    public override async Task HandleAsync(HttpContext ctx)
-    {
-        Console.WriteLine("Checking auth...");
-        if (Next != null) await Next.HandleAsync(ctx);
-    }
-}
-
-public class LoggingHandler : Handler
-{
-    public override async Task HandleAsync(HttpContext ctx)
-    {
-        Console.WriteLine("Logging request...");
-        if (Next != null) await Next.HandleAsync(ctx);
-    }
-}
-```
-
-**Direct real-world mapping:** ASP.NET Core ka `app.Use(...)` middleware pipeline, har middleware `await next(context)` call karte hue, exactly yeh pattern hai — har link decide karta hai act karna hai, pass through karna hai, ya chain short-circuit karna hai.
-
----
-
-### Visitor and Memento [gaps]
-
-**Gap identified:** dono source mein absent hain. Visitor real framework machinery ke underlying hai (`ExpressionVisitor`) isliye yeh LINQ/expression-tree discussions mein surface ho sakta hai; Memento ek common follow-up hai jab bhi undo/redo ya state-snapshotting design ki baat aati hai. Upar ke core behavioral write-ups ke against yahan tight rakha gaya hai.
-
-#### Visitor
-
-Aapko ek heterogeneous object structure (jaise, ek AST, ek shape hierarchy) ke upar ek **new operation** add karne deta hai element classes ko khud modify kiye bina — har element ek visitor accept karta hai aur double-dispatch karta hai us `Visit` overload ko jo uske concrete type ke saath match karta ho. Trade-off Strategy/Template Method ka mirror image hai: ek naya **operation** add karna easy hai (ek naya visitor), lekin ek naya **element type** add karna matlab har existing visitor implementation ko touch karna — inverse extensibility problem, aur interview mein trade-off ke roop mein explicitly naam lene layak.
-
-```csharp
-public interface IShapeVisitor
-{
-    void Visit(Circle circle);
-    void Visit(Square square);
-}
-
-public abstract class Shape { public abstract void Accept(IShapeVisitor visitor); }
-
-public class Circle : Shape
-{
-    public double Radius { get; init; }
-    public override void Accept(IShapeVisitor visitor) => visitor.Visit(this);
-}
-
-public class Square : Shape
-{
-    public double Side { get; init; }
-    public override void Accept(IShapeVisitor visitor) => visitor.Visit(this);
-}
-
-// New operation added without touching Circle/Square
-public class AreaVisitor : IShapeVisitor
-{
-    public double TotalArea { get; private set; }
-    public void Visit(Circle circle) => TotalArea += Math.PI * circle.Radius * circle.Radius;
-    public void Visit(Square square) => TotalArea += square.Side * square.Side;
-}
-```
-
-*Ek real .NET codebase mein isko actually kab reach karoge:* ek AST/expression tree ko walk ya rewrite karna — `System.Linq.Expressions.ExpressionVisitor` canonical BCL example hai — ya node classes ko per-format logic se pollute kiye bina ek fixed, closed set of node types ko kai different output formats (JSON, XML, ek report) mein serialize karna.
-
-#### Memento
-
-Ek object ke internal state ko capture aur externalize karta hai taaki isko baad mein restore kiya ja sake **encapsulation violate kiye bina** — originator khud decide karta hai ki snapshot mein kya jaayega aur ek opaque token hand back karta hai jisko sirf usi ko reapply karna aata hai.
-
-```csharp
-public class EditorMemento
-{
-    // Internal representation; caretaker never inspects this
-    internal string Content { get; }
-    internal EditorMemento(string content) => Content = content;
-}
-
-public class TextEditor
-{
-    public string Content { get; private set; } = string.Empty;
-    public void Type(string text) => Content += text;
-    public EditorMemento Save() => new EditorMemento(Content);
-    public void Restore(EditorMemento memento) => Content = memento.Content;
-}
-
-// Caretaker only stores/retrieves opaque mementos — never touches TextEditor internals directly
-public class UndoStack
-{
-    private readonly Stack<EditorMemento> _history = new();
-    public void Push(EditorMemento m) => _history.Push(m);
-    public EditorMemento Pop() => _history.Pop();
-}
-```
-
-*Ek real .NET codebase mein isko actually kab reach karoge:* editors ya form-builder UIs mein undo/redo stacks, ya rollback allow karne ke liye ek risky operation se pehle state snapshot karna. Modern C# mein, note karo yeh overlap: ek immutable `record` (ya plain serialization JSON mein) often aapko ek "free" memento de deta hai — aapko formal pattern ki ceremony ki zaroorat nahi hai jab tak originator ka true internal state ek simple immutable copy se richer na ho, ya aapko exactly control karna ho ki caretaker ko kya expose hota hai.
-
----
-
 ### Null Object Pattern [gaps]
 
 **Gap identified:** source mein absent hai. Frequently nullable reference types (C# 8+ `#nullable enable`) aur functional Option/Maybe types ke against pitted hota hai modern senior discussions mein — yeh comparison ek live design debate hai jiske dono sides argue karne layak hai.
@@ -1549,83 +1243,12 @@ Kubernetes bhi pods ke beech leader election ke liye ek native `Lease` object (e
 
 ---
 
-### [new content] .NET mein Options Pattern
-
-**Gap identified:** source mein bilkul mention nahi hai, lekin Options pattern ek staple senior ASP.NET Core question hai — yeh strongly-typed, validated configuration objects ka idiomatic .NET analogue hai aur upar already discuss ki gayi DI lifetimes se directly tie karta hai.
-
-**Intent:** codebase ke through `IConfiguration["Key:SubKey"]` string lookups scatter karne ke bajaye configuration sections ko strongly typed POCOs se bind karna, aur configuration ko DI lifetimes ke saath integrate karna.
-
-```csharp
-public class SmtpOptions
-{
-    public string Host { get; set; } = "";
-    public int Port { get; set; } = 587;
-    public bool UseSsl { get; set; } = true;
-}
-```
-
-```csharp
-builder.Services.Configure<SmtpOptions>(builder.Configuration.GetSection("Smtp"));
-```
-
-```csharp
-public class EmailSender
-{
-    private readonly SmtpOptions _options;
-    public EmailSender(IOptions<SmtpOptions> options) => _options = options.Value;
-}
-```
-
-| Interface | Reload behavior | Lifetime fit | Use case |
-|---|---|---|---|
-| `IOptions<T>` | First resolution par snapshot — runtime mein config changes **nahi** pick karta | Singleton ke saath kaam karta hai | Simple, static-for-app-lifetime settings |
-| `IOptionsSnapshot<T>` | Agar config source reload support kare to per Scoped resolution (e.g., per request) recomputed hota hai | Sirf Scoped | Settings jo change ho sakti hain aur per-request apply hone chahiye |
-| `IOptionsMonitor<T>` | Live-reloads karta hai aur `OnChange` callbacks support karta hai | Singleton ke saath kaam karta hai | Long-lived services (e.g., background workers) jinhe restart kiye bina config changes par react karna hai |
-
-**Validation (senior-level add-on):**
-```csharp
-builder.Services.AddOptions<SmtpOptions>()
-    .Bind(builder.Configuration.GetSection("Smtp"))
-    .Validate(o => o.Port > 0, "Port must be positive")
-    .ValidateDataAnnotations()
-    .ValidateOnStart(); // fail fast at startup instead of first use
-```
-
-**Yeh architecturally kyun matter karta hai:** Options effectively configuration ke liye ek **typed Factory + Strategy hybrid** hai — `IOptionsMonitor<T>` conceptually configuration changes ke upar ek Observer hai. Options ko upar wale patterns (DI lifetimes, Observer-like change notification) se connect kar paana rote memorization ke bajaye pattern fluency ka ek strong signal hai.
-
----
-
-### [new content] Repository + Unit of Work vs Raw EF Core / CQRS
-
-**Gap identified:** source ne Repository aur Unit of Work ko individually cover kiya lekin kabhi directly "kya humein yeh EF Core ke saath use bhi karna chahiye, ya 2026 mein yeh redundant/anti-pattern hai?" wala debate address nahi kiya — most common senior .NET interview traps mein se ek.
-
-```mermaid
-flowchart TD
-    A[Need data access abstraction?] --> B{Multiple data sources or\nneed to swap ORM/DB?}
-    B -- Yes --> C[Repository + UoW justified]
-    B -- No --> D{Heavy read/write asymmetry\nor complex divergent queries?}
-    D -- Yes --> E[Consider CQRS: separate\nread/write models, Dapper for reads]
-    D -- No --> F{Just need mockable\ndata access for unit tests?}
-    F -- Yes --> G[DbContext + interfaces per aggregate\nis usually enough - avoid generic IRepository T]
-    F -- No --> H[Use DbContext/DbSet directly\nit already IS Repository+UoW]
-```
-
-**Core tension:**
-- `DbContext` already **Unit of Work** implement karta hai (change tracking + atomic `SaveChanges`) aur har `DbSet<T>` already ek **Repository** ke close hai (`IQueryable<T>` + CRUD).
-- `DbSet<T>` ko wrap karne wala ek generic `IRepository<T>` aksar `IQueryable` ko ek leaky abstraction ke peeche sirf **hide** kar deta hai (aap ya to interface par `IQueryable` expose karte ho — jo abstraction ka purpose hi defeat kar deta hai — ya aap har query shape ke liye ek bespoke method add karte-karte end kar dete ho, jo interface ko balloon kar deta hai).
-- Repository/UoW abhi bhi add karne ke legitimate reasons: DDD aggregate boundaries enforce karna (per aggregate root repository, per table nahi), swappable persistence technology, ya complex query composition centralize karna (upar wale **Specification pattern** ke saath well pairs karta hai).
-- CQRS-style systems mein, kai teams **read side par Repository ko poori tarah skip** kar dete hain — DTOs ko direct Dapper/raw SQL/`AsNoTracking()` projections pure reads ke liye repository abstraction se aksar faster aur simpler hote hain; Repository mainly write/command side par invariants enforce karne ke liye relevant rehta hai.
-
-**Strong senior answer:** "Main default se EF Core ke saath generic Repository + UoW ke liye nahi jaata — `DbContext` already mujhe dono deta hai. Main Repository introduce karta hoon jab mujhe DDD mein aggregate boundaries enforce karni hon, testing ke liye domain ko persistence tech se isolate karna ho, ya complex specifications centralize karni hon. Read side par, especially CQRS mein, main repository abstraction ke bajaye direct, no-tracking projections ya Dapper favor karta hoon kyunki wahan abstraction apna cost pay nahi karta."
-
----
-
 ## SOLID Principles
 
 | Principle | One-line definition | Design pattern jo enforce karne mein help karta hai |
 |---|---|---|
-| **S** — Single Responsibility | Ek class ke change hone ka ek hi reason hona chahiye | Facade, Decorator (concerns ko layers mein separate karta hai) |
-| **O** — Open/Closed | Extension ke liye open, modification ke liye closed | Strategy, Factory Method, Decorator, Chain of Responsibility |
+| **S** — Single Responsibility | Ek class ke change hone ka ek hi reason hona chahiye | Decorator (concerns ko layers mein separate karta hai) |
+| **O** — Open/Closed | Extension ke liye open, modification ke liye closed | Strategy, Factory Method, Decorator |
 | **L** — Liskov Substitution | Subtypes bina behavior break kiye apne base types ke liye substitutable hone chahiye | Template Method (jab correctly kiya jaaye), careful inheritance design |
 | **I** — Interface Segregation | Ek fat interface ke bajaye kai small, client-specific interfaces prefer karo | Adapter, role interfaces (`IReader`/`IWriter` vs ek monolithic `IRepository`) |
 | **D** — Dependency Inversion | High-level modules ko abstractions par depend karna chahiye, concretions par nahi | DI, Abstract Factory, Strategy |
@@ -1755,7 +1378,7 @@ public class OrderProcessor
 
 **Gap identified:** source notes anti-patterns ko ek category ki tarah kabhi discuss nahi karte, iske bawajood ki "aapne kaunse anti-patterns dekhe/fix kiye hain?" ek near-guaranteed senior/lead interview question hai.
 
-**God Object (aka God Class):** ek class jo bahut zyada jaanti/karti hai — aksar ek `Manager`, `Helper`, ya `Utils` class jo saalon ke over unrelated responsibilities accrete karti hai. Long-term SRP ignore karne ka symptom hai. **Extract Class**/Facade ke through incrementally fix karo, ek big-bang rewrite nahi.
+**God Object (aka God Class):** ek class jo bahut zyada jaanti/karti hai — aksar ek `Manager`, `Helper`, ya `Utils` class jo saalon ke over unrelated responsibilities accrete karti hai. Long-term SRP ignore karne ka symptom hai. **Extract Class** ke through incrementally fix karo, ek big-bang rewrite nahi.
 
 **Anemic Domain Model:** entities jo pure data bags hain (`{ get; set; }` everywhere) jinme saari business logic separate "Service" classes mein push kar di gayi hai. EF Core codebases mein common hai kyunki yeh path of least resistance hai, lekin yeh OO encapsulation violate karta hai — invariants kahin bhi violate ho sakte hain kyunki kuch bhi entity state protect nahi karta. Fix: behavior ko entity par khud push karo (rich domain model) — e.g., `order.Cancel()` jo "shipped order cancel nahi kar sakte" internally enforce karta hai, `OrderService.Cancel(order)` ke bajaye jo woh check externally perform karta hai jahan use bhoolna/duplicate karna easy hai.
 ```csharp
@@ -1865,14 +1488,9 @@ Neeche diye `[new content]` sections add kiye gaye kyunki yeh source notes mein 
 - **Builder vs Factory vs Abstract Factory Decision Tree** — interviewers aksar puchte hain "aap kaunsa pick karoge aur kyun"; ek decision framework judgment demonstrate karta hai, sirf recall nahi.
 - **Prototype** — baaki reh gaya uncovered GoF creational pattern; shallow vs. deep clone questions ke liye relevant.
 - **Decorator vs Proxy vs Adapter** — most common structural-pattern comparison questions mein se ek; yeh teen ek jaise dikhte hain aur frequently confuse ho jaate hain.
-- **Facade** — subsystem access simplify karne ke liye quick, commonly-asked pattern; `HttpClient` aur similar BCL types ko frame karne ke liye use hota hai.
-- **Specification Pattern** — explicitly requested; Repository/DDD discussions ko complement karta hai aur query logic ko composable aur repository interfaces ke bahar rakhta hai.
 - **Strategy vs State** — dono structurally identical dikhte hain lekin intent/control of transitions mein differ karte hain; ek bahut common "in dono ko compare karo" senior question, source se absent.
 - **Template Method** — source file ek bare, completely unanswered "Template Method:" stub par end hui thi; "answer everything" requirement ke per fully likha gaya, Strategy se comparison including.
 - **Command Pattern** — MediatR (already heavily covered) se directly connect karta hai kyunki MediatR ka `IRequest`/handler ek Command implementation hai; interviewers puchte hain "MediatR kaunse pattern par built hai."
-- **Chain of Responsibility** — ASP.NET Core middleware se directly maps karta hai, ek daily-use feature; ek bahut likely "X ke peeche wala pattern naam karo" question.
-- **Options Pattern in .NET** — idiomatic strongly-typed configuration binding, already discussed DI lifetimes mein ties karta hai; ek staple modern ASP.NET Core question jo source se absent tha.
-- **Repository + Unit of Work vs Raw EF Core / CQRS** — source ne har pattern individually cover kiya lekin kabhi "kya yeh EF Core ke saath redundant hai?" wala debate nahi, ek bahut common senior trap question.
 - **SOLID in Practice — Violation-to-Fix Walkthroughs** — source sirf passing mein SOLID mention karta tha (re: Singleton); saare paanch principles ke liye full violation→fix code add kiya gaya kyunki "SOLID violation spot karo" ek frequent live-coding interview format hai.
 - **God Object, Anemic Domain Model, Service Locator, aur Doosre Overused/Misapplied Patterns** — anti-patterns source se poori tarah absent the, near-guaranteed senior/lead interview material hone ke bawajood.
 
@@ -1884,6 +1502,4 @@ Neeche diye `[new content]` sections add kiye gaye kyunki yeh source notes mein 
 
 Neeche diye `[gaps]` sections is second pass mein add kiye gaye taaki un recognizable GoF patterns aur ek common modern-C# design debate ko cover kiya ja sake jo pehle `[new content]` pass ke baad bhi still missing the:
 
-1. **Bridge, Composite, aur Flyweight** (Structural Patterns) — yeh kyun matter karta hai: yeh recognizable GoF structural patterns hain jinhe senior candidates se at least define karna aur similar patterns se distinguish karna (e.g. Bridge vs Adapter, Composite vs Decorator) expect kiya jaata hai, chahe yeh Decorator/Proxy/Adapter se kam aate hon; crisp real-world .NET examples hona ek "aapne X use kiya hai?" follow-up mein fumble karne se bachata hai.
-2. **Visitor aur Memento** (Behavioral Patterns) — yeh kyun matter karta hai: Visitor real .NET framework machinery (`ExpressionVisitor`) ke underlying hai isliye interviewers LINQ/expression trees discuss karte waqt ise probe kar sakte hain; Memento undo/redo ya state snapshotting design discuss karte waqt ek common follow-up hai.
-3. **Null Object Pattern** — yeh kyun matter karta hai: modern C# discussions mein frequently nullable reference types aur Option/Maybe types se confuse ya compare kiya jaata hai; senior interviews aksar probe karte hain ki kya ek candidate absence ko hide karna (Null Object) vs type system mein surface karna (nullable refs / Option types) ke trade-off ko articulate kar sakta hai, jo current .NET codebases mein ek live design debate hai.
+1. **Null Object Pattern** — yeh kyun matter karta hai: modern C# discussions mein frequently nullable reference types aur Option/Maybe types se confuse ya compare kiya jaata hai; senior interviews aksar probe karte hain ki kya ek candidate absence ko hide karna (Null Object) vs type system mein surface karna (nullable refs / Option types) ke trade-off ko articulate kar sakta hai, jo current .NET codebases mein ek live design debate hai.
