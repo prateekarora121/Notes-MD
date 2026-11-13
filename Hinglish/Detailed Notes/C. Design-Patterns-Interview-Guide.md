@@ -21,7 +21,6 @@
    - [Mediator Pattern (MediatR)](#mediator-pattern-mediatr)
    - [[new content] Strategy vs State](#new-content-strategy-vs-state)
    - [[new content] Template Method](#new-content-template-method)
-   - [[new content] Command Pattern](#new-content-command-pattern)
    - [Null Object Pattern [gaps]](#null-object-pattern-gaps)
 5. [Architectural Patterns](#architectural-patterns)
    - [CQRS](#cqrs)
@@ -988,36 +987,6 @@ public class InventoryReportGenerator : ReportGenerator
 
 ---
 
-### [new content] Command Pattern
-
-**Gap identified:** source mein present nahi hai; relevant hai kyunki MediatR ka `IRequest`/`IRequestHandler` (source mein heavily covered) literally Command ka ek implementation hai (commands ke liye) + iska ek variant queries ke liye — interviewers often poochte hain "MediatR kaunse GoF pattern par bana hai?" aur expect karte hain "Command + Mediator."
-
-**Intent:** ek request (action + parameters) ko ek object ke roop mein encapsulate karo, queuing, logging, undo/redo enable karte hue, aur invoker ko executor se decouple karte hue.
-
-```csharp
-public interface ICommand { void Execute(); void Undo(); }
-
-public class AddItemCommand : ICommand
-{
-    private readonly List<string> _cart;
-    private readonly string _item;
-    public AddItemCommand(List<string> cart, string item) { _cart = cart; _item = item; }
-    public void Execute() => _cart.Add(_item);
-    public void Undo() => _cart.Remove(_item);
-}
-
-public class CommandInvoker
-{
-    private readonly Stack<ICommand> _history = new();
-    public void Run(ICommand command) { command.Execute(); _history.Push(command); }
-    public void UndoLast() { if (_history.TryPop(out var cmd)) cmd.Undo(); }
-}
-```
-
-**MediatR se connection:** `IRequest<TResponse>` + `IRequestHandler<TRequest,TResponse>` Command hai (encapsulated request object + separate handler) jo dispatch ke liye ek Mediator ke through wired hai. Interview mein isko recognize/kehna ek strong senior signal hai.
-
----
-
 ### Null Object Pattern [gaps]
 
 **Gap identified:** source mein absent hai. Frequently nullable reference types (C# 8+ `#nullable enable`) aur functional Option/Maybe types ke against pitted hota hai modern senior discussions mein — yeh comparison ek live design debate hai jiske dono sides argue karne layak hai.
@@ -1490,7 +1459,6 @@ Neeche diye `[new content]` sections add kiye gaye kyunki yeh source notes mein 
 - **Decorator vs Proxy vs Adapter** — most common structural-pattern comparison questions mein se ek; yeh teen ek jaise dikhte hain aur frequently confuse ho jaate hain.
 - **Strategy vs State** — dono structurally identical dikhte hain lekin intent/control of transitions mein differ karte hain; ek bahut common "in dono ko compare karo" senior question, source se absent.
 - **Template Method** — source file ek bare, completely unanswered "Template Method:" stub par end hui thi; "answer everything" requirement ke per fully likha gaya, Strategy se comparison including.
-- **Command Pattern** — MediatR (already heavily covered) se directly connect karta hai kyunki MediatR ka `IRequest`/handler ek Command implementation hai; interviewers puchte hain "MediatR kaunse pattern par built hai."
 - **SOLID in Practice — Violation-to-Fix Walkthroughs** — source sirf passing mein SOLID mention karta tha (re: Singleton); saare paanch principles ke liye full violation→fix code add kiya gaya kyunki "SOLID violation spot karo" ek frequent live-coding interview format hai.
 - **God Object, Anemic Domain Model, Service Locator, aur Doosre Overused/Misapplied Patterns** — anti-patterns source se poori tarah absent the, near-guaranteed senior/lead interview material hone ke bawajood.
 

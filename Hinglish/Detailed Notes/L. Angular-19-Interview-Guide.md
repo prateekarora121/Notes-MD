@@ -1,6 +1,6 @@
 # Angular Interview Prep Guide (Angular 19) — Full-Stack / 10 YOE Edition
 
-> **Yeh guide kis liye hai:** Aap ek 10-year full-stack developer ho, currently Angular 19 par kaam kar rahe ho (Dealer Management Dashboard project), aur interviews ke liye revise kar rahe ho. Maine aapke do original files (`L__Angular-Interview-Guide.md` — 3100+ lines — aur uska "Addendum") ko **ek hi file** mein merge kiya hai, restructure kiya hai, aur har major topic ko ek **consistent, revision-friendly format** diya hai taaki aap ise ek baar padh ke seedha interview mein bol sako.
+> **Yeh guide kis liye hai:** Aap ek 10-year full-stack developer ho, currently Angular 19 par kaam kar rahe ho (Dealer Management Dashboard project), aur interviews ke liye revise kar rahe ho. Purane [Angular guide](./L.%20Angular-Interview-Guide.md) aur [addendum](./L.%20Angular-Interview-Guide%20%282%29.md) ka content is canonical file mein merge aur restructure kiya gaya hai. Dono purani files ab yahan point karti hain. Har major topic ko ek **consistent, revision-friendly format** diya gaya hai taaki aap ise ek baar padh ke seedha interview mein bol sako.
 >
 > **Har topic is format mein hai:**
 > - **💡 Simple Explanation** — plain language mein, bina jargon ke

@@ -11,7 +11,8 @@
 3. [Part 3 — Interface vs Concrete Registration](#part-3--interface-vs-concrete-registration)
 4. [Part 4 — Service Factories](#part-4--service-factories)
 5. [Part 5 — Advanced DI Concepts](#part-5--advanced-di-concepts)
-6. [Cheat Sheet](#cheat-sheet)
+6. [Part 6 — ASP.NET Core DI Reference Additions](#part-6--aspnet-core-di-reference-additions)
+7. [Cheat Sheet](#cheat-sheet)
 
 ---
 
@@ -681,6 +682,71 @@ builder.Services.AddScoped<FileWriterService>();
 ```
 
 The container uses asynchronous disposal when the owning scope is disposed asynchronously. Use `CreateAsyncScope`/`await using` when resolving services that require async disposal. Disposal happens in **reverse order of creation** (last created, first disposed), mirroring nested `using` blocks; the order depends on resolution order, not registration order.
+
+---
+
+## Part 6 — ASP.NET Core DI Reference Additions
+
+### 6.1 DI terminology and the composition root
+
+| Term | Meaning |
+|---|---|
+| **IoC** | Broad principle: control of object creation or execution flow is delegated to a framework or caller. |
+| **DI** | Technique for supplying an object's dependencies from outside instead of having it construct them. |
+| **DIP** | Design principle that high-level code should depend on abstractions. A DI container does not guarantee DIP if code still depends on concrete implementations. |
+
+In ASP.NET Core, `Program.cs` and its registration extension methods form the **composition root**. Keep application wiring there; after `builder.Build()`, adding registrations to the original collection does not change the already-built provider.
+
+### 6.2 Constructor resolution and property injection
+
+The container recursively resolves public constructor parameters. A missing registration usually throws `InvalidOperationException` when the service is resolved; scope validation and `ValidateOnBuild` can catch many invalid graphs earlier.
+
+If a class has multiple public constructors, the container chooses a resolvable constructor whose parameters are a superset of the other viable constructors. If viable constructors are ambiguous, simplify the constructors or use a factory; `[ActivatorUtilitiesConstructor]` can disambiguate construction through `ActivatorUtilities`.
+
+Circular constructor dependencies throw `InvalidOperationException`. Break the cycle by extracting a shared collaborator or changing the dependency direction; do not hide it with ad hoc service-location calls.
+
+The built-in container does not support general property injection. Prefer constructor injection so required dependencies are visible and the object is valid when constructed. For MVC actions, Minimal API handlers, and middleware `InvokeAsync` methods, ASP.NET Core can bind service parameters at the framework boundary.
+
+### 6.3 Registration details
+
+The registered **service type** is the lookup key: registering `CsvReportWriter` does not also register `IReportWriter`. To share one instance through both types, register the concrete service and forward the abstraction to it using a factory.
+
+Library registration helpers can use `TryAdd` to supply a default only when absent, `TryAddEnumerable` to avoid duplicate service/implementation pairs, and `Replace` or `RemoveAll<T>` when intentionally overriding registrations. For multiple registrations, a single service resolution returns the last registration; `IEnumerable<T>` returns all registrations in order.
+
+### 6.4 `ActivatorUtilities` and framework-managed services
+
+`ActivatorUtilities` constructs a type that is not registered, resolving some constructor parameters from DI and accepting other arguments explicitly:
+
+```csharp
+var job = ActivatorUtilities.CreateInstance<ReportJob>(serviceProvider, "monthly");
+```
+
+The caller owns and must dispose an object created this way. ASP.NET Core uses this construction model in places such as `TypeFilter`; use `[ServiceFilter]` when the filter itself is registered, and `[TypeFilter]` when ASP.NET Core should construct it with `ActivatorUtilities`.
+
+| Service | Typical lifetime | Important note |
+|---|---|---|
+| `ILogger<T>` | Singleton | Safe to inject into services of any lifetime. |
+| `BackgroundService` / `IHostedService` | Singleton | Create a scope for scoped work on each iteration. |
+| `IHttpClientFactory` | Singleton | Prefer injecting it into long-lived services and create clients as needed. |
+| Typed `HttpClient` client | Transient | Avoid retaining it in a singleton, which can undermine handler rotation. |
+| EF Core `DbContext` from `AddDbContext` | Scoped | Not thread-safe; use `IDbContextFactory<T>` for independent instances. |
+
+### 6.5 Request-bound services and named options
+
+Do not capture `HttpContext` or request data in singleton fields. `IHttpContextAccessor` is a singleton that exposes the current context through `AsyncLocal`; read it at call time, and expect no current context in background work. For filters, use `[ServiceFilter]` or `[TypeFilter]` as appropriate. For fire-and-forget or hosted work, pass plain data and create a fresh scope with `IServiceScopeFactory`; never use request-scoped services after the request ends.
+
+Named options configure multiple values of the same options type. Use `IOptionsMonitor<T>.Get(name)` in long-lived services or `IOptionsSnapshot<T>.Get(name)` in scoped services; do not inject the scoped snapshot into a singleton.
+
+### 6.6 Choose an implementation without spreading resolution logic
+
+| Need | Prefer |
+|---|---|
+| A small, local choice | Direct conditional logic. |
+| A fixed set of named implementations | Keyed services. |
+| Implementations that self-report whether they can handle a request | `IEnumerable<T>` with a selector. |
+| Complex creation or runtime input | An explicit factory. |
+
+Keep selection policy in one service. Validate or allow-list any key derived from request input before resolving a keyed service.
 
 ---
 
