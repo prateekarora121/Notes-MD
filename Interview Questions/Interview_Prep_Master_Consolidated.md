@@ -34,6 +34,7 @@
 21. [Coverage Audit](#21-coverage-audit)
 22. [Quick Cheat Sheet](#22-quick-cheat-sheet)
 23. [References & Research Limits](#23-references--research-limits)
+24. [Screenshot Consolidation — Async, .NET & Real-Time Scenarios](#24-screenshot-consolidation--async-net--real-time-scenarios)
 
 ---
 
@@ -2977,6 +2978,184 @@ Lowest selectivity automatically best nahin — query ke result size, index cove
 40. Honeywell — career@hiso.honeywell.com
 
 **Usage tip:** Tailor subject line/email body to specific role/project. Generic mass emails ignore hote hain.
+
+---
+
+## 24. Screenshot Consolidation — Async, .NET & Real-Time Scenarios
+
+> **Source:** `Sample Questions/20261112_113955670_iOS.png`, `20261118_102533710_iOS.png`, and `IMG_1813.jpg` se consolidated. Duplicates ko related master sections ke saath merge kiya gaya hai; is section mein screenshot-specific revisions aur scenario answers hain.
+
+### Q24.1 Synchronous aur asynchronous programming mein kya farq hai?
+
+**Short answer:** Synchronous code agle step par jaane se pehle operation complete hone ka wait karta hai; asynchronous code wait ke dauran caller ko control de sakta hai aur operation complete hone par continuation schedule karta hai.
+
+**Answer:** Async/await ka main benefit thread ko I/O wait par block na karna aur scalability improve karna hai. `async` aur `await` naye thread ki automatic guarantee nahin dete. Networking, file I/O aur timer jaise APIs naturally asynchronous ho sakte hain.
+
+**Pitfall:** UI thread block karne wale expensive CPU operations ko async method bana dene se UI sirf method ke first await tak ya sirf wrong thread par active reh sakta hai. CPU-bound kaam ke liye `Task.Run` ya dedicated worker consider karein.
+
+**Scenario:** API ko external database/HTTP call chahiye — `await` se thread call site par wait karke block nahi hota. CPU-heavy report PDF banane ke liye work ko bounded background processing queue/worker par bhejein, sirf UI thread ko free na karein.
+
+**Follow-ups**
+- **Kya synchronous method bhi parallel ho sakti hai?** Haan, independent work multiple threads par schedule kar ke, lekin `async`/`await` alone parallelism guarantee nahi karta.
+- **Aam rule?** I/O-bound ke liye async APIs; CPU-bound ke liye bounded parallelism/work queue.
+
+---
+
+### Q24.2 `Thread`, `Task`, aur `Task<T>` mein kya antar hai?
+
+**Short answer:** `Thread` execution thread ko represent karta hai; `Task` ek asynchronous/composed unit of work aur uski completion ko represent karta hai; `Task<T>` result ke saath task hai.
+
+**Answer:** Modern application code mein thread-level creation avoid karke `Task` aur async APIs use karein. Thread pool work scheduling aur continuation resources manage karta hai. `Task<T>.Result` ya `.Wait()` synchronously block kar sakte hain aur codebase ke pattern ke mutabik deadlock/thread-pool starvation cause kar sakte hain.
+
+**Pitfall:** `Task` ko "thread" ya `Task.Run` ko I/O scalability solution kehna galat hai. `Task.Run(asyncMethod)` nested/extra scheduling laata hai aur na to I/O thread banata hai na wait ko faster karta hai.
+
+**Scenario:** Independent HTTP calls ko `Task` objects mein compose karein aur `WhenAll` se await karein.
+
+```csharp
+Task<User> userTask = client.GetUserAsync(id, ct);
+Task<List<Order>> ordersTask = client.GetOrdersAsync(id, ct);
+var (user, orders) = (await userTask, await ordersTask);
+```
+
+---
+
+### Q24.3 `Task.Run`, `Task.WhenAll`, aur `Task.WhenAny` kab use karein?
+
+**Short answer:** `Task.Run` synchronous CPU work ko thread pool par schedule karta hai; `WhenAll` sab independent tasks complete hone ka wait karta hai; `WhenAny` pehle completed task return karta hai.
+
+**Answer:** `Task.Run` long-running CPU work ke liye use hota hai. `WhenAll` concurrent fan-out ke liye aur aggregate results ke liye suitable hai. `WhenAny` timeout/race/first-result/primary-fallback patterns ke liye ho sakta hai; result ko await karne par chosen task ki exception handle nahi hua hoti.
+
+**Pitfall:** `WhenAll` aur `WhenAny` concurrency limit nahi lagate. Thousands tasks lane se downstream throttling/circuit breaking burrow ho sakta hai. `WhenAll` mein ek failure par bhi baaki tasks continue karte hain; caller ko `AggregateException`/individual task status aur resource cleanup handle karni hoti hai.
+
+**Scenario:** External HTTP service se user, orders aur preferences fetch karne mein `WhenAll` use karein, lekin throughput ko `SemaphoreSlim`/bulkhead se cap karein.
+
+---
+
+### Q24.4 `ConfigureAwait(false)`, cancellation aur async exceptions kaise handle karein?
+
+**Short answer:** `ConfigureAwait(false)` library code ko captured UI/request context par continuation resume karne ki zaroorat se bacha sakta hai. `CancellationToken` cooperative cancellation propagate karta hai; task failure awaited/caller ko exception ke through milti hai.
+
+**Answer:** UI/application framework context ke baad library code mein `ConfigureAwait(false)` context capture avoid karta hai. ASP.NET Core request context guarantee nahi hoti, isliye app code mein iski zarurat normally kam hoti hai. `TaskCanceledException` timeout/cancel ko distinguish karein; cancellation ke baad partial work cleanup aur `OperationCanceledException` propagate karein.
+
+**Pitfall:** `ConfigureAwait(false)` UI control update ke baad apply karna UI thread marzi tod sakta hai. Async method se exception fire-and-forget task par chup-chup reh sakti hai.
+
+**Scenario:** Long report download ke liye `CancellationToken` aur timeout pass karein. Request abort hone par downstream HTTP call bhi cancel ho.
+
+```csharp
+public async Task<Stream> DownloadAsync(CancellationToken ct)
+{
+    using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+    timeout.CancelAfter(TimeSpan.FromSeconds(30));
+    return await httpClient.GetStreamAsync(url, timeout.Token);
+}
+```
+
+**Follow-ups**
+- **`async void` kyun avoid?** `.NET` sirf event handlers ke liye natural exception handling surface deta hai; normal async API par caller task observe nahin kar sakta. Event handlers ke liye exceptions framework lifecycle ke hisaab se handle karein.
+- **Fire-and-forget kya hai?** Task start karke await na karna. Background queue/hosted service aur observed failure/cancellation/shutdown lifecycle use karein.
+
+---
+
+### Q24.5 Multithreading, thread pool, race condition, lock aur deadlock?
+
+**Short answer:** Multithreading ek process ke multiple threads ko concurrent execution deta hai; thread pool reusable threads schedule karta hai. Race shared state ke timing se wrong result create karti hai; lock mutual exclusion deta hai; deadlock circular lock wait hai.
+
+**Answer:** Thread pool short, well-bounded async continuation/work items ke liye use hota hai. Shared mutable state ke liye lock scope chhota rakhein, consistent lock order use karein, aur prefer karein immutable state/`Interlocked`/channel or concurrent collections.
+
+**Pitfall:** Synchronous blocking (`.Result`, `.Wait()`) thread pool threads ko busy wait kar sakti hai aur starvation la sakti hai. Deadlock ke liye hold-and-wait, mutual exclusion, no preemption aur circular wait ka combination hota hai.
+
+**Scenario:** Inventory decrement ko ek atomic database UPDATE/transaction se enforce karein; application mein single lock har instance/application ke liye sirf in-process guarantee deta hai, distributed database lock/outbox/idempotency ko replace nahin karta.
+
+---
+
+### Q24.6 `ref`, `out`, `in`, `const`, `readonly`, aur `static readonly`?
+
+**Short answer:** `ref` caller variable ko bidirectionally pass karta hai, `out` callee se value return karne ke liye, aur `in` read-only reference pass karta hai. `const` compile-time constant hai, `readonly` runtime par initialize hone ke baad immutable, aur `static readonly` class-scoped runtime constant hai.
+
+**Answer:** Passing-by-reference exceptions allocate/copy avoid kar sakte hain, lekin APIs ki data ownership clear honi chahiye. `const` primitive/string compile-time values ke liye; assembly ki public API par changing const new assembly rebuild ke bina stale ho sakta hai. `readonly` instance field constructor mein set hota hai; `static readonly` static constructor ya declaration par set hota hai.
+
+**Pitfall:** `const` ko configuration ya mutable dependency ke liye use na karein. `readonly` reference object ki properties ko immutable nahi banata.
+
+---
+
+### Q24.7 `String` aur `StringBuilder`, aur `HashSet<T>` aur `Dictionary<TKey,TValue>`?
+
+**Short answer:** `string` immutable hai — modification logical value ke liye naya object bana sakta hai. `StringBuilder` repeated concatenation ke liye mutable buffer deta hai. `HashSet<T>` unique keys/value set; `Dictionary` key se value map karta hai.
+
+**Answer:** Chhote/few concatenations ke liye ordinary `+` simple aur efficient hota hai. Loop mein many appends ke liye `StringBuilder` allocations aur copying reduce karta hai. Hash collections O(1) average lookup dete hain, lekin hashing/collision, load aur mutation behavior matter karti hai.
+
+**Pitfall:** Mutable key ko hash collection ke andar badalna dictionary/hashset lookup ko break karta hai. HashSet member equality ke liye `IEquatable<T>` aur consistent `GetHashCode` zaroori.
+
+**Scenario:** Unique invoice IDs track karne ke liye `HashSet<string>`; invoice metadata map karne ke liye `Dictionary<string, Invoice>` use karein.
+
+---
+
+### Q24.8 `DataSet` aur `DataTable` mein kya farq hai?
+
+**Short answer:** `DataTable` single in-memory tabular result hai; `DataSet` multiple `DataTable` objects, relations aur constraints ko hold karta hai.
+
+**Answer:** Legacy disconnected architecture, XML interchange aur multiple result sets ke liye useful. Modern APIs mein strongly typed DTO/domain models low memory aur simpler contracts dete hain. `DataAdapter` fill/update ke liye bridge hai.
+
+**Pitfall:** API response mein complete `DataSet` expose na karein — weak typing, internal schema, serialization complexity aur unnecessary payload costs; it should be translated to DTOs.
+
+---
+
+### Q24.9 ASP.NET Core middleware, action filters, aur action/result types?
+
+**Short answer:** Middleware entire HTTP pipeline ko wrap karta hai; action filters MVC action execution ke around-specific hooks hain. `IActionResult` implementation abstraction hai; `ActionResult<T>` result aur return value dono ko represent karta hai; Minimal APIs `IResult` return karti hain.
+
+**Answer:** Use middleware for cross-cutting concerns such as correlation IDs, exception handling, HTTPS, security headers and request timing. Use MVC filters for model binding, authorization, validation or action-result transformations within MVC. `appsettings.json` configuration values ko bind karo; production overrides environment variables/secrets managers se do.
+
+**Pitfall:** Middleware order pipeline behavior badal deta hai. Exception handler normally earlier middleware ke exceptions ko catch karne ke liye uske baad register hota hai. Sensitive appsettings secrets source control mein commit na karein.
+
+```csharp
+app.UseMiddleware<CorrelationMiddleware>();
+app.UseExceptionHandler("/error");
+app.MapGet("/orders/{id}", async (int id, IOrderService svc, CancellationToken ct)
+    => await svc.GetAsync(id, ct) is { } order
+        ? Results.Ok(order)
+        : Results.NotFound());
+```
+
+---
+
+### Q24.10 LINQ duplicate records aur slow query kaise handle karein?
+
+**Short answer:** Duplicate rows ko `Distinct` ya key-based `GroupBy` se remove/group karo; database query ko execution plan, indexes, cardinality aur N+1 patterns se diagnose karo.
+
+**Answer:** In-memory duplicates ke liye normalized key choose karein, aur `DistinctBy`/`GroupBy` ka output projection explicit rakhein. EF/LINQ-to-SQL query mein `ToList()` ke baad filtering/ordering database par na rahe — SQL generation aur generated SQL verify karein.
+
+**Pitfall:** `Distinct` complete object equality use karta hai. Read-modify-write duplicate rows ko simply remove karne se separate business invariants enforce na ho sakte; DB unique constraint best.
+
+```csharp
+var duplicateInvoices = invoices
+    .GroupBy(i => i.InvoiceNumber)
+    .Where(g => g.Count() > 1);
+```
+
+---
+
+### Q24.11 Real-time scenario — 100 requests se 1 million requests tak API scale kaise karein?
+
+**Short answer:** Requirements aur bottleneck measure karein, horizontal scaling ke saath stateless app, caching, async I/O, bounded concurrency, database scaling aur observability adopt karein.
+
+**Answer:** First RPS, latency SLO, payload, read/write ratio aur peak pattern define karein. Load test real query mix se p95/p99 latency aur saturation track karein. API ko stateless banayein; cache hot reads; downstream calls ko timeout, retry/backoff, circuit breaker aur bulkheads protect karein; DB reads/write path indexes aur replica/pooling se scale karein.
+
+**Pitfall:** Har traffic ko blindly add-more-servers se solve na karein. Common bottleneck hot query, connection pool, cache stampede, lock contention, large response, or synchronous I/O ho sakta hai.
+
+**Scenario:** 100 se 1M requests ka jump demand-based load test, CDN/static cache, Redis/hot-object cache, request coalescing aur queue-based writes consider karein. Backpressure return `429`/`503` sahi tarike se enforce karein.
+
+---
+
+### Q24.12 Real-time scenario — slow API, large report aur database deadlock?
+
+**Short answer:** Pehle symptom aur request trace measure karein, phir bottleneck isolate karein: hot path, SQL plan, cache, downstream dependency, locks ya serialization.
+
+**Answer:** API ke liye `Activity`/trace IDs aur duration, DB wait, downstream time aur error metrics record karein. Large reports ko paginated/async/export workflow ke roop mein serve karein: job accepted `202`, progress/status URL, bounded queue aur notification.
+
+**Deadlock mitigation:** Transactions chhote, consistent lock/resource order, appropriate indexes aur retry only known transient serialization/deadlock errors after jitter. Database deadlock graph aur victim process identify karein.
+
+**Pitfall:** Timeout ko sirf `Task.Delay` ya HTTP client timeout samajhna kaafi nahi. Background job cancellation aur cleanup, idempotent retries aur partial file cleanup bhi chahiye.
 
 ---
 
